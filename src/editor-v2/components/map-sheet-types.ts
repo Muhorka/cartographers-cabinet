@@ -1,0 +1,40 @@
+import type { KernelPoint } from "../geometry/geometry-types";
+import type { ReactNode } from "react";
+import type { ResizeCorner } from "../geometry/region-resize";
+import type { EditorProject, ProjectMeasureSettings } from "../model/project-model";
+import type { WorkLayerId } from "../toolbox/toolbox-model";
+import type { MapGesture, MapGestureDraft, MapSheetInteraction } from "./map-sheet-gesture";
+import type { SheetViewport } from "./map-sheet-geometry";
+import type { SelectionRotationControl } from "./selection-rotation-handle";
+
+export type MapSelection = { kind: "place" | "element" | "surface" | "room" | "wall" | "opening" | "transition"; id: string };
+export type MapSheetCopy = { ariaLabel: string; empty: string; compass: string; zoomIn: string; zoomOut: string; resetView: string; back: string; northMark?: string; measurements?: { title: string; grid: string; axes?: string; opacity: string; spacing: string; cell?: string; snap: string; units: string; metric: string; imperial: string; roomAreas: string }; openingLabel?(kind: "door" | "window" | "gate" | "passage", id: string): string; transitionLabel?(id: string, kind?: "stairs" | "elevator"): string };
+
+export type MapSheetProps = {
+  pointPicker?: import("./map-point-picker").MapPointPicker;
+  storyOverlay?: ReactNode;
+  rotationControl?: SelectionRotationControl;
+  nodeInsertion?: { active: boolean; previewAt(point: KernelPoint): KernelPoint | undefined; insertAt(point: KernelPoint): void; cancel(): void };
+  project: EditorProject; activePlaceId: string;
+  viewport: SheetViewport; copy: MapSheetCopy;
+  selectedIds?: string[]; draftStrokes?: KernelPoint[][]; gestureDraft?: MapGestureDraft;
+  sheetSize?: { width: number; height: number }; interaction?: MapSheetInteraction;
+  selectionEditing?: boolean; /** Read-only source picking used by Story mode; never enables geometry edits. */ selectionOnly?: boolean; outlineEditing?: boolean; selectionMode?: "direct" | "marquee"; selectionLayerId?: WorkLayerId;
+  sketchVisible?: boolean; sketchOpacity?: number; eraserSize?: number; gapClosingEnabled?: boolean; gapClosingTolerance?: number;
+  tracingProject?: EditorProject; tracingOpacity?: number;
+  onSelect?(selection: MapSelection, additive?: boolean): void; onSelectMany?(selections: MapSelection[]): void;
+  onOpenPlace?(placeId: string): void; onClearSelection?(): void; onDeleteSelected?(): void; onCancelDrawing?(): void;
+  onViewportChange?(viewport: SheetViewport): void; onGesture?(gesture: MapGesture): void; onGestureDraftChange?(draft?: MapGestureDraft): void;
+  onMeasureSettingsChange?(settings: ProjectMeasureSettings): void;
+  onNoteTextChange?(id: string, text: string): void;
+  onMoveSelection?(selection: MapSelection, delta: KernelPoint): void;
+  onMoveWallEndpoint?(wallId: string, endpoint: "start" | "end", point: KernelPoint): void;
+  onResizeOpening?(openingId: string, width: number): void;
+  onResizeTransition?(transitionId: string, corner: ResizeCorner, point: KernelPoint): void;
+  onResizeElement?(elementId: string, corner: ResizeCorner, point: KernelPoint): void;
+  onResizeSurface?(surfaceId: string, corner: ResizeCorner, point: KernelPoint): void;
+  onResizePlace?(placeId: string, corner: ResizeCorner, point: KernelPoint): void;
+  onMoveElementVertex?(elementId: string, polygonIndex: number, vertexIndex: number, point: KernelPoint): void;
+  onMoveSurfaceVertex?(surfaceId: string, polygonIndex: number, vertexIndex: number, point: KernelPoint): void;
+  onMovePlaceVertex?(placeId: string, polygonIndex: number, vertexIndex: number, point: KernelPoint): void;
+};

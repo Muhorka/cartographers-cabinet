@@ -1,0 +1,70 @@
+.backdrop {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  display: grid;
+  place-items: start center;
+  padding: 10vh 1rem 2rem;
+  background: #08140fb8;
+  backdrop-filter: blur(3px);
+}
+
+.dialog {
+  position: relative;
+  width: min(760px, 100%);
+  max-height: min(62vh, 650px);
+  overflow: auto;
+  padding: 20px;
+  color: #ddd0ad;
+  border: 1px solid #b18a4866;
+  background: linear-gradient(145deg, #25382ef7, #19281ff7);
+  box-shadow: 0 18px 36px #0009, inset 0 0 34px #0005;
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.dialog::before { position: absolute; inset: 4px; pointer-events: none; border: 1px solid #a57c3d33; content: ""; }
+.dialog header { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding-bottom: 14px; border-bottom: 1px solid #b38b4e55; }
+.dialog h2 { margin: 0; color: #d6ba7c; font-size: .78rem; font-weight: 400; letter-spacing: .14em; text-transform: uppercase; }
+.dialog button { color: #eadcba; border: 1px solid #a57c3d77; background: #21342a; cursor: pointer; font: inherit; }
+.dialog header button { width: 28px; height: 28px; padding: 0; color: #d6ba7c; background: #18251e; font-size: 1.15rem; }
+.dialog button:hover,
+.dialog button:focus-visible { color: #fff0c7; border-color: #d0aa62; outline: 1px solid #d0aa62; outline-offset: 1px; }
+
+.create { display: grid; grid-template-columns: minmax(170px, 1fr) minmax(140px, .65fr) auto; align-items: end; gap: 9px; padding: 14px 0 10px; }
+.libraryTools{position:relative;display:flex;align-items:center;gap:10px;padding-top:10px}.libraryTools label{display:inline-block;padding:6px 9px;color:#eadcba;border:1px solid #a57c3d77;background:#21342a;cursor:pointer;font-size:.68rem}.libraryTools input{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.libraryTools p{margin:0;color:#e0a18e;font-size:.68rem}.rename{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:4px}.rename input{min-width:0;padding:5px;color:#eadcba;border:0;border-bottom:1px solid #b38b4e88;background:#1d251f;font:italic .78rem Georgia,serif}.rename button{padding:4px 6px;font-size:.62rem}
+.create label { display: grid; gap: 4px; }
+.create span { color: #bbae90; font-size: .65rem; letter-spacing: .08em; text-transform: uppercase; }
+.create input,
+.create select { min-width: 0; padding: 6px 5px; color: #eadcba; border: 0; border-bottom: 1px solid #b38b4e88; outline: none; background: #1d251f; font: italic .78rem Georgia, serif; }
+.create input:focus,
+.create select:focus { border-color: #d0aa62; }
+.create button,
+.actions button,
+.confirm button { padding: 6px 8px; font-size: .65rem; }
+.create button:disabled { opacity: .4; cursor: default; }
+.list { display: grid; margin: 0; padding: 0; }
+.list article { display: grid; grid-template-columns: 126px minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 10px 0; border-top: 1px solid #b38b4e33; }
+.list article.active { padding-left: 9px; box-shadow: inset 2px 0 #b8914d; }
+.thumbnail { display: block; width: 126px; aspect-ratio: 16 / 9; object-fit: cover; border: 1px solid #a57c3d77; background: #e8d9b4; box-shadow: 0 2px 6px #0005; }
+.projectInfo { display: grid; min-width: 0; gap: 3px; }
+.list strong { overflow-wrap: anywhere; color: #eadcba; font-size: .82rem; }
+.list small { color: #9b927e; font-size: .63rem; }
+.actions,
+.confirm { display: flex; align-items: center; justify-content: flex-end; gap: 5px; }
+.exportMenu { position: relative; }
+.exportMenu summary { padding: 6px 8px; color: #eadcba; border: 1px solid #a57c3d77; background: #21342a; cursor: pointer; font-size: .65rem; list-style: none; }
+.exportMenu summary::-webkit-details-marker { display: none; }
+.exportMenu > div { position: absolute; right: 0; z-index: 2; display: grid; min-width: 9rem; gap: 3px; padding: 5px; border: 1px solid #a57c3d77; background: #19281f; box-shadow: 0 4px 12px #0007; }
+.exportMenu > div button { text-align: left; white-space: nowrap; }
+.confirm { flex-wrap: wrap; padding: 6px 8px; color: #e1aa98; border: 1px solid #a9584e99; background: #412a27cc; }
+.confirm button:first-child { color: #f0c0ad; border-color: #c56b5b; background: #6b332c; }
+
+@media (max-width: 560px) {
+  .backdrop { padding: 1rem; }
+  .dialog { padding: 14px; }
+  .create,
+  .list article { grid-template-columns: 1fr; }
+  .thumbnail { width: 100%; max-width: 320px; }
+  .actions,
+  .confirm { justify-content: flex-start; flex-wrap: wrap; }
+}

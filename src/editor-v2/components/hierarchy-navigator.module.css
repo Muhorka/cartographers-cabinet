@@ -1,0 +1,126 @@
+.navigator {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 18px 14px 22px;
+  color: #ddd0ad;
+  background: transparent;
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.tree,
+.group { margin: 0; padding: 0; list-style: none; }
+.levelMenu{display:grid;gap:3px;margin:2px 4px 6px 24px;padding:5px;border-left:1px solid #9c7b43;background:#152b23}.levelMenu button{padding:5px 7px;border:1px solid #6e603b;background:#20352c;color:#d8c18a;font:inherit;font-size:.64rem;text-align:left;cursor:pointer}.levelMenu button:hover,.levelMenu button:focus-visible{border-color:#bd944d;color:#fff0bd;outline:none}
+.tree { display: grid; gap: 2px; }
+
+.group {
+  position: relative;
+  margin: 2px 0 4px 5px;
+  padding-left: 3px;
+  border-left: 1px solid #b48a4255;
+}
+
+.branch { min-width: 0; }
+
+.placeRow {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 14px minmax(0, 1fr) 22px;
+  align-items: stretch;
+  border-left: 2px solid transparent;
+}
+
+.placeRow:hover { background: #f4dda610; }
+
+.active {
+  border-left-color: #d0a44a;
+  background: linear-gradient(90deg, #8b553750, #d0a44a14);
+}
+
+.disclosure,
+.placeButton {
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
+.disclosure {
+  display: grid;
+  align-self: stretch;
+  place-items: center;
+  padding: 0;
+  border: 0;
+}
+
+.disclosure:hover { color: #fff3cd; background: #d4ad5a14; }
+.disclosure svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+.leafMark { position: relative; }
+.leafMark::after { position: absolute; top: 17px; left: 5px; width: 4px; height: 4px; border: 1px solid #b48a42; content: ""; transform: rotate(45deg); }
+
+.placeButton {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 6px 4px;
+  border: 0;
+  text-align: left;
+}
+
+.placeButton:hover strong { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.placeButton svg { flex: 0 0 auto; width: 14px; height: 14px; margin-top: 2px; fill: none; stroke: #cba252; stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; }
+.surfaceGlyph { flex: 0 0 auto; width: 14px; margin-top: 1px; color: #cba252; font-size: .9rem; line-height: 1; }
+.placeText { display: grid; min-width: 0; gap: 2px; }
+.placeText strong { overflow-wrap: anywhere; color: #e8d8af; font-size: .78rem; font-weight: 600; line-height: 1.16; }
+.placeText small { overflow-wrap: anywhere; color: #9f9780; font-size: .59rem; line-height: 1.1; letter-spacing: .035em; }
+.active .placeText strong { color: #fff2c9; }
+.rowAction,
+.dragHandle {
+  display: grid;
+  width: 20px;
+  height: 24px;
+  align-self: center;
+  place-items: center;
+  padding: 0;
+  color: #c8a760;
+  border: 1px solid transparent;
+  background: transparent;
+}
+.rowAction { cursor: pointer; }
+.rowAction:hover,
+.rowAction:focus-visible { color: #fff0bf; border-color: #a8823e88; outline: none; }
+.rowAction svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; }
+.dragHandle { cursor: grab; font-size: .8rem; letter-spacing: -3px; opacity: .62; user-select: none; }
+.dragHandle:hover { color: #fff0bf; opacity: 1; }
+.dragHandle:active { cursor: grabbing; }
+.empty { margin: 5px; color: #c4b894; font-style: italic; line-height: 1.35; }
+
+.addContaining {
+  composes: button from "./book-controls.module.css";
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 9px;
+  text-align: left;
+}
+
+.addContaining svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; }
+.addForm { display: grid; gap: 7px; padding: 9px; border: 1px solid #a57c3d55; background: #18271fbb; }
+.addForm label { display: grid; gap: 3px; }
+.addForm label span { color: #baaa83; font-size: .56rem; letter-spacing: .07em; text-transform: uppercase; }
+.addForm input,
+.addForm select { min-width: 0; padding: 5px 4px; color: #eadcba; border: 0; border-bottom: 1px solid #a57c3d77; outline: none; background: #101d17; font: italic .68rem Georgia, serif; }
+.addForm div { display: flex; gap: 5px; }
+.addForm button { padding: 5px 7px; color: #dcc798; border: 1px solid #a57c3d66; background: #21342a; cursor: pointer; font: .6rem Georgia, serif; }
+.addForm button:first-child { border-color: #b08a46; background: #553b2b; }
+.navigator button:focus-visible { outline: 2px solid #e1bb68; outline-offset: 1px; }
+
+@media (max-width: 680px) {
+  .navigator { padding: 14px 9px; }
+  .placeText strong { font-size: .75rem; }
+  .group { margin-left: 4px; padding-left: 2px; }
+}

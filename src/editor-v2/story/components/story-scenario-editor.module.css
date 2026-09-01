@@ -1,0 +1,39 @@
+.workshop {
+  composes: buttons fields from "../../components/book-controls.module.css";
+  composes: headings from "../../components/book-typography.module.css";
+  display: grid;
+  gap: .65rem;
+  min-width: 0;
+  color: #eadbb8;
+  font: .82rem/1.4 Georgia, serif;
+}
+.workshop > header h2 { margin: 0; }
+.intro { composes: description from "../../components/book-typography.module.css"; margin: 0; }
+.identity { display: grid; gap: .45rem; padding: .5rem; border: 1px solid #b58a4688; background: #18271f; }
+.identity summary { color: #d6ba7c; cursor: pointer; font-size: .75rem; font-weight: 400; }
+.identity label, .stepFields { display: grid; gap: .25rem; }
+.identity label, .stepFields label { color: #b89b67; font-size: .62rem; }
+.status { margin: 0; color: #bdb091; font-size: .68rem; font-style: italic; }
+.switcher, .actions, .effectActions { display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; }
+.switcher button[aria-pressed="true"] { box-shadow: inset 0 -2px #d2b572; }
+.section { display: grid; gap: .45rem; margin: 0; padding: .6rem; border: 1px solid #b58a4644; background: #18271f88; }
+.section h3 { margin: 0; }
+.step { display: grid; gap: .4rem; padding: .45rem; border: 1px solid #b58a4644; background: #101b1688; }
+.stepHeader { display: flex; flex-wrap: wrap; gap: .35rem; align-items: baseline; justify-content: space-between; }
+.stepHeader strong { color: #efdeb2; }
+.stepHeader small { color: #bca77a; }
+.stepFields textarea { min-height: 2.5rem; }
+.effect { display: grid; gap: .45rem; padding: .55rem; border-left: 3px solid #b58a46; background: #101b16; }
+.effectTitle { display: flex; flex-wrap: wrap; gap: .35rem; justify-content: space-between; color: #efdeb2; }
+.effectTitle strong { overflow-wrap: anywhere; }
+.effectTitle small, .effectWarning { color: #d2b572; }
+.fieldList { display: grid; gap: .25rem; margin: 0; }
+.fieldRow { display: grid; gap: .1rem; padding: .25rem 0; border-top: 1px solid #b58a4628; }
+.fieldRow dt { color: #cabb97; overflow-wrap: anywhere; }
+.fieldRow dd { margin: 0; overflow-wrap: anywhere; }
+.value { color: #eadbb8; }
+.empty { margin: 0; padding: .5rem; color: #cabb97; font-style: italic; }
+.warning { margin: 0; color: #edc77b; }
+.effectActions { margin-top: .1rem; }
+.unchanged { margin: .1rem 0 0; border-top: 1px solid #b58a4628; padding-top: .3rem; }
+.unchanged summary { color: #bca77a; cursor: pointer; font-size: .75rem; }

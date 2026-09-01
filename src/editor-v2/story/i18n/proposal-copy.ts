@@ -1,0 +1,26 @@
+export const proposalCopy = {
+  pl: {
+    coverageCodes: "Kody techniczne ograniczeń", coverageCollection: (name: string) => `Szczegóły nie obejmują zmian w kolekcji: ${name}.`,
+    coverageAmbiguous: "Pominięto niejednoznaczne wpisy. Raport nie obejmuje wszystkich zmian; na jego podstawie nie można uznać, że pozostałe dane są niezmienione.",
+    coverageStructure: "Szczegóły nie obejmują zmian nazw, opisów ani struktury scenariuszy i ich kroków.",
+    coverageProject: "Szczegóły nie obejmują zmian pozostałych danych projektu, np. geometrii lub ustawień.",
+    coverageUnknown: "Nie rozpoznano przyczyny ograniczenia. Raport może pomijać część zmian; kod jest dostępny w szczegółach technicznych.",
+    coverageEvidence: "Materiały źródłowe", coverageVersion: "Szczegóły nie obejmują zmiany wersji formatu danych opowieści.",
+    title: "Proponowane zmiany pól", before: "Przed", after: "Proponowane po", authored: "Zapis pola", effective: "Wynik w tym kontekście", base: "Baza", missing: "Brak obiektu lub kontekstu po jednej ze stron — wynik nieznany.",
+    unchanged: "Zmieniono zapis, ale wynikowa wartość pozostaje taka sama.", scope: "Tylko bezpośrednie zmiany pól obiektów i skutków scenariusza/kroku. Bez pośredniego wpływu na grupy i inne obiekty.", unsupported: "Poza zakresem szczegółów", empty: "Brak bezpośrednich zmian obsługiwanych pól w tym zakresie.",
+    stale: "Projekt zmienił się. To historyczne porównanie zapisanej propozycji, nie jej zastosowanie do bieżących danych.", unavailable: "Nie można odczytać szczegółów propozycji.", provenance: "Źródła i konflikty", noProvenance: "Dla tego pola nie ma pełnego opisu pochodzenia wartości. Pokazano miejsce zapisu zmiany.",
+    shown: "Wiersze", of: "z", more: "Następna strona", first: "Pierwsza strona", loading: "Wczytywanie…", loaderMissing: "Dalsze strony nie są dostępne w tym widoku.", source: "Miejsce zapisu", conflicts: "Konflikty", sources: "Źródła", unknown: "Nieznane",
+  },
+  en: {
+    coverageCodes: "Technical coverage codes", coverageCollection: (name: string) => `Details exclude changes in this collection: ${name}.`,
+    coverageAmbiguous: "Ambiguous records were omitted. This report does not cover all changes; it cannot establish that the remaining data is unchanged.",
+    coverageStructure: "Details exclude changes to scenario and step names, descriptions, or structure.",
+    coverageProject: "Details exclude changes to other project data, such as geometry or settings.",
+    coverageUnknown: "The coverage limitation is not recognized. This report may omit changes; its code is available in the technical details.",
+    coverageEvidence: "Source evidence", coverageVersion: "Details exclude a change to the Story data format version.",
+    title: "Proposed field changes", before: "Before", after: "Proposed after", authored: "Authored field", effective: "Effective in this context", base: "Base", missing: "Object or context is missing on one side — effective result is unknown.",
+    unchanged: "The authored field changed, but its effective value stays the same.", scope: "Direct object and scenario/step field changes only. Indirect effects on groups and other objects are not included.", unsupported: "Outside detailed coverage", empty: "No direct changes to supported fields in this scope.",
+    stale: "The project changed. This is the historical saved proposal comparison, not a rebase onto current data.", unavailable: "Proposal details could not be read.", provenance: "Sources and conflicts", noProvenance: "Full value provenance is unavailable for this field. Its authored source is shown.",
+    shown: "Rows", of: "of", more: "Next page", first: "First page", loading: "Loading…", loaderMissing: "Further pages are unavailable in this view.", source: "Authored source", conflicts: "Conflicts", sources: "Sources", unknown: "Unknown",
+  },
+} as const;

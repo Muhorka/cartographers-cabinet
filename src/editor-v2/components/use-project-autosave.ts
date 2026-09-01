@@ -1,0 +1,49 @@
+"use client";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { EditorProject } from "../model/project-model";
+import type { EditorSession } from "../state/editor-session";
+import { ProjectSaveQueue } from "../persistence/project-save-queue";
+
+export function useProjectAutosave(project: EditorProject | undefined, onSaved: (project: EditorProject) => void) {
+  const [queue] = useState(() => new ProjectSaveQueue());
+  const [state, setState] = useState<{ document?: EditorProject; status: "saved" | "saving" | "failed" }>({ status: "saved" });
+  const current = useRef(project); const notify = useRef(onSaved);
+  const timer = useRef<{ projectId: string; handle: ReturnType<typeof setTimeout> } | undefined>(undefined);
+  const mounted = useRef(true);
+  useEffect(() => { current.current = project; notify.current = onSaved; }, [project, onSaved]);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; clearTimeout(timer.current?.handle); }; }, []);
+  const flush = useCallback(async (document: EditorProject) => {
+    if (timer.current?.projectId === document.id) clearTimeout(timer.current.handle);
+    if (mounted.current && current.current === document) setState({ document, status: "saving" });
+    const result = await queue.save(document);
+    if (mounted.current) {
+      // A completed old-project write still updates the library, not the new project's badge.
+      if (result.state === "saved" && !queue.isRemoved(document.id)) notify.current(result.project);
+      if (current.current === document) setState({ document, status: result.state });
+    }
+    return result;
+  }, [queue]);
+  const flushSession = useCallback(async (session: EditorSession) => {
+    while (true) {
+      const document = session.getViewState().project;
+      if (queue.isRemoved(document.id)) return true;
+      if ((await flush(document)).state === "failed") return false;
+      if (session.getViewState().project === document) return true;
+    }
+  }, [flush, queue]);
+  useEffect(() => {
+    if (!project || queue.isRemoved(project.id)) return;
+    const handle = setTimeout(() => { void flush(project); }, 350);
+    timer.current = { projectId: project.id, handle };
+    return () => clearTimeout(handle);
+  }, [project, flush, queue]);
+  const controls = useMemo(() => ({ flush, flushSession,
+    latest: (id: string) => queue.latest(id),
+    remove: async (id: string, action: () => Promise<void>) => {
+      if (timer.current?.projectId === id) clearTimeout(timer.current.handle);
+      await queue.remove(id, action);
+    },
+  }), [flush, flushSession, queue]);
+  const status = state.document === project ? state.status : project ? "saving" : "saved";
+  return { ...controls, saving: status === "saving", saveFailed: status === "failed" };
+}

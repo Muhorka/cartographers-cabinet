@@ -1,0 +1,37 @@
+# Dependencies and build output
+node_modules/
+.next/
+out/
+dist/
+coverage/
+playwright-report/
+test-results/
+.playwright-cli/
+output/playwright/
+tmp/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.local
+.devpost-hackathon-state.json
+
+# Local caches and editor state
+.turbo/
+.cache/
+.private/
+*.tsbuildinfo
+.DS_Store
+Thumbs.db
+
+# Exported user projects and generated media
+private-projects/
+user-projects/
+exports/
+generated/
+
+# The parent workspace is private and must never be vendored here.
+private-source/
+private-workspace/
+*private-source*

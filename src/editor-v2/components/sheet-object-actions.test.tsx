@@ -1,0 +1,40 @@
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+import { describe, expect, it, vi } from "vitest";
+import { createStarterProject } from "../model/starter-project";
+import { workbenchCopy } from "../i18n/workbench-copy";
+import { updateSelectionState } from "../drawing/selection-detail-operations";
+import { SheetObjectList } from "./sheet-object-list";
+import { sheetObjectGroups } from "./sheet-object-catalogue";
+
+describe("uniform catalogue actions", () => {
+  it.each(["place", "room", "wall", "opening", "transition", "surface", "element"] as const)("routes hide, lock, unlock and delete to the exact %s", (kind) => {
+    let project = createStarterProject("p", "Test", "pl");
+    const plan = project.constructions[0];
+    plan.openings = [{ id: "door", kind: "door", wallId: plan.walls[0].id, position: .5, width: 1 }];
+    plan.transitions = [{ id: "stairs", kind: "stairs", sameLevelRise: true, footprint: { kind: "rectangle", x: 1, y: 1, width: 2, height: 2 } }];
+    project.surfaces = [{ id: "stage", name: "Scena", kind: "stage", belongsToId: "p:level", shape: { kind: "rectangle", x: 1, y: 1, width: 2, height: 2 }, attachment: "free", elevation: 0, visible: true, locked: false, tags: [], access: [], properties: {} }];
+    project.elements = [{ id: "tree", name: "Drzewo", belongsToId: "p:level", layerId: "equipment", subjectId: "equipment.plant", geometry: { kind: "point", at: { x: 2, y: 2 } }, visible: true, locked: false, tags: [], access: [], properties: {} }];
+    const activePlaceId = kind === "place" ? "p:world" : "p:level";
+    const copy = workbenchCopy.pl.objectList;
+    const target = sheetObjectGroups(project, activePlaceId, copy).flatMap(({ items }) => items).find(({ selection }) => selection.kind === kind)!;
+    expect(target).toBeDefined();
+    const container = document.createElement("div"); document.body.append(container);
+    const root = createRoot(container); const remove = vi.fn(); const update = vi.fn((selection, details) => { project = updateSelectionState(project, selection, details); render(); });
+    const render = () => root.render(<SheetObjectList project={project} activePlaceId={activePlaceId} copy={copy} onSelect={vi.fn()} onDelete={remove} onUpdateSelection={update}/>);
+    const button = (label: string) => [...container.querySelectorAll("button")].find((node) => node.getAttribute("aria-label") === `${label}: ${target.label}`)!;
+    act(render);
+    act(() => button(copy.hide).click());
+    expect(update).toHaveBeenLastCalledWith(target.selection, { visible: false });
+    expect(button(copy.show)).toBeTruthy();
+    act(() => button(copy.lock).click());
+    expect(update).toHaveBeenLastCalledWith(target.selection, { locked: true });
+    expect(button(copy.delete!).disabled).toBe(true);
+    act(() => button(copy.delete!).click());
+    expect(remove).not.toHaveBeenCalled();
+    act(() => button(copy.unlock).click());
+    act(() => button(copy.delete!).click());
+    expect(remove).toHaveBeenCalledExactlyOnceWith(target.selection);
+    act(() => root.unmount()); container.remove();
+  });
+});

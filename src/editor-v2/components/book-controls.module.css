@@ -1,0 +1,78 @@
+/* Shared cartographer-book controls. Layout belongs to the consuming panel.
+   The reference is HierarchyNavigator's original "Add level" action. */
+.button,
+.buttons :where(button) {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  padding: 7px 5px;
+  color: var(--book-button-ink, #d8bc82);
+  border: 1px solid var(--book-button-border, #a57c3d55);
+  border-radius: 0;
+  background: var(--book-button-face, transparent);
+  box-shadow: none;
+  cursor: pointer;
+  font: normal 400 .65rem/1.35 Georgia, "Times New Roman", serif;
+  letter-spacing: normal;
+  text-transform: none;
+  overflow-wrap: anywhere;
+}
+
+.button:not(:disabled):hover,
+.buttons :where(button:not(:disabled):hover) {
+  color: var(--book-button-hover-ink, #fff0bf);
+  border-color: var(--book-button-hover-border, #a8823e);
+  background: var(--book-button-hover-face, #a57c3d14);
+}
+
+.button:focus-visible,
+.buttons :where(button:focus-visible),
+.fields :where(input:focus-visible, select:focus-visible, textarea:focus-visible) {
+  outline: 1px solid #d0aa62;
+  outline-offset: 2px;
+}
+
+.button:disabled,
+.buttons :where(button:disabled) { opacity: .5; cursor: default; }
+
+.button[aria-pressed="true"],
+.buttons :where(button[aria-pressed="true"]),
+.selected {
+  --book-button-ink: #f0dfb3;
+  --book-button-border: #b8914d;
+  --book-button-face: #a57c3d22;
+}
+
+.primary {
+  --book-button-ink: #eadbb8;
+  --book-button-border: #b08a46;
+  --book-button-face: #553b2b;
+  --book-button-hover-face: #674832;
+}
+
+.danger {
+  --book-button-ink: #e7a99b;
+  --book-button-border: #7f3830;
+  --book-button-face: #7f2d261c;
+  --book-button-hover-ink: #f4d2c5;
+  --book-button-hover-border: #c46b5e;
+  --book-button-hover-face: #7f2d2633;
+}
+
+.fields :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]), textarea, select) {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  padding: 6px 5px;
+  color: #eadcba;
+  border: 0;
+  border-bottom: 1px solid #a57c3d77;
+  border-radius: 0;
+  background: #17231d88;
+  font: italic .78rem/1.35 Georgia, "Times New Roman", serif;
+}
+
+.fields :where(input[type="checkbox"], input[type="radio"]) { accent-color: #943c34; }
+.fields :where(textarea) { resize: vertical; }
+.fields :where(select option) { color: #eadcba; background: #17251e; }

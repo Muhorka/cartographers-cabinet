@@ -1,0 +1,38 @@
+.panel {
+  composes: buttons fields from "../../components/book-controls.module.css";
+  composes: headings from "../../components/book-typography.module.css";
+  display: grid;
+  gap: .7rem;
+  min-width: 0;
+  color: #eadbb8;
+  font: normal .82rem/1.4 Georgia, "Times New Roman", serif;
+}
+.panel h2, .panel h3, .panel p { margin: 0; }
+.panel h2 + p { color: #bdb091; font: italic .72rem/1.35 Georgia, "Times New Roman", serif; }
+.panel label { display: grid; gap: .3rem; color: #b89b67; font-size: .62rem; }
+.panel button { text-align: left; }
+.panel summary { cursor: pointer; color: #d6ba7c; font-size: .75rem; font-weight: 400; }
+.panel ul { padding-left: 1.1rem; margin: .4rem 0; }
+.panel li + li { margin-top: .25rem; }
+.panel .checkbox { display: flex; align-items: center; gap: .4rem; }
+.context { border-left: 3px solid #b58a4688; padding-left: .6rem; }
+.actions { display: flex; flex-wrap: wrap; gap: .4rem; }
+.scopeNote { font-size: .8rem; line-height: 1.45; opacity: .85; }
+.results { display: grid; gap: .75rem; }
+.result { display: grid; gap: .55rem; padding: .7rem; border: 1px solid #b58a4666; background: #1a2a21e6; }
+.resultTitle { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: .4rem; }
+.badge { font-size: .75rem; border: 1px solid currentColor; padding: .2rem .5rem; white-space: nowrap; }
+.result[data-review-status="satisfied"] .badge { color: #9db08c; }
+.result[data-review-status="blocked"] .badge { color: #e7a99b; }
+.result[data-review-status="conditional"] .badge, .result[data-review-status="unknown"] .badge { color: #d6ba7c; }
+.panel [role="status"] { color: #bdb091; font-size: .72rem; font-style: italic; }
+.panel [role="alert"], .warning { color: #e7a99b; font-size: .72rem; }
+.sources { border-top: 1px solid #b58a4666; padding-top: .5rem; }
+.fact { display: grid; gap: .4rem; margin-top: .5rem; }
+.fact dl { margin: 0; }
+.fact dl > div { padding: .25rem 0; border-bottom: 1px dotted #b58a4644; }
+.fact dt { font-size: .8rem; font-weight: 600; }
+.fact dd { margin-left: 0; font-size: .85rem; overflow-wrap: anywhere; }
+.fact dd small { display: block; opacity: .8; }
+.sources blockquote { border-left: 2px solid #b58a4688; margin: .5rem 0; padding-left: .5rem; font-size: .85rem; }
+.sources cite { display: block; font-size: .8rem; }

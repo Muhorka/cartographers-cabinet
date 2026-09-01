@@ -1,0 +1,15 @@
+.panel {
+  composes: buttons fields from "../components/book-controls.module.css";
+  display: grid;
+  gap: 6px;
+  padding: 7px;
+  border: 1px solid #a57c3d55;
+  background: #182820;
+  color: #dfceaa;
+  font: .68rem Georgia, "Times New Roman", serif;
+}
+.panel strong { color: #d6ba7c; font-size: .72rem; font-weight: 400; }
+.panel label { display: grid; grid-template-columns: minmax(0, 1fr) 70px; align-items: center; gap: 6px; }
+.actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.hint { composes: description from "../components/book-typography.module.css"; }
+.empty { composes: description from "../components/book-typography.module.css"; padding: 7px; }

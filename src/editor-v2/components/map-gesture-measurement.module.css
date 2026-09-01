@@ -1,0 +1,3 @@
+.readout{pointer-events:none;color:#563b2d;filter:drop-shadow(0 1px 1px #fff1c0)}
+.readout rect{fill:#f5eac7e8;stroke:#8d6b45;stroke-width:.6;vector-effect:non-scaling-stroke}
+.readout text{fill:currentColor;font-family:Georgia,serif;dominant-baseline:middle;white-space:pre}

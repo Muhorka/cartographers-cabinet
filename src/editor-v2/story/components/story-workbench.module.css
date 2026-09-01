@@ -1,0 +1,93 @@
+/* Story panels are mounted inside the existing editor shell; the shell owns the page frame. */
+.kicker { color: #c5a567; font-size: .62rem; letter-spacing: .2em; text-transform: uppercase; }
+.storyStamp { display: grid; width: 52px; height: 52px; place-items: center; color: #ead19a; border: 1px solid var(--story-brass); border-radius: 50%; background: radial-gradient(circle, #794438, #422a25 75%); box-shadow: inset 0 0 0 4px #ffffff0c; transform: rotate(-7deg); }
+.storyNav { composes: buttons fields from "../../components/book-controls.module.css"; composes: headings from "../../components/book-typography.module.css"; }
+.collectionRail { composes: buttons from "../../components/book-controls.module.css"; }
+.collectionRail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; margin-bottom: 12px; }
+.collectionRail button { min-height: 30px; padding: 5px; overflow-wrap: anywhere; }
+.isActive { composes: selected from "../../components/book-controls.module.css"; }
+.storyStrip { composes: buttons fields from "../../components/book-controls.module.css"; }
+.storyStrip { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; padding: 9px 11px; color: #e4d2aa; border: 1px solid #b58a4688; background: linear-gradient(90deg, #203027, #2d3d30 55%, #1c2b23); box-shadow: 0 6px 18px #0007, inset 0 1px #f2d18c22; }
+.storyStrip label { display: grid; gap: 3px; min-width: min(180px, 28vw); color: #beaa7c; font-size: .58rem; letter-spacing: .1em; text-transform: uppercase; }
+.contextMode { display: flex; align-items: end; gap: 3px; min-height: 0; margin: 0; padding: 0; border: 0; }
+.contextMode legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.contextMode button { min-height: 30px; }
+.contextPanel { composes: buttons fields from "../../components/book-controls.module.css"; composes: headings from "../../components/book-typography.module.css"; }
+.storyNav, .contextPanel { min-width: 0; padding: 12px; background: #1a2a21e6; border: 1px solid #b58a463c; }
+.storyNav h2, .panelHeading h2 { margin: 2px 0 11px; }
+.storyNav button { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 6px; text-align: left; }
+.storyNav button span, .count { color: #9c916e; font-size: .65rem; }
+.navHint { composes: description from "../../components/book-typography.module.css"; }
+.lensNote { composes: description from "../../components/book-typography.module.css"; }
+.disclosureBook { display: grid; gap: 7px; min-width: 0; padding: 0; }
+.disclosureSection { min-width: 0; margin: 0; padding: 0; color: #eadbb8; border: 1px solid #b58a463c; background: #1a2a21e6; }
+.disclosureSummary { composes: disclosure from "../../components/book-typography.module.css"; display: flex; min-width: 0; align-items: center; gap: 8px; padding: 9px 10px; list-style: none; }
+.disclosureSummary::-webkit-details-marker { display: none; }
+.disclosureSummary::before { content: "›"; color: #c5a567; font-size: 1.1rem; line-height: 1; transform: rotate(0deg); transition: transform 120ms ease; }
+.disclosureSection[open] > .disclosureSummary::before { transform: rotate(90deg); }
+.disclosureSummary:hover, .disclosureSummary:focus-visible { color: #fff0c7; background: #b58a4618; }
+.disclosureContent { container-type: inline-size; min-width: 0; padding: 0 3px 3px; }
+.bookPanel, .lensPanel { --story-paper: #17251e; --story-ink: #eadbb8; --story-red: #a85743; color: #eadbb8; min-width: 0; min-height: 100%; padding: 10px; }
+.bookPanel { composes: buttons fields from "../../components/book-controls.module.css"; composes: headings from "../../components/book-typography.module.css"; }
+.lensPanel { composes: buttons fields from "../../components/book-controls.module.css"; composes: headings from "../../components/book-typography.module.css"; }
+.panelHeading { display: flex; align-items: start; justify-content: space-between; gap: 10px; }
+.panelHeading .count { padding-top: 4px; }
+.entryLayout, .lensGrid { display: grid; grid-template-columns: minmax(145px, 30%) minmax(0, 1fr); gap: 13px; }
+.entryList { display: grid; align-content: start; gap: 3px; }
+.entryList button { display: grid; min-width: 0; gap: 3px; padding: 9px 8px; text-align: left; }
+.selectedEntry { composes: selected from "../../components/book-controls.module.css"; }
+.lensRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px; }
+.lensRow > button:first-child { min-width: 0; }
+.favoriteButton { align-self: stretch; padding: 4px 7px; }
+.entryList strong { overflow-wrap: anywhere; font-size: .76rem; font-weight: 600; }
+.entryList small { overflow-wrap: anywhere; color: #c9b790; font-size: .72rem; line-height: 1.3; }
+.entryEditor { min-width: 0; }
+.addRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; margin-bottom: 12px; color: #cdbb91; font-size: .75rem; }
+.addRow > label { grid-column: 1 / -1; }
+.addRow > label:not(:first-child) { display: grid; gap: 4px; }
+.addRow { composes: buttons fields from "../../components/book-controls.module.css"; }
+.form { composes: buttons fields from "../../components/book-controls.module.css"; display: grid; gap: 9px; }
+.field { composes: fields from "../../components/book-controls.module.css"; composes: label from "../../components/book-typography.module.css"; display: grid; gap: 4px; }
+.field textarea { resize: vertical; line-height: 1.35; }
+.field select[multiple] { min-height: 86px; }
+.check { display: flex; align-items: center; gap: 7px; color: #cdbb91; font-size: .75rem; }
+.check input { accent-color: var(--story-red); }
+.segmented { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; padding: 7px; border: 1px solid #98784566; }
+.segmented legend, .bulkField legend { padding: 0 4px; }
+.segmented label { display: flex; align-items: center; gap: 4px; padding: 4px 7px; color: #d8cbaa; background: #a57c3d14; font-size: .68rem; }
+.segmented input { accent-color: var(--story-red); }
+.explanation { composes: description from "../../components/book-typography.module.css"; margin: 0; padding: 8px; border-left: 2px solid #a57c3d77; background: #a57c3d14; }
+.predicateBuilder { display: grid; grid-template-columns: minmax(90px, .8fr) minmax(0, 1.4fr) auto; align-items: end; gap: 6px; min-width: 0; padding: 8px; border: 1px solid #98784566; }
+.predicateBuilder > * { min-width: 0; }
+.predicateBuilder > legend { grid-column: 1 / -1; }
+.predicateList { display: grid; gap: 4px; }
+.predicateRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px; align-items: center; padding: 5px 7px; color: #d8cbaa; background: #a57c3d14; font-size: .68rem; }
+.predicateRow button { --book-button-ink: #e7a99b; --book-button-border: #7f3830; padding: 4px 6px; }
+.bulkField { margin: 0; padding: 8px; border: 1px solid #98784566; }
+.bulkField small { display: block; color: #84724c; font-size: .6rem; }
+.primaryButton { composes: button primary from "../../components/book-controls.module.css"; justify-self: end; }
+.bulkActions { display: flex; grid-column: 1 / -1; flex-wrap: wrap; gap: 5px; min-width: 0; }
+.bulkActions { composes: buttons from "../../components/book-controls.module.css"; }
+.resolvedHint { color: #aaa181; font-size: .6rem; font-style: italic; }
+.dangerButton { composes: button danger from "../../components/book-controls.module.css"; justify-self: end; }
+.neutralButton { composes: button from "../../components/book-controls.module.css"; }
+.empty { margin: 0; padding: 10px; color: #c0ad85; font-size: .75rem; font-style: italic; }
+.subsection { display: grid; gap: 6px; margin-top: 4px; padding: 8px; border: 1px solid #98784566; }
+.subsection h3, .subsection legend { margin: 0; }
+.stepRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px; }
+.contextPanel { color: #eadbb8; }
+.contextGlyph { color: #c59a50; }
+.selectionBadge { display: grid; gap: 2px; margin: 0; padding: 8px; border-left: 2px solid #c59a50; background: #b58a4618; }
+.selectionBadge strong { overflow-wrap: anywhere; color: #f0dfb9; font-size: .78rem; }
+.selectionBadge small { color: #a79b7e; font-size: .62rem; }
+.provenance { display: grid; gap: 3px; padding: 6px 8px; color: #cdbb91; border-left: 2px solid #c59a50; background: #b58a4618; font-size: .62rem; }
+.provenance strong { color: #efc886; font-size: .64rem; }
+.bulkField { color: #cdbb91; }
+.contextPanel .bulkField { border-color: #b58a4666; }
+.contextPanel .bulkField small { color: #a79b7e; }
+.agentCard { display: flex; align-items: start; gap: 8px; margin-top: 18px; padding-top: 12px; border-top: 1px solid #b58a4644; }
+.agentCard strong { color: #dbc998; font-size: .72rem; }
+.agentCard p { margin: 4px 0 0; color: #9f997f; font-size: .66rem; line-height: 1.3; }
+.agentDot { display: block; width: 8px; height: 8px; margin-top: 3px; flex: 0 0 auto; border-radius: 50%; background: #9c916e; }.agentDot.isWorking { background: #d2a457; box-shadow: 0 0 8px #d2a457; }
+@container (max-width: 420px) { .entryLayout, .lensGrid { grid-template-columns: 1fr; }.entryList { max-height: 180px; overflow: auto; }.collectionRail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }.storyStrip label { min-width: min(180px, 100%); }.predicateBuilder { grid-template-columns: minmax(0, 1fr); }.predicateBuilder > legend, .predicateBuilder > .bulkActions { grid-column: 1; } }
+@media (prefers-reduced-motion: reduce) { .storyStrip *, .storyNav *, .contextPanel *, .bookPanel *, .lensPanel * { scroll-behavior: auto !important; transition: none !important; } }

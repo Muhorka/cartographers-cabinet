@@ -1,0 +1,49 @@
+{
+  "name": "spatial-workbench",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "npm exec --yes --package=serve@14.2.6 -- serve out --listen tcp://127.0.0.1:3000",
+    "lint": "eslint .",
+    "check:files": "node scripts/check-file-size.mjs",
+    "check:release": "node scripts/check-public-release.mjs",
+    "check:dead-code": "knip",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "pnpm check:release && pnpm check:files && pnpm check:dead-code && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "dependencies": {
+    "dexie": "latest",
+    "jspdf": "4.2.1",
+    "jsts": "^2.12.1",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "svg2pdf.js": "2.7.0",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "eslint": "9.39.5",
+    "eslint-config-next": "latest",
+    "jsdom": "latest",
+    "knip": "6.32.2",
+    "typescript": "6.0.3",
+    "vitest": "latest"
+  },
+  "knip": {
+    "entry": [
+      "src/app/**/*.{ts,tsx}",
+      "src/**/*.test.{ts,tsx}"
+    ],
+    "project": [
+      "src/**/*.{ts,tsx}"
+    ]
+  },
+  "packageManager": "pnpm@11.7.0"
+}

@@ -1,0 +1,8 @@
+.preview{pointer-events:none;color:#9f463b}
+.preview path,.preview rect,.preview circle,.preview ellipse{fill:#a5483912;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:5 3;vector-effect:non-scaling-stroke;filter:drop-shadow(0 1px 1px #fff1c0)}
+.preview .node{fill:#e9d8aa;stroke:#8d392f;stroke-width:1;stroke-dasharray:none}
+.erase{color:#b0674d;opacity:.7}
+.erase path{fill:none;stroke-linecap:round;stroke-dasharray:none;filter:none}
+.preview .eraserTip{fill:#b0674d2e;stroke:#8d392f;stroke-width:1;stroke-dasharray:none;filter:none}
+.polygon path{stroke-dasharray:3 2}
+.pen path{fill:none;stroke-dasharray:none}.pen line{stroke:#9f463b;stroke-width:1;stroke-dasharray:2 2;vector-effect:non-scaling-stroke}.pen .handle{fill:#d2b475;stroke:#7c392f;stroke-width:.8;stroke-dasharray:none}

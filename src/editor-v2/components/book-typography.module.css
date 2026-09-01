@@ -1,0 +1,41 @@
+/* Roles from the original ledger: brass headings, handwritten descriptions,
+   quiet field labels. No geometry or page-layout rules belong in this skin. */
+.heading,
+.headings :where(h2) {
+  color: #d6ba7c;
+  font: normal 400 .78rem/1.35 Georgia, "Times New Roman", serif;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.subheading,
+.headings :where(h3, legend) {
+  color: #d6ba7c;
+  font: normal 400 .75rem/1.35 Georgia, "Times New Roman", serif;
+  overflow-wrap: anywhere;
+}
+
+.description {
+  color: #bdb091;
+  font: italic .72rem/1.4 Georgia, "Times New Roman", serif;
+  overflow-wrap: anywhere;
+}
+
+.label {
+  color: #b89b67;
+  font: normal .68rem/1.35 Georgia, "Times New Roman", serif;
+  overflow-wrap: anywhere;
+}
+
+.disclosure {
+  color: #d6ba7c;
+  font: normal 400 .68rem/1.4 Georgia, "Times New Roman", serif;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.disclosure:hover { color: #fff0bf; }
+.disclosure:focus-visible { outline: 1px solid #d0aa62; outline-offset: 2px; }

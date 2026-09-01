@@ -1,0 +1,83 @@
+.panel {
+  min-width: 0;
+  height: 100%;
+  overflow: auto;
+  padding: 18px 15px 24px;
+  color: #ddd0ad;
+  background: transparent;
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.panel h2 {
+  position: relative;
+  margin: 0 0 22px;
+  padding: 12px 13px 11px;
+  color: #d6ba7c;
+  border: 1px solid #9b794455;
+  background: linear-gradient(110deg, #17251e80, #47332836);
+  box-shadow: inset 0 0 18px #0003, 0 1px #d7b46713;
+  font-size: .78rem;
+  font-weight: 400;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+
+.panel h2::before,
+.panel h2::after {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border: 1px solid #b68e4c88;
+  content: "";
+  transform: rotate(45deg);
+}
+
+.panel h2::before { top: -4px; left: -4px; }
+.panel h2::after { right: -4px; bottom: -4px; }
+
+.form { display: grid; gap: 18px; }
+.levelActions{display:grid;gap:4px}
+.form label,
+.belongs { display: grid; gap: 5px; }
+.form label > span,
+.belongs > span { color: #b89b67; font-size: .62rem; letter-spacing: .12em; text-transform: uppercase; }
+
+.form input,
+.form textarea,
+.form select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 3px;
+  color: #f1dfb4;
+  border: 0;
+  border-bottom: 1px solid #8b6738;
+  outline: none;
+  background: #17231d88;
+  font: italic .86rem Georgia, serif;
+}
+
+.form input:focus,
+.form textarea:focus,
+.form select:focus { border-color: #d0aa62; box-shadow: 0 2px #943c3444; }
+.form input[readonly],
+.form textarea[readonly],
+.form select:disabled { color: #d8c9a7; border-bottom-color: #725c3a66; background: transparent; cursor: default; opacity: .86; }
+.form textarea { min-height: 7rem; resize: vertical; line-height: 1.45; }
+.belongs strong { color: #e0d0aa; font-size: .83rem; font-style: italic; font-weight: 400; }
+
+.delete {
+  composes: button danger from "./book-controls.module.css";
+  justify-self: start;
+  margin-top: 8px;
+}
+
+.action {
+  composes: button from "./book-controls.module.css";
+  justify-self: start;
+}
+
+.empty,
+.selectionKind { color: #bdb091; font-style: italic; line-height: 1.5; }
+.hint { margin: 0; color: #bdb091; font-size: .76rem; font-style: italic; line-height: 1.45; }
+.panel code { display: block; margin-top: 10px; overflow-wrap: anywhere; color: #c7b88f; font-size: .65rem; }
+.levelChecklist{border:1px solid #7e683d66;padding:.45rem .55rem;margin:.15rem 0;display:grid;gap:.34rem}.levelChecklist legend{padding:0 .3rem;color:var(--ink-muted,#766346);font-size:.75rem;text-transform:uppercase;letter-spacing:.08em}.levelChecklist label{display:grid;grid-template-columns:1rem minmax(0,1fr);align-items:center;gap:.5rem;min-height:1.35rem}.levelChecklist input{width:.9rem;height:.9rem;margin:0;align-self:center}.levelChecklist span{line-height:1.2}

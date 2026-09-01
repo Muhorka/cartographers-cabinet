@@ -1,0 +1,25 @@
+.panel {
+  composes: buttons fields from "../../components/book-controls.module.css";
+  composes: headings from "../../components/book-typography.module.css";
+  display: grid;
+  gap: .65rem;
+  color: #dfd1ad;
+  font: normal .82rem/1.4 Georgia, "Times New Roman", serif;
+}
+.panel h2 { margin: .4rem 0; }
+.panel h2 + p { margin: .2rem 0 .5rem; color: #bdb091; font: italic .72rem/1.35 Georgia, "Times New Roman", serif; }
+.panel p { line-height: 1.4; margin: .2rem 0; }
+.panel label { display: grid; gap: .3rem; color: #b89b67; font-size: .62rem; }
+.panel fieldset { border: 1px solid #967540; min-width: 0; padding: .4rem; }
+.coordinates { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; margin-top: .4rem; }
+.pointButton { justify-self: start; padding: .3rem .45rem; }
+.precision, .preferences { border: 1px solid #967540; min-width: 0; padding: .4rem; }
+.precision summary { cursor: pointer; color: #d6ba7c; font-size: .75rem; font-weight: 400; }
+.precision p { color: #bbae91; font-size: .8em; }
+.panel [role="alert"] { color: #e7a99b; font-size: .72rem; }
+.panel .override { display: flex; grid-template-columns: auto 1fr; align-items: center; gap: .4rem; margin: .4rem 0; }
+.override input { width: auto; }
+.preferences { display: grid; gap: .4rem; }
+.preferences legend { padding: 0 .25rem; color: #d6ba7c; font-size: .75rem; font-weight: 400; }
+.preferences label { grid-template-columns: minmax(0, 1fr) minmax(5rem, 8rem); align-items: center; }
+@container (max-width: 320px) { .coordinates { grid-template-columns: 1fr; } .preferences label { grid-template-columns: 1fr; } }
