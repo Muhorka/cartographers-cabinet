@@ -18,6 +18,7 @@ import { applyAffinePoint, relativePlaceMatrix } from "../geometry/affine-transf
 import { duplicateSelectedConstructionSurfaces, mergeSelectedConstructionSurfaces, moveConstructionSurfaceVertex, resizeConstructionSurface, transformSelectedConstructionSurfaces, updateConstructionSurface, type ConstructionSurfaceGroupResult } from "../drawing/construction-surface-operations";
 import { joinFlowingWater, joinRoads, roadJoinNoticeKey } from "../roads/road-joining";
 import { isFlowingWater } from "../geometry/ribbon-geometry";
+import { useEditorTransaction } from "./use-editor-transaction";
 
 export function useEditorSelection({ session, snapshot, copy, locale, refresh, onSelection, onSelections }: {
   session?: EditorSession;
@@ -31,39 +32,39 @@ export function useEditorSelection({ session, snapshot, copy, locale, refresh, o
   const [review, setReview] = useState<{ project: EditorSessionState["project"]; effects: string[] }>();
   const [blocked, setBlocked] = useState<keyof WorkbenchCopy["editingStatus"]["blocked"]>();
   const identity = useMemo(() => ({ createId: () => crypto.randomUUID(), createRoomName: (index: number) => locale === "pl" ? `Pomieszczenie ${index}` : `Room ${index}` }), [locale]);
+  const { commit: commitTransaction } = useEditorTransaction(session, refresh, setBlocked);
+  const commit = (project: EditorSessionState["project"] | ((project: EditorSessionState["project"]) => EditorSessionState["project"]), transactionId: string) => commitTransaction(transactionId, project);
 
   function finish(result: SelectionOperationResult, transactionId: string, applyReviewImmediately = false) {
     setBlocked(undefined);
-    if (result.state === "blocked") { setBlocked(result.reason); return; }
-    if (result.state === "review-required" && !applyReviewImmediately) { setReview({ project: result.accept(), effects: result.effects }); return; }
+    if (result.state === "blocked") { setBlocked(result.reason); return false; }
+    if (result.state === "review-required" && !applyReviewImmediately) { setReview({ project: result.accept(), effects: result.effects }); return true; }
     const project = result.state === "review-required" ? result.accept() : result.project;
-    session?.executeTransaction({ id: transactionId, apply: () => project }); refresh();
+    return commit(project, transactionId);
   }
 
   function finishElements(result: ElementTransformationResult, transactionId: string) {
     setBlocked(undefined);
     if (result.state === "blocked") { setBlocked(result.reason === "outside-outline" ? "outside-outline" : "unsupported"); return; }
-    session?.executeTransaction({ id: transactionId, apply: () => result.project });
-    onSelections(result.selectedIds.map((id) => ({ kind: "element", id }))); refresh();
+    if (commit(result.project, transactionId)) onSelections(result.selectedIds.map((id) => ({ kind: "element", id })));
   }
 
   function finishPlaces(result: PlaceTransformationResult, transactionId: string) {
     setBlocked(undefined);
     if (result.state === "blocked") { setBlocked(result.reason === "outside-outline" ? "outside-outline" : "unsupported"); return; }
-    session?.executeTransaction({ id: transactionId, apply: () => result.project }); onSelections(result.selectedIds.map((id) => ({ kind: "place", id }))); refresh();
+    if (commit(result.project, transactionId)) onSelections(result.selectedIds.map((id) => ({ kind: "place", id })));
   }
 
   function finishRooms(result: RoomTransformationResult, transactionId: string) {
     setBlocked(undefined);
     if (result.state === "blocked") { setBlocked(result.reason === "outside-outline" ? "outside-outline" : result.reason === "locked-outline" ? "locked-outline" : "unsupported"); return; }
-    session?.executeTransaction({ id: transactionId, apply: () => result.project });
-    onSelections(result.selectedIds.map((id) => ({ kind: "room", id }))); refresh();
+    if (commit(result.project, transactionId)) onSelections(result.selectedIds.map((id) => ({ kind: "room", id })));
   }
 
   function finishSurfaces(result: ConstructionSurfaceGroupResult, transactionId: string) {
     setBlocked(undefined);
     if (result.state === "blocked") { setBlocked(result.reason === "locked-outline" ? "locked-outline" : "unsupported"); return; }
-    session?.executeTransaction({ id: transactionId, apply: () => result.project }); onSelections(result.selectedIds.map((id) => ({ kind: "surface", id }))); refresh();
+    if (commit(result.project, transactionId)) onSelections(result.selectedIds.map((id) => ({ kind: "surface", id })));
   }
 
   function move(selection: EditableSelection, delta: KernelPoint) {
@@ -83,27 +84,26 @@ export function useEditorSelection({ session, snapshot, copy, locale, refresh, o
 
   function remove(selection: EditableSelection) {
     if (!snapshot) return;
-    finish(deleteSelection(snapshot.project, { activePlaceId: snapshot.activePlaceId ?? "", selection, boundaryEditing: snapshot.boundaryEditing }, identity), `delete:${selection.kind}:${selection.id}`);
-    if (selection.kind !== "wall") onSelection(undefined);
+    const accepted = finish(deleteSelection(snapshot.project, { activePlaceId: snapshot.activePlaceId ?? "", selection, boundaryEditing: snapshot.boundaryEditing }, identity), `delete:${selection.kind}:${selection.id}`);
+    if (accepted && selection.kind !== "wall") onSelection(undefined);
   }
 
   function removeMany(selections: EditableSelection[]) {
     if (!snapshot) return;
-    finish(deleteSelectionGroup(snapshot.project, { activePlaceId: snapshot.activePlaceId ?? "", selections, boundaryEditing: snapshot.boundaryEditing }, identity), `delete:group:${selections.map(({ id }) => id).join(":")}`);
-    onSelection(undefined);
+    if (finish(deleteSelectionGroup(snapshot.project, { activePlaceId: snapshot.activePlaceId ?? "", selections, boundaryEditing: snapshot.boundaryEditing }, identity), `delete:group:${selections.map(({ id }) => id).join(":")}`)) onSelection(undefined);
   }
 
   function editElement(id: string, details: { widthMeters?: number; name?: string; description?: string; tags?: string[]; belongsToId?: string; appearance?: MapAppearance; properties?: Record<string, string | number | boolean | null>; geometry?: DrawingElement["geometry"]; visible?: boolean; locked?: boolean }) {
     if (!session) return;
-    session.executeTransaction({ id: `details:element:${id}`, apply: (project) => updateElementDetails(project, id, details) }); refresh();
+    commit((project) => updateElementDetails(project, id, details), `details:element:${id}`);
   }
 
   function editNoteText(id: string, text: string) {
-    if (!session) return; session.executeTransaction({ id: `note:${id}`, apply: (project) => updateNoteText(project, id, text) }); refresh();
+    if (!session) return; commit((project) => updateNoteText(project, id, text), `note:${id}`);
   }
 
   function editSelectionState(selection: EditableSelection, details: { visible?: boolean; locked?: boolean }) {
-    if (!session) return; session.executeTransaction({ id: `state:${selection.kind}:${selection.id}`, apply: (project) => updateSelectionState(project, selection, details) }); refresh();
+    if (!session) return; commit((project) => updateSelectionState(project, selection, details), `state:${selection.kind}:${selection.id}`);
   }
 
   function resizeOpening(id: string, width: number) {
@@ -157,7 +157,7 @@ export function useEditorSelection({ session, snapshot, copy, locale, refresh, o
 
   function editSurface(id: string, details: Parameters<typeof updateConstructionSurface>[2]) {
     if (!snapshot) return; const project = updateConstructionSurface(snapshot.project, id, details);
-    session?.executeTransaction({ id: `details:surface:${id}`, apply: () => project }); refresh();
+    commit(project, `details:surface:${id}`);
   }
 
   function duplicateElements(ids: string[]) {
@@ -238,7 +238,7 @@ export function useEditorSelection({ session, snapshot, copy, locale, refresh, o
 
   function acceptReview() {
     if (!review || !session) return;
-    session.executeTransaction({ id: "selection:reviewed-change", apply: () => review.project }); setReview(undefined); refresh();
+    if (commit(review.project, "selection:reviewed-change")) setReview(undefined);
   }
 
   let notice: DrawingNoticeModel | undefined;

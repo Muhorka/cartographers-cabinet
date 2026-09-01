@@ -20,12 +20,25 @@ export function useProjectCheckpoints(project: EditorProject | undefined, locale
     void loadProjectCheckpoint(effectiveActiveId, projectId).then((loaded) => { if (!cancelled) setTracing({ id: effectiveActiveId, projectId, project: loaded }); }).catch((cause) => { if (!cancelled) setError(String(cause)); });
     return () => { cancelled = true; };
   }, [effectiveActiveId, projectId]);
-  async function preserve(name: string) { if (!project) return; const checkpoint = await saveProjectCheckpoint(project, name || checkpointCopy[locale].automaticName(new Date())); setItems((current) => [checkpointSummary(checkpoint), ...current]); return checkpoint; }
+  async function preserve(name: string) {
+    if (!project) return;
+    try {
+      const checkpoint = await saveProjectCheckpoint(project, name || checkpointCopy[locale].automaticName(new Date()));
+      setError(undefined); setItems((current) => [checkpointSummary(checkpoint), ...current]); return checkpoint;
+    } catch { setError(checkpointCopy[locale].saveFailed); return undefined; }
+  }
   async function preserveAgentChange(before: EditorProject, after: EditorProject, summary: string, kind: "safety" | "proposal") {
     const label = kind === "safety" ? checkpointCopy[locale].agentSafety : checkpointCopy[locale].proposal;
-    const checkpoint = await saveProjectCheckpoint(kind === "safety" ? before : after, `${label} — ${summary}`, { kind, summary, ...(kind === "proposal" ? { baseSnapshot: before } : {}) });
-    setItems((current) => [checkpointSummary(checkpoint), ...current]); return checkpoint.id;
+    try {
+      const checkpoint = await saveProjectCheckpoint(kind === "safety" ? before : after, `${label} — ${summary}`, { kind, summary, ...(kind === "proposal" ? { baseSnapshot: before } : {}) });
+      setError(undefined); setItems((current) => [checkpointSummary(checkpoint), ...current]); return checkpoint.id;
+    } catch { setError(kind === "safety" ? checkpointCopy[locale].safetyFailed : checkpointCopy[locale].saveFailed); return undefined; }
   }
-  async function remove(id: string) { await removeProjectCheckpoint(id); setItems((current) => current.filter(({ id: checkpointId }) => checkpointId !== id)); if (activeId === id) setActiveId(undefined); }
+  async function remove(id: string) {
+    try {
+      await removeProjectCheckpoint(id);
+      setError(undefined); setItems((current) => current.filter(({ id: checkpointId }) => checkpointId !== id)); if (activeId === id) setActiveId(undefined);
+    } catch (cause) { setError(checkpointCopy[locale].removeFailed); throw cause; }
+  }
   return { items: projectItems, activeId: effectiveActiveId, setActiveId, opacity, setOpacity, error, tracingProject: tracing && tracing.projectId === projectId && tracing.id === effectiveActiveId ? tracing.project : undefined, preserve, preserveAgentChange, remove };
 }

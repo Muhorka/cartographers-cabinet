@@ -86,4 +86,12 @@ describe("project diff semantic equality", () => {
     const parsed = editorProjectSchema.parse(structuredClone(before));
     expect(projectDiff(before, parsed).elements).toEqual({ added: 0, removed: 0, changed: 0 });
   });
+
+  it("reports project name and measurement settings outside the object collections", () => {
+    const before = project([]);
+    const after = structuredClone(before);
+    after.name = "Renamed";
+    after.measureSettings.showAxes = true;
+    expect(projectDiff(before, after).project).toEqual({ added: 0, removed: 0, changed: 2 });
+  });
 });

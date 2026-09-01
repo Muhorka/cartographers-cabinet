@@ -1,4 +1,3 @@
-import { reconcileRoadRoutes } from "../roads/road-transaction";
 import { clearConstructionLayer, type ConstructionClearCategory } from "./clear-construction-layer";
 import { activateLayer, chooseInstrument, chooseSubject, createToolboxState, type ToolboxState } from "../toolbox/toolbox-state";
 import type { InstrumentId, WorkLayerId } from "../toolbox/toolbox-model";
@@ -7,6 +6,9 @@ import { deletePlaceSubtree } from "../model/hierarchy-operations";
 import { repairProjectConstructions } from "../model/construction-repair";
 import { visibleLayerId } from "../toolbox/toolbox-model";
 import { immutableSnapshot } from "./immutable-snapshot";
+import { prepareProjectTransaction, type PreparedProjectTransaction, type ProjectTransaction } from "./project-transaction";
+import { reconcileSessionNavigation } from "../model/navigation-fallback";
+export type { PreparedProjectTransaction, ProjectTransaction } from "./project-transaction";
 
 /** The only selectable things exposed by the editor session. */
 export type EditorSelection =
@@ -40,11 +42,6 @@ export type SessionResult<T = undefined> = {
   reason?: string;
 };
 
-export type ProjectTransaction = {
-  id: string;
-  apply: (project: EditorProject) => EditorProject;
-};
-
 export type EditorSessionState = {
   project: EditorProject;
   activePlaceId?: string;
@@ -68,8 +65,6 @@ type History = {
 };
 
 const clone = <T>(value: T): T => structuredClone(value);
-const signature = (project: EditorProject) => JSON.stringify(project);
-
 function constructionFor(project: EditorProject, constructionId: string) {
   return project.constructions.find(({ id }) => id === constructionId);
 }
@@ -95,6 +90,7 @@ export function normalizedClearLayer(layerId: WorkLayerId) {
 
 export class EditorSession {
   private readonly history: History = { past: [], future: [] };
+  private readonly preparedTransactions = new WeakSet<PreparedProjectTransaction>();
   private readonly createId: () => string;
   private readonly createRoomName: (index: number) => string;
   private state: EditorSessionState;
@@ -173,22 +169,29 @@ export class EditorSession {
 
   dismissRoadConflict() { this.state = { ...this.state, roadConflict: undefined }; }
 
-  executeTransaction(transaction: ProjectTransaction): SessionResult {
-    let next: EditorProject;
-    try {
-      next = repairProjectConstructions(normalizeEditorProject(clone(transaction.apply(clone(this.state.project)))), { createId: this.createId, createName: this.createRoomName });
-      const routed = reconcileRoadRoutes(this.state.project, next);
-      if (!routed) { this.state = { ...this.state, roadConflict: true }; return { code: "road-obstacle", changed: false }; }
-      next = routed; this.state = { ...this.state, roadConflict: undefined };
-    } catch (error) {
-      return { code: "transaction-failed", changed: false, reason: error instanceof Error ? error.message : String(error) };
+  prepareTransaction(transaction: ProjectTransaction): PreparedProjectTransaction {
+    const prepared = prepareProjectTransaction(this.state.project, transaction, { createId: this.createId, createRoomName: this.createRoomName });
+    this.preparedTransactions.add(prepared);
+    return prepared;
+  }
+
+  commitPreparedTransaction(prepared: PreparedProjectTransaction): SessionResult {
+    if (!this.preparedTransactions.delete(prepared)) return { code: "transaction-failed", changed: false, reason: "transaction-untrusted" };
+    if (prepared.before !== this.state.project) return { code: "transaction-failed", changed: false, reason: "transaction-stale" };
+    if (prepared.status === "blocked") {
+      if (prepared.code === "road-obstacle") this.state = { ...this.state, roadConflict: true };
+      return { code: prepared.code, changed: false, ...(prepared.reason ? { reason: prepared.reason } : {}) };
     }
-    if (signature(next) === signature(this.state.project)) return { code: "no-change", changed: false };
-    next = immutableSnapshot(next, this.state.project);
+    this.state = { ...this.state, roadConflict: undefined };
+    if (prepared.status === "no-change") return { code: "no-change", changed: false };
     this.history.past.push(this.state.project);
     this.history.future = [];
-    this.state = { ...this.state, project: next };
+    this.installProject(prepared.project);
     return { code: "committed", changed: true };
+  }
+
+  executeTransaction(transaction: ProjectTransaction): SessionResult {
+    return this.commitPreparedTransaction(this.prepareTransaction(transaction));
   }
 
   clearCurrentLayer(layerId: WorkLayerId = this.state.toolbox.activeLayerId, category: ConstructionClearCategory = "all"): SessionResult {
@@ -222,7 +225,7 @@ export class EditorSession {
     const previous = this.history.past.pop();
     if (!previous) return { code: "history-empty", changed: false };
     this.history.future.push(this.state.project);
-    this.state = { ...this.state, project: previous };
+    this.installProject(previous);
     return { code: "committed", changed: true };
   }
 
@@ -230,7 +233,17 @@ export class EditorSession {
     const next = this.history.future.pop();
     if (!next) return { code: "history-empty", changed: false };
     this.history.past.push(this.state.project);
-    this.state = { ...this.state, project: next };
+    this.installProject(next);
     return { code: "committed", changed: true };
+  }
+
+  /** Installs a canonical document and keeps session navigation valid across snapshots. */
+  private installProject(project: EditorProject) {
+    const navigation = reconcileSessionNavigation(this.state.project, project, {
+      activePlaceId: this.state.activePlaceId,
+      selection: this.state.selection,
+      boundaryEditing: this.state.boundaryEditing,
+    });
+    this.state = { ...this.state, project, ...navigation };
   }
 }

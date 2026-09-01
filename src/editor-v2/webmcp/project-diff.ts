@@ -4,7 +4,7 @@ import { storyCollectionEntryId } from "../story/collection-identity";
 import { projectStoryData } from "../story/project-effective";
 
 type ChangeCount = { added: number; removed: number; changed: number };
-export type ProjectDiff = Record<"places" | "elements" | "surfaces" | "constructions" | "roadJunctions" | "story", ChangeCount>;
+export type ProjectDiff = Record<"project" | "places" | "elements" | "surfaces" | "constructions" | "roadJunctions" | "story", ChangeCount>;
 
 function collectionDiff<T extends { id: string }>(before: readonly T[], after: readonly T[]): ChangeCount {
   const old = new Map(before.map((item) => [item.id, stableJsonStringify(item)]));
@@ -17,9 +17,14 @@ function collectionDiff<T extends { id: string }>(before: readonly T[], after: r
 }
 
 export function projectDiff(before: EditorProject, after: EditorProject): ProjectDiff {
+  const projectProperties = (project: EditorProject) => [
+    { id: "name", value: project.name },
+    { id: "measureSettings", value: project.measureSettings },
+  ];
   const story = (project: EditorProject): { id: string; value: unknown }[] => Object.entries(projectStoryData(project)).flatMap(([collection, value]): { id: string; value: unknown }[] =>
     Array.isArray(value) ? value.map((entry) => ({ value: entry, id: `${collection}:${storyCollectionEntryId(entry)}` })) : [{ id: collection, value }]);
   return {
+    project: collectionDiff(projectProperties(before), projectProperties(after)),
     places: collectionDiff(before.places, after.places), elements: collectionDiff(before.elements, after.elements),
     surfaces: collectionDiff(before.surfaces, after.surfaces), constructions: collectionDiff(before.constructions, after.constructions),
     roadJunctions: collectionDiff(before.roadJunctions ?? [], after.roadJunctions ?? []), story: collectionDiff(story(before), story(after)),

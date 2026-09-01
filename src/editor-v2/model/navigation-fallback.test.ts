@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createPlace, deletePlaceSubtree } from "./hierarchy-operations";
 import { emptyProject } from "./project-model";
-import { placeToOpenAbove, placeToOpenAfterDeletion } from "./navigation-fallback";
+import { placeToOpenAbove, placeToOpenAfterDeletion, placeToOpenAfterProjectInstall, reconcileSessionNavigation } from "./navigation-fallback";
 
 function projectWithLevels() {
   let project = createPlace(emptyProject("project", "Project"), { id: "world", name: "World", kind: "world" });
@@ -39,5 +39,26 @@ describe("navigation after deleting a place", () => {
     let before = projectWithLevels(); before = deletePlaceSubtree(before, "ground");
     const after = deletePlaceSubtree(before, "first");
     expect(placeToOpenAfterDeletion(before, after, "first", "first")).toBe("building");
+  });
+
+  it("falls back to the first place when the former active subtree had no surviving parent", () => {
+    const before = projectWithLevels();
+    const after = { ...before, places: [{ ...before.places[0], id: "replacement" }] };
+    expect(placeToOpenAfterProjectInstall(before, after, "first")).toBe("replacement");
+  });
+
+  it("filters removed selections and closes boundary editing only when navigation changes", () => {
+    const before = projectWithLevels();
+    const after = { ...before, places: before.places.filter(({ id }) => id !== "first") };
+    expect(reconcileSessionNavigation(before, after, {
+      activePlaceId: "first",
+      selection: [{ kind: "place", id: "first" }, { kind: "place", id: "ground" }],
+      boundaryEditing: true,
+    })).toEqual({ activePlaceId: "ground", selection: [], boundaryEditing: false });
+    expect(reconcileSessionNavigation(before, before, {
+      activePlaceId: "ground",
+      selection: [{ kind: "place", id: "ground" }],
+      boundaryEditing: true,
+    }).boundaryEditing).toBe(true);
   });
 });

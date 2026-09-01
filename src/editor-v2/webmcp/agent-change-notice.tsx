@@ -5,8 +5,8 @@ import styles from "./agent-change-notice.module.css";
 
 export type AgentChangeReport = Parameters<NonNullable<CommandBridge["reportAgentChange"]>>[0];
 const copy = {
-  pl: { title: "Zmiana agenta", undo: "Cofnij", compare: "Pokaż kalkę", close: "Zamknij podsumowanie", details: "Szczegóły zmian", places: "Lokalizacje", elements: "Obiekty", surfaces: "Podesty", constructions: "Konstrukcje", roadJunctions: "Skrzyżowania", story: "Opowieść", added: "dodano", removed: "usunięto", changed: "zmieniono" },
-  en: { title: "Agent change", undo: "Undo", compare: "Show tracing", close: "Close summary", details: "Change details", places: "Places", elements: "Objects", surfaces: "Platforms", constructions: "Construction", roadJunctions: "Junctions", story: "Story", added: "added", removed: "removed", changed: "changed" },
+  pl: { title: "Zmiana agenta", undo: "Cofnij", compare: "Pokaż kalkę", close: "Zamknij podsumowanie", details: "Szczegóły zmian", project: "Projekt i widok", places: "Lokalizacje", elements: "Obiekty", surfaces: "Podesty", constructions: "Konstrukcje", roadJunctions: "Skrzyżowania", story: "Opowieść", added: "dodano", removed: "usunięto", changed: "zmieniono" },
+  en: { title: "Agent change", undo: "Undo", compare: "Show tracing", close: "Close summary", details: "Change details", project: "Project and view", places: "Places", elements: "Objects", surfaces: "Platforms", constructions: "Construction", roadJunctions: "Junctions", story: "Story", added: "added", removed: "removed", changed: "changed" },
 };
 export function AgentChangeNotice({ report, locale, canUndo = true, onUndo, onCompare, onClose, currentRevision, currentProjectId, onReadProposalChanges }: { report?: AgentChangeReport; locale: "pl" | "en"; canUndo?: boolean; onUndo(): void; onCompare(id: string): void; onClose(): void; currentRevision?: string; currentProjectId?: string; onReadProposalChanges?(input: ProposalChangeInput): Promise<ProposalChangeReadResult> }) {
   if (!report) return null;

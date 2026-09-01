@@ -140,6 +140,8 @@ Inventory date: 2026-09-01. This notice is based on the locked production depend
 
 `Gelasio` static TTF files (`public/fonts/gelasio/Gelasio-Regular.ttf`, `Gelasio-Italic.ttf`, `Gelasio-Bold.ttf`, `Gelasio-BoldItalic.ttf`) — The Gelasio Project Authors, SIL Open Font License 1.1. The repository already carries [README.md](public/fonts/gelasio/README.md) and [OFL.txt](public/fonts/gelasio/OFL.txt); keep those files beside the font assets. Source: [SorkinType/Gelasio](https://github.com/SorkinType/Gelasio), pinned revision recorded in the README.
 
+`Italianno` static TTF file (`public/fonts/italianno/Italianno-Regular.ttf`) — The Italianno Project Authors, SIL Open Font License 1.1. The repository carries [README.md](public/fonts/italianno/README.md) and [OFL.txt](public/fonts/italianno/OFL.txt) beside the asset. Source: [Google Fonts italianno](https://github.com/google/fonts/tree/main/ofl/italianno); the README records the exact Google Fonts CSS asset URL and SHA-256.
+
 ## Direct transitive paths that must remain visible
 
 * `jspdf@4.2.1` -> `@babel/runtime`, `fflate`, `fast-png`; optional runtime paths include `canvg`, `core-js`, `dompurify`, `html2canvas`.

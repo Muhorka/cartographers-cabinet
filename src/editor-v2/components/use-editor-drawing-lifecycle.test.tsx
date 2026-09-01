@@ -1,6 +1,6 @@
 import { act, createRef, forwardRef, useImperativeHandle } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createStarterProject } from "../model/starter-project";
 import { EditorSession } from "../state/editor-session";
 import { workbenchCopy } from "../i18n/workbench-copy";
@@ -12,9 +12,10 @@ let session: EditorSession;
 let activePlaceId: string;
 let host: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
+let selected: unknown;
 
 const Probe = forwardRef<DrawingApi, { session: EditorSession }>(function Probe({ session }, ref) {
-  const drawing = useEditorDrawing({ session, snapshot: session.getViewState(), locale: "en", copy: workbenchCopy.en, refresh: () => undefined, onSelection: () => undefined });
+  const drawing = useEditorDrawing({ session, snapshot: session.getViewState(), locale: "en", copy: workbenchCopy.en, refresh: () => undefined, onSelection: (selection) => { selected = selection; } });
   useImperativeHandle(ref, () => drawing, [drawing]);
   return null;
 });
@@ -23,7 +24,7 @@ describe("drawing notice lifecycle", () => {
   beforeEach(() => {
     const project = createStarterProject("p", "Synthetic lifecycle", "en");
     const level = project.places.find(({ kind }) => kind === "level")!;
-    activePlaceId = level.id; session = new EditorSession(project, { initialPlaceId: activePlaceId });
+    activePlaceId = level.id; session = new EditorSession(project, { initialPlaceId: activePlaceId }); selected = undefined;
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     host = document.createElement("div"); document.body.append(host); root = createRoot(host); drawingRef = createRef<DrawingApi>();
     act(() => root.render(<Probe ref={drawingRef} session={session}/>));
@@ -51,5 +52,30 @@ describe("drawing notice lifecycle", () => {
     expect(drawingRef.current!.canUndoDraft).toBe(false);
     expect(drawingRef.current!.notice).toBeUndefined();
     expect(session.getViewState().project).toEqual(beforeProject);
+  });
+
+  it("keeps drawing state and selection unchanged when the central transaction refuses a gesture", () => {
+    const before = session.getViewState().project;
+    vi.spyOn(session, "executeTransaction").mockReturnValueOnce({ code: "transaction-failed", changed: false, reason: "Synthetic rejection" });
+    const gesture = { instrumentId: "point" as const, points: [{ x: 0, y: 0 }] };
+    act(() => drawingRef.current!.applyGesture(gesture, { activePlaceId, layerId: "equipment", subjectId: "equipment.marker", boundaryEditing: false, gesture }));
+    expect(session.getViewState().project).toBe(before);
+    expect(selected).toBeUndefined();
+    expect(drawingRef.current!.notice?.message).toBe(workbenchCopy.en.drawingStatus.blocked["transaction-failed"]);
+  });
+
+  it("does not discard an unfinished drawing when saving it as a sketch is refused", () => {
+    const draft = { instrumentId: "polygon" as const, points: [{ x: 1, y: 1 }, { x: 2, y: 2 }] };
+    act(() => drawingRef.current!.setGestureDraft(draft));
+    let continued = false;
+    act(() => drawingRef.current!.requestAfterDraft(() => { continued = true; }));
+    vi.spyOn(session, "executeTransaction").mockReturnValueOnce({ code: "transaction-failed", changed: false, reason: "Synthetic rejection" });
+    const save = drawingRef.current!.notice?.actions.find(({ label }) => label === workbenchCopy.en.drawingStatus.saveAsSketch);
+    expect(save).toBeDefined();
+    act(() => save!.onClick());
+    expect(continued).toBe(false);
+    expect(drawingRef.current!.gestureDraft).toEqual(draft);
+    expect(drawingRef.current!.canUndoDraft).toBe(true);
+    expect(drawingRef.current!.notice?.message).toBe(workbenchCopy.en.drawingStatus.blocked["transaction-failed"]);
   });
 });

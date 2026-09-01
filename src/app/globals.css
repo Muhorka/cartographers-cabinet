@@ -1,3 +1,4 @@
+@font-face { font-family:"Italianno Cabinet"; src:url("/fonts/italianno/Italianno-Regular.ttf") format("truetype"); font-style:normal; font-weight:400; font-display:swap; }
 :root { --ink:#2d3129; --green:#263f35; --brass:#a57c3d; --red:#943c34; --paper:#dfcfaa; --paper-light:#eee1bf; }
 * { box-sizing:border-box; }
 html { background:#171b17; }

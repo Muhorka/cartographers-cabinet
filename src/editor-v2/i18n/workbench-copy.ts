@@ -95,7 +95,7 @@ export type WorkbenchCopy = {
     cancel: string;
     deleteQuestion: string;
     confirmDelete: string;
-    blocked: Record<"unavailable-here" | "outside-outline" | "geometry-conflict" | "no-wall" | "stairs-need-room" | "bezier-pending" | "road-obstacle", string>;
+    blocked: Record<"unavailable-here" | "outside-outline" | "geometry-conflict" | "no-wall" | "stairs-need-room" | "bezier-pending" | "road-obstacle" | "transaction-failed", string>;
   };
   editingStatus: {
     reviewQuestion: string;
@@ -142,6 +142,7 @@ export const workbenchCopy: Record<EditorLocale, WorkbenchCopy> = {
         "no-wall": "W tym miejscu nie ma ściany, do której można przypisać ten element.",
         "stairs-need-room": "Schody muszą w całości mieścić się w jednym pomieszczeniu.",
         "road-obstacle": "Nie znalazłem przejazdu o tej szerokości. Przesuń początek lub koniec drogi poza budynek albo wybierz węższą drogę.",
+        "transaction-failed": "Zmiany nie udało się zapisać. Dotychczasowy plan pozostał bez zmian.",
         "bezier-pending": "Prawdziwe pióro Béziera jest jeszcze podpinane do nowego rdzenia — ten gest nie został zapisany jako zwykła kreska.",
       },
     },
@@ -154,7 +155,7 @@ export const workbenchCopy: Record<EditorLocale, WorkbenchCopy> = {
         "outside-outline": "Element musi pozostać wewnątrz dozwolonego obrysu.",
         collision: "W tym miejscu element kolidowałby z inną częścią planu.",
         unsupported: "Tego elementu nie można jeszcze przesunąć w ten sposób.",
-        "not-found": "Nie udało się odnaleźć zaznaczonego elementu.", "road-obstacle": "Nie można połączyć dróg, ponieważ trasa koliduje z przeszkodą.", "transaction-failed": "Zmiana nie została zapisana z powodu błędu geometrii.", "road-not-found": "Nie znaleziono jednej z wybranych dróg.", "road-different-owner": "Wybierz drogi należące do tego samego arkusza.", "road-too-far": "Końce wybranych dróg są zbyt daleko od siebie, a ich osie się nie krzyżują.", "road-already-joined": "Te drogi mają już zapisane skrzyżowanie.", "road-unsupported": "Można łączyć tylko dwie otwarte drogi o edytowalnym przebiegu.", "road-routing": "Nie można połączyć dróg, ponieważ nowy przebieg koliduje z przeszkodą.",
+        "not-found": "Nie udało się odnaleźć zaznaczonego elementu.", "road-obstacle": "Nie można połączyć dróg, ponieważ trasa koliduje z przeszkodą.", "transaction-failed": "Zmiany nie udało się zapisać. Dotychczasowy plan pozostał bez zmian.", "road-not-found": "Nie znaleziono jednej z wybranych dróg.", "road-different-owner": "Wybierz drogi należące do tego samego arkusza.", "road-too-far": "Końce wybranych dróg są zbyt daleko od siebie, a ich osie się nie krzyżują.", "road-already-joined": "Te drogi mają już zapisane skrzyżowanie.", "road-unsupported": "Można łączyć tylko dwie otwarte drogi o edytowalnym przebiegu.", "road-routing": "Nie można połączyć dróg, ponieważ nowy przebieg koliduje z przeszkodą.",
       },
     },
   },
@@ -190,6 +191,7 @@ export const workbenchCopy: Record<EditorLocale, WorkbenchCopy> = {
         "no-wall": "There is no wall here to receive this element.",
         "stairs-need-room": "Stairs must fit completely inside one room.",
         "road-obstacle": "No clear route of this width was found. Move the road endpoints outside the building or choose a narrower road.",
+        "transaction-failed": "The change could not be saved. The current plan remains unchanged.",
         "bezier-pending": "The true Bezier pen is still being connected to the new core; this gesture was not saved as an ordinary line.",
       },
     },
@@ -202,7 +204,7 @@ export const workbenchCopy: Record<EditorLocale, WorkbenchCopy> = {
         "outside-outline": "The item must remain inside the allowed outline.",
         collision: "The item would collide with another part of the plan here.",
         unsupported: "This item cannot yet be moved in this way.",
-        "not-found": "The selected item could not be found.", "road-obstacle": "The roads cannot be joined because the route conflicts with an obstacle.", "transaction-failed": "The change could not be saved because the geometry failed validation.", "road-not-found": "One of the selected roads could not be found.", "road-different-owner": "Choose roads that belong to the same sheet.", "road-too-far": "The road endpoints are too far apart and their centerlines do not cross.", "road-already-joined": "These roads already have a recorded junction.", "road-unsupported": "Only two open roads with editable paths can be joined.", "road-routing": "The joined road would conflict with an obstacle.",
+        "not-found": "The selected item could not be found.", "road-obstacle": "The roads cannot be joined because the route conflicts with an obstacle.", "transaction-failed": "The change could not be saved. The current plan remains unchanged.", "road-not-found": "One of the selected roads could not be found.", "road-different-owner": "Choose roads that belong to the same sheet.", "road-too-far": "The road endpoints are too far apart and their centerlines do not cross.", "road-already-joined": "These roads already have a recorded junction.", "road-unsupported": "Only two open roads with editable paths can be joined.", "road-routing": "The joined road would conflict with an obstacle.",
       },
     },
   },

@@ -10,6 +10,7 @@ import { WebMcpDiagnosticsPanel } from "./webmcp-diagnostics-panel";
 import { InspectorPanel } from "./inspector-panel";
 import { MapSheet, type MapSelection } from "./map-sheet";
 import { DrawingNotice } from "./drawing-notice"; import { confirmationNotice } from "./confirmation-notice";
+import { workbenchNoticeKind } from "./workbench-notice";
 import { constructionClearCategoryForToolbox, constructionClearNotice } from "./construction-clear-notice"; import { OverlapNotice } from "./overlap-notice"; import { projectLibraryFileActions } from "./project-library-file-actions";
 import { ProjectLibraryDialog } from "./project-library-dialog";
 import { WorkbenchToolbox } from "./workbench-toolbox";
@@ -50,6 +51,7 @@ import { useEditorV2Tools } from "../webmcp/use-editor-tools";
 import { requestStoryViewTransition } from "./story-view-transition";
 import { canContinueSemanticDraft } from "./toolbox-change-policy";
 import { TransitionCreationDialog } from "./transition-creation-dialog"; import { WorkbenchMasthead } from "./workbench-masthead";
+import { useEditorTransaction } from "./use-editor-transaction";
 type Mode = "drawing" | "story";
 export function EditorWorkbench() {
   const [locale, setLocale] = useState<EditorLocale>("pl"); const copy = workbenchCopy[locale];
@@ -68,7 +70,7 @@ export function EditorWorkbench() {
   const [pendingOverlapDeparture, setPendingOverlapDeparture] = useState(false); const [dismissedOverlapSignature, setDismissedOverlapSignature] = useState<string>();
   const overlapContinuation = useRef<{ action(replacementPlaceId?: string): void; targetPlaceId?: string } | undefined>(undefined);
   const [viewport, setViewport] = useState<SheetViewport>({ center: { x: 60, y: 40 }, zoom: 6, rotation: 0 });
-  const [libraryError, setLibraryError] = useState<string>();
+  const [operationError, setOperationError] = useState<string>();
   const autosave = useProjectAutosave(snapshot?.project, (saved) => setProjects((current) => [saved, ...current.filter(({ id }) => id !== saved.id)]));
   const [bootError, setBootError] = useState<string>();
   function installLoadedProject(loaded: Awaited<ReturnType<typeof restoreWorkbenchProject>>) {
@@ -76,8 +78,9 @@ export function EditorWorkbench() {
     setExpandedIds(new Set(loaded.project.places.map(({ id }) => id))); setSketchVisible(loaded.sketchVisible); setSketchOpacity(loaded.sketchOpacity);
     setEraserSize(loaded.eraserSize); setGapClosingEnabled(loaded.gapClosingEnabled); setGapClosingTolerance(loaded.gapClosingTolerance);
   }
-  const projectNavigation = useWorkbenchProjectSwitch({ session, locale, autosave, install: installLoadedProject, onError: setLibraryError });
+  const projectNavigation = useWorkbenchProjectSwitch({ session, locale, autosave, install: installLoadedProject, onError: setOperationError });
   const { loadProject } = projectNavigation;
+  const workbenchTransaction = useEditorTransaction(session, () => refresh(), (failure) => setOperationError(failure === "transaction-failed" ? copy.editingStatus.blocked["transaction-failed"] : undefined));
   useEffect(() => { let cancelled = false;
     void loadInitialWorkbenchProject().then(({ locale, projects, loaded }) => {
       if (!cancelled) { setLocale(locale); setProjects(projects); installLoadedProject(loaded); }
@@ -136,17 +139,18 @@ export function EditorWorkbench() {
       if (result.state !== "merged") continue;
       ids.filter((id) => id !== result.survivorId).forEach((id) => replacements.set(id, result.survivorId)); project = result.project;
     }
-    session.executeTransaction({ id: `merge-overlaps:${mode}`, apply: () => project }); setSelections([]); setDismissedOverlapSignature(undefined); refresh();
+    if (!workbenchTransaction.commit(`merge-overlaps:${mode}`, project)) return;
+    setSelections([]); setDismissedOverlapSignature(undefined);
     if (buildingOverlapGroups(project, state.activePlaceId).length) { setPendingOverlapDeparture(true); return; }
     const continuation = overlapContinuation.current; overlapContinuation.current = undefined; setPendingOverlapDeparture(false);
     continuation?.action(continuation.targetPlaceId ? replacements.get(continuation.targetPlaceId) : undefined);
   }
-  function updatePlace(placeId: string, details: { name?: string; description?: string; tags?: string[]; appearance?: MapAppearance }) { if (!session) return; session.executeTransaction({ id: `details:${placeId}`, apply: (project) => updatePlaceDetails(project, placeId, details) }); refresh(); }
-  function updateMeasureSettings(settings: ProjectMeasureSettings) { if (!session) return; session.executeTransaction({ id: "settings:measurements", apply: (project) => ({ ...project, measureSettings: settings }) }); refresh(); }
-  function reparent(placeId: string, parentId?: string) { if (!session) return; session.executeTransaction({ id: `reparent:${placeId}`, apply: (project) => reparentPlace(project, placeId, parentId) }); setSelections([]); refresh(); }
+  function updatePlace(placeId: string, details: { name?: string; description?: string; tags?: string[]; appearance?: MapAppearance }) { if (!session) return; workbenchTransaction.commit(`details:${placeId}`, (project) => updatePlaceDetails(project, placeId, details)); }
+  function updateMeasureSettings(settings: ProjectMeasureSettings) { if (!session) return; workbenchTransaction.commit("settings:measurements", (project) => ({ ...project, measureSettings: settings })); }
+  function reparent(placeId: string, parentId?: string) { if (!session || !workbenchTransaction.commit(`reparent:${placeId}`, (project) => reparentPlace(project, placeId, parentId))) return; setSelections([]); }
   function deletePlace(placeId: string) {
     if (!session) return;
-    const result = deleteWorkbenchPlace(session, placeId); if (!result) return;
+    const result = deleteWorkbenchPlace(session, placeId, workbenchTransaction.commit); if (!result) return;
     if (result.fallbackId) { setViewport(viewportFor(result.project, result.fallbackId)); void setPreference(`activePlaceId:${result.project.id}`, result.fallbackId); }
     setSelections([]); refresh();
   }
@@ -157,13 +161,12 @@ export function EditorWorkbench() {
   }
   function addLevel(buildingId: string, position: "above" | "below") {
     if (!session || !snapshot) return;
-    const id = createWorkbenchLevel(session, buildingId, position, locale); if (!id) return;
+    const id = createWorkbenchLevel(session, buildingId, position, locale, workbenchTransaction.commit); if (!id) return;
     setExpandedIds((current) => new Set([...current, buildingId, id])); session.openPlace(id); activatePreferredLayer(session, id); void setPreference(`activePlaceId:${snapshot.project.id}`, id); setSelections([]); setViewport(viewportFor(session.getState().project, id)); refresh();
   }
   function changeLevelOrder(levelId: string, beforeLevelId?: string) {
     if (!session) return;
-    session.executeTransaction({ id: `reorder-level:${levelId}`, apply: (project) => reorderLevel(project, levelId, beforeLevelId) });
-    refresh();
+    workbenchTransaction.commit(`reorder-level:${levelId}`, (project) => reorderLevel(project, levelId, beforeLevelId));
   }
   function addBroaderMap(placeId: string, kind: MapLevelKind, name?: string) {
     drawing.requestAfterDraft(() => requestAfterOverlap(() => commitAddBroaderMap(placeId, kind, name)));
@@ -171,15 +174,15 @@ export function EditorWorkbench() {
   function commitAddBroaderMap(placeId: string, desiredKind: MapLevelKind, chosenName?: string) {
     if (!session || !snapshot) return;
     const result = addMapLevel(snapshot.project, placeId, desiredKind, chosenName, locale, { createId: () => crypto.randomUUID() }); if (!result) return;
-    session.executeTransaction({ id: `wrap:${placeId}:${desiredKind}`, apply: () => result.project });
+    if (!workbenchTransaction.commit(`wrap:${placeId}:${desiredKind}`, result.project)) return;
     session.openPlace(result.openedId); activatePreferredLayer(session, result.openedId); void setPreference(`activePlaceId:${snapshot.project.id}`, result.openedId); setExpandedIds((current) => new Set([...current, ...result.addedIds, result.openedId])); setSelections([]); setViewport(viewportFor(result.project, result.openedId)); refresh();
   }
   async function createProject(input?: { name: string; scale: StartingScale }) { const name = (input?.name ?? draftName).trim(); if (!name) return; const created = await saveProject(createProjectAtScale(crypto.randomUUID(), name, locale, input?.scale ?? startingScale)); setProjects((current) => [created, ...current]); setDraftName(""); setLibraryOpen(false); drawing.reset(); await loadProject(created); return created; }
   async function duplicateProject(id: string) { const source = snapshot?.project.id === id ? snapshot.project : projects.find((project) => project.id === id); if (!source) return; const duplicate = await saveProject({ ...structuredClone(source), id: crypto.randomUUID(), name: `${source.name} — ${locale === "pl" ? "kopia" : "copy"}` }); setProjects((current) => [duplicate, ...current]); return duplicate; }
-  async function deleteProject(id: string) { try { await autosave.remove(id, () => removeProject(id)); let remaining = projects.filter((project) => project.id !== id); if (!remaining.length) remaining = [await saveProject(createStarterProject(crypto.randomUUID(), locale === "pl" ? "Nowy projekt" : "New project", locale))]; setProjects((current) => [...current.filter((project) => project.id !== id), ...remaining.filter((project) => !current.some(({ id }) => id === project.id))]); setPendingDeleteId(undefined); if (projectNavigation.getSession()?.getViewState().project.id === id && await loadProject(remaining[0])) drawing.reset(); return true; } catch (error) { setLibraryError(String(error)); return false; } }
-  async function renameProjectInLibrary(id: string, name: string) { const active = projectNavigation.getSession(); if (active?.getViewState().project.id === id) { active.executeTransaction({ id: `rename-project:${id}`, apply: (project) => ({ ...project, name: name.trim() }) }); refresh(active); const result = await autosave.flush(active.getViewState().project); return result.state === "saved" ? result.project : undefined; } const source = autosave.latest(id) ?? projects.find((project) => project.id === id); if (!source) return; const result = await autosave.flush({ ...source, name: name.trim() }); return result.state === "saved" ? result.project : undefined; }
+  async function deleteProject(id: string) { try { await autosave.remove(id, () => removeProject(id)); let remaining = projects.filter((project) => project.id !== id); if (!remaining.length) remaining = [await saveProject(createStarterProject(crypto.randomUUID(), locale === "pl" ? "Nowy projekt" : "New project", locale))]; setProjects((current) => [...current.filter((project) => project.id !== id), ...remaining.filter((project) => !current.some(({ id }) => id === project.id))]); setPendingDeleteId(undefined); if (projectNavigation.getSession()?.getViewState().project.id === id && await loadProject(remaining[0])) drawing.reset(); return true; } catch (error) { setOperationError(String(error)); return false; } }
+  async function renameProjectInLibrary(id: string, name: string) { const active = projectNavigation.getSession(); if (active?.getViewState().project.id === id) { if (!workbenchTransaction.commit(`rename-project:${id}`, (project) => ({ ...project, name: name.trim() }))) return; const result = await autosave.flush(active.getViewState().project); return result.state === "saved" ? result.project : undefined; } const source = autosave.latest(id) ?? projects.find((project) => project.id === id); if (!source) return; const result = await autosave.flush({ ...source, name: name.trim() }); return result.state === "saved" ? result.project : undefined; }
   async function openSavedProject(id: string) { const project = snapshot?.project.id === id ? snapshot.project : projects.find((candidate) => candidate.id === id); if (!project) return false; const opened = await loadProject(project); if (opened) drawing.reset(); return opened; }
-  const { exportProject, exportView, importProject } = projectLibraryFileActions({ snapshot, projects, locale, viewport, onError: setLibraryError, onImport: (project) => setProjects((current) => [project, ...current]) });
+  const { exportProject, exportView, importProject } = projectLibraryFileActions({ snapshot, projects, locale, viewport, onError: setOperationError, onImport: (project) => setProjects((current) => [project, ...current]) });
   const cutoutTarget = preferredCutoutTarget(snapshot?.project, selections.length === 1 ? selections[0] : undefined, snapshot?.activePlaceId, snapshot?.boundaryEditing);
   const drawing = useEditorDrawing({ session, snapshot, locale, copy, refresh: () => refresh(), onSelection: selectOnMap, cutoutActive, addOutlineActive, cutoutTarget });
   const enterStory = () => { drawing.leaveDrawing(); setMode("story"); };
@@ -200,10 +203,11 @@ export function EditorWorkbench() {
   const placeDeleteNotice = pendingPlaceDeleteId ? confirmationNotice(copy.deletePlaceQuestion, copy.deletePlaceWithContents, copy.drawingStatus.cancel, () => { const id = pendingPlaceDeleteId; setPendingPlaceDeleteId(undefined); deletePlace(id); }, () => setPendingPlaceDeleteId(undefined)) : undefined;
   const roadNotice = snapshot?.roadConflict ? { message: copy.drawingStatus.blocked["road-obstacle"], tone: "warning" as const, actions: [{ id: "close-road-notice", label: copy.close, onClick: () => { session?.dismissRoadConflict(); refresh(); } }] } : undefined;
   const clearLayerNotice = pendingClearLayer ? pendingClearCategory !== "all"
-    ? constructionClearNotice({ locale, place: activePlaceName, category: pendingClearCategory, confirmLabel: copy.confirmClearLayer, cancelLabel: copy.drawingStatus.cancel, onCategoryChange: setPendingClearCategory, onConfirm: () => { setPendingClearLayer(false); session?.clearCurrentLayer(snapshot?.toolbox.activeLayerId, pendingClearCategory); setSelections([]); refresh(); }, onCancel: () => setPendingClearLayer(false) })
-    : confirmationNotice(clearLayerLabel, copy.confirmClearLayer, copy.drawingStatus.cancel, () => { setPendingClearLayer(false); session?.clearCurrentLayer(); setSelections([]); refresh(); }, () => setPendingClearLayer(false)) : undefined;
-  const hasOverlapNotice = overlapGroups.length > 0 && (pendingOverlapDeparture || dismissedOverlapSignature !== overlapSignature);
-  const otherNotice = roadNotice ?? placeDeleteNotice ?? clearLayerNotice ?? drawing.notice ?? rotation.notice ?? editing.notice;
+    ? constructionClearNotice({ locale, place: activePlaceName, category: pendingClearCategory, confirmLabel: copy.confirmClearLayer, cancelLabel: copy.drawingStatus.cancel, onCategoryChange: setPendingClearCategory, onConfirm: () => { setPendingClearLayer(false); if (session && workbenchTransaction.accept(session.clearCurrentLayer(snapshot?.toolbox.activeLayerId, pendingClearCategory))) setSelections([]); }, onCancel: () => setPendingClearLayer(false) })
+    : confirmationNotice(clearLayerLabel, copy.confirmClearLayer, copy.drawingStatus.cancel, () => { setPendingClearLayer(false); if (session && workbenchTransaction.accept(session.clearCurrentLayer())) setSelections([]); }, () => setPendingClearLayer(false)) : undefined;
+  const secondaryNotice = placeDeleteNotice ?? clearLayerNotice ?? drawing.notice ?? rotation.notice ?? editing.notice;
+  const otherNotice = roadNotice ?? secondaryNotice;
+  const hasOverlapNotice = workbenchNoticeKind({ roadNotice, overlapNotice: overlapGroups.length > 0 && (pendingOverlapDeparture || dismissedOverlapSignature !== overlapSignature), pendingOverlapDeparture, otherNotice: secondaryNotice }) === "overlap";
   const tree = useMemo(() => currentProject?.places ?? [], [currentProject]);
   const availableLayerIds = useMemo(() => new Set(workLayers.filter(({ id }) => currentProject && activePlaceId && workLayerAvailability(currentProject, activePlaceId, id).available).map(({ id }) => id)), [activePlaceId, currentProject]);
   const availableSubjectIds = useMemo(() => currentProject && activePlaceId ? new Set(availableWorkSubjects(currentProject, activePlaceId, "equipment").map(({ id }) => id)) : undefined, [activePlaceId, currentProject]);
@@ -215,7 +219,7 @@ export function EditorWorkbench() {
   return <main className={styles.workshop}>
     <WorkbenchMasthead locale={locale} copy={copy} mode={mode} onLanguage={changeLocale} onModeToggle={() => mode === "story" ? setMode("drawing") : drawing.requestAfterDraft(() => requestAfterOverlap(enterStory))}/>
     <section className={styles.projectBar}><button type="button" className={styles.libraryButton} onClick={() => drawing.requestAfterDraft(() => setLibraryOpen(true))}><span>✦</span><small>{copy.project}</small><strong><b>{headerName}</b><i>{copy.projects}</i></strong></button><div className={styles.modes}><button type="button" className={mode === "drawing" ? styles.activeMode : undefined} onClick={() => setMode("drawing")}>{copy.drawing}</button><button type="button" className={mode === "story" ? styles.activeMode : undefined} onClick={() => drawing.requestAfterDraft(() => requestAfterOverlap(enterStory))}>{copy.story}</button><em role={autosave.saveFailed ? "alert" : undefined}>{autosave.saveFailed ? copy.saveFailed : autosave.saving ? copy.saving : copy.saved}</em>{autosave.saveFailed && <button type="button" onClick={() => void autosave.flushSession(session)}>{copy.retrySave}</button>}</div></section>
-    {libraryError && !libraryOpen && <p className={styles.operationError} role="alert">{libraryError}</p>}
+    {operationError && !libraryOpen && <p className={styles.operationError} role="alert">{operationError}</p>}
     <section className={`${styles.desk}${leftOpen ? "" : ` ${styles.leftClosed}`}${rightOpen ? "" : ` ${styles.rightClosed}`}`}>
       <aside className={styles.leftBook}><button type="button" className={styles.bookFold} title={locale === "pl" ? "Zwiń lewą księgę" : "Fold left book"} aria-label={locale === "pl" ? "Zwiń lewą księgę" : "Fold left book"} onClick={() => setLeftOpen(false)}>‹</button><header className={styles.bookHeading}><h2>{mode === "story" ? copy.story : copy.atlas}</h2></header><StoryDisclosureBook {...story.leftBookProps} tree={<HierarchyNavigator places={tree} surfaces={currentProject.surfaces} activePlaceId={activePlaceId} expandedPlaceIds={expandedIds} copy={copy.hierarchy} onOpenPlace={openPlace} onSelectSurface={selectSurfaceFromTree} onExpandedChange={(id, expanded) => setExpandedIds((current) => { const next = new Set(current); if (expanded) next.add(id); else next.delete(id); return next; })} onAddContainingPlace={addBroaderMap} onAddLevel={(buildingId, position) => drawing.requestAfterDraft(() => addLevel(buildingId, position))} onReorderLevel={(levelId, beforeLevelId) => drawing.requestAfterDraft(() => changeLevelOrder(levelId, beforeLevelId))}/>}/></aside>
       {!leftOpen && <button type="button" className={`${styles.bookTab} ${styles.leftTab}`} title={locale === "pl" ? "Rozwiń lewą księgę" : "Open left book"} aria-label={locale === "pl" ? "Rozwiń lewą księgę" : "Open left book"} onClick={() => setLeftOpen(true)}>›</button>}
@@ -227,7 +231,8 @@ export function EditorWorkbench() {
       <aside className={styles.rightBook}><button type="button" className={styles.bookFold} title={locale === "pl" ? "Zwiń prawą księgę" : "Fold right book"} aria-label={locale === "pl" ? "Zwiń prawą księgę" : "Fold right book"} onClick={() => setRightOpen(false)}>›</button><header className={`${styles.bookHeading} ${styles.inspectorHeading}`}><small>{copy.inspector}</small><span aria-hidden="true">✦</span></header><InspectorPanel selectionEditor={story.zoneInspector} detailsEditor={story.inspector} onNoteTextChange={editing.editNoteText} onDeleteSelection={deleteListedSelection} onUpdateSelection={editing.editSelectionState} project={currentProject} activePlaceId={activePlaceId} selections={selections} copy={copy} readOnly={mode === "story"} onUpdatePlace={updatePlace} onUpdateElement={editing.editElement} onUpdateSurface={editing.editSurface} onResizeOpening={editing.resizeOpening} onUpdateTransition={editing.editTransition} onDeletePlace={(id) => drawing.requestAfterDraft(() => requestDeletePlace(id))} onAddLevel={(id, position) => drawing.requestAfterDraft(() => requestAfterOverlap((replacementId) => addLevel(replacementId ?? id, position), id))} onReparentPlace={(id, parentId) => drawing.requestAfterDraft(() => reparent(id, parentId))} onSelect={mode === "drawing" ? selectForEditing : selectOnMap} geometryTools={mode === "drawing" ? planning.inspector : undefined} footer={<CheckpointPanel error={projectCheckpoints.error} checkpoints={projectCheckpoints.items} activeCheckpointId={projectCheckpoints.activeId} tracingOpacity={projectCheckpoints.opacity} copy={checkpointCopy[locale]} locale={locale} onSave={(name) => void projectCheckpoints.preserve(name)} onTracing={projectCheckpoints.setActiveId} onOpacity={projectCheckpoints.setOpacity} onRestore={(id) => void (async () => { const result = await projectNavigation.restoreCheckpoint(id, (before, after) => projectCheckpoints.preserveAgentChange(before, after, checkpointCopy[locale].safetyName(new Date()), "safety")); if (!result) return; drawing.reset(); setSelections([]); if (!result.project.places.some((place) => place.id === activePlaceId)) { const root = result.project.places.find((place) => !place.parentId); if (root) result.session.openPlace(root.id); } refresh(result.session); })()} onRemove={(id) => void projectCheckpoints.remove(id)}/>} bottom={<LegalMarginalia ref={legalMarginaliaRef} locale={locale}/>}/></aside>
       {!rightOpen && <button type="button" className={`${styles.bookTab} ${styles.rightTab}`} title={locale === "pl" ? "Rozwiń prawą księgę" : "Open right book"} aria-label={locale === "pl" ? "Rozwiń prawą księgę" : "Open right book"} onClick={() => setRightOpen(true)}>‹</button>}
     </section>
-    {libraryOpen && <ProjectLibraryDialog projects={projects} activeProjectId={currentProject.id} copy={copy} draftName={draftName} startingScale={startingScale} pendingDeleteId={pendingDeleteId} error={libraryError} onDraftName={setDraftName} onStartingScale={setStartingScale} onCreate={() => drawing.requestAfterDraft(() => requestAfterOverlap(() => void createProject()))} onOpen={(id) => drawing.requestAfterDraft(() => requestAfterOverlap(() => { void openSavedProject(id).then((opened) => { if (opened) setLibraryOpen(false); }); }))} onDuplicate={(id) => void duplicateProject(id)} onRename={(id, name) => void renameProjectInLibrary(id, name)} onExport={exportProject} onExportView={(id, format) => { void exportView(id, format); }} onImport={(file) => void importProject(file)} onAskDelete={setPendingDeleteId} onDelete={(id) => void deleteProject(id)} onCancelDelete={() => setPendingDeleteId(undefined)} onClose={() => { setLibraryError(undefined); setLibraryOpen(false); }}/>}
+    {libraryOpen && <ProjectLibraryDialog projects={projects} activeProjectId={currentProject.id} copy={copy} draftName={draftName} startingScale={startingScale} pendingDeleteId={pendingDeleteId} error={operationError} onDraftName={setDraftName} onStartingScale={setStartingScale} onCreate={() => drawing.requestAfterDraft(() => requestAfterOverlap(() => void createProject()))} onOpen={(id) => drawing.requestAfterDraft(() => requestAfterOverlap(() => { void openSavedProject(id).then((opened) => { if (opened) setLibraryOpen(false); }); }))} onDuplicate={(id) => void duplicateProject(id)} onRename={(id, name) => void renameProjectInLibrary(id, name)} onExport={exportProject} onExportView={(id, format) => { void exportView(id, format); }} onImport={(file) => void importProject(file)} onAskDelete={setPendingDeleteId} onDelete={(id) => void deleteProject(id)} onCancelDelete={() => setPendingDeleteId(undefined)}
+      onClose={() => { setOperationError(undefined); setLibraryOpen(false); }}/>}
     <GlobalLegalFooter locale={locale} onOpenMarginalia={(section) => { setRightOpen(true); setPendingLegalSection(section); }}/>
     <WebMcpDiagnosticsPanel locale={locale}/>
   </main>;

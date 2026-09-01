@@ -5,6 +5,12 @@ import { MAX_PROJECT_FILE_BYTES, PROJECT_FILE_FORMAT, PROJECT_FILE_VERSION, clon
 
 describe("editor v2 project files", () => {
   const project = createStarterProject("project-original", "Dolina Brzasku", "pl");
+  const envelope = (candidate: typeof project) => ({ format: PROJECT_FILE_FORMAT, fileVersion: PROJECT_FILE_VERSION, exportedAt: project.updatedAt, project: candidate });
+  const withTransition = (references: { sourceLevelId?: string; targetLevelId?: string; connectedLevelIds?: string[] }) => {
+    const candidate = structuredClone(project);
+    candidate.constructions[0]!.transitions = [{ id: "stairs", kind: "stairs", footprint: { kind: "rectangle", x: 1, y: 1, width: 2, height: 3 }, ...references }];
+    return candidate;
+  };
 
   it("exports a versioned application-specific envelope", () => {
     const exportedAt = "2026-08-29T20:00:00.000Z";
@@ -44,6 +50,29 @@ describe("editor v2 project files", () => {
 
     const cycle = structuredClone(project); cycle.places[0]!.parentId = cycle.places[0]!.id;
     expect(() => parseProjectFile({ format: PROJECT_FILE_FORMAT, fileVersion: PROJECT_FILE_VERSION, exportedAt: project.updatedAt, project: cycle })).toThrow(/Hierarchy cycle/);
+  });
+
+  it.each([
+    ["sourceLevelId", "room", project.places.find(({ kind }) => kind === "room")!.id],
+    ["targetLevelId", "location", project.places.find(({ kind }) => kind === "location")!.id],
+  ] as const)("rejects a %s that names an existing %s", (field, kind, placeId) => {
+    const candidate = withTransition({ [field]: placeId });
+    expect(() => parseProjectFile(envelope(candidate))).toThrow(new RegExp(`not a level: ${placeId} \\(${kind}\\)`));
+  });
+
+  it("rejects mixed connected level ids when one existing place is not a level", () => {
+    const levelId = project.places.find(({ kind }) => kind === "level")!.id;
+    const locationId = project.places.find(({ kind }) => kind === "location")!.id;
+    expect(() => parseProjectFile(envelope(withTransition({ connectedLevelIds: [levelId, locationId] })))).toThrow(new RegExp(`not a level: ${locationId} \\(location\\)`));
+  });
+
+  it("keeps the missing-level error and accepts source, target and connected level ids", () => {
+    expect(() => parseProjectFile(envelope(withTransition({ sourceLevelId: "missing-level" })))).toThrow(/Vertical connection references a missing level: missing-level/);
+    const firstLevel = project.places.find(({ kind }) => kind === "level")!;
+    const secondLevel = { ...firstLevel, id: "project-original:upper-level", name: "Piętro", constructionId: undefined, order: 1 };
+    const valid = withTransition({ sourceLevelId: firstLevel.id, targetLevelId: secondLevel.id, connectedLevelIds: [firstLevel.id, secondLevel.id] });
+    valid.places.push(secondLevel);
+    expect(parseProjectFile(envelope(valid)).project.constructions[0]!.transitions[0]).toMatchObject({ sourceLevelId: firstLevel.id, targetLevelId: secondLevel.id, connectedLevelIds: [firstLevel.id, secondLevel.id] });
   });
 
   it("imports only under a fresh id without mutating the source", () => {

@@ -43,4 +43,23 @@ describe("checkpoint contents load on demand", () => {
     storage.load.mockRejectedValue(new Error("Checkpoint missing")); await act(async () => hook.setActiveId("c"));
     expect(hook.error).toContain("Checkpoint missing"); expect(hook.tracingProject).toBeUndefined();
   });
+
+  it("does not add a checkpoint when saving fails and clears an earlier error after success", async () => {
+    const project = emptyProject("p", "Current"); storage.list.mockRejectedValueOnce(new Error("Storage unavailable")); storage.save.mockRejectedValueOnce(new Error("Write failed"));
+    await act(async () => root.render(<Probe project={project}/>)); expect(hook.error).toContain("Storage unavailable");
+    await act(async () => { expect(await hook.preserve("failed")).toBeUndefined(); });
+    expect(hook.error).toBe("Nie udało się zachować tej wersji. Bieżący projekt pozostaje bez zmian."); expect(hook.items).toHaveLength(0);
+    const checkpoint = { ...summary("saved"), snapshot: project }; storage.save.mockResolvedValueOnce(checkpoint);
+    await act(async () => { expect(await hook.preserve("saved")).toEqual(checkpoint); });
+    expect(hook.error).toBeUndefined(); expect(hook.items[0]).toEqual(summary("saved"));
+  });
+
+  it("keeps the checkpoint list unchanged when deletion fails and clears the error after success", async () => {
+    const project = emptyProject("p", "Current"); storage.remove.mockRejectedValueOnce(new Error("Delete failed"));
+    await act(async () => root.render(<Probe project={project}/>));
+    await act(async () => { await expect(hook.remove("a")).rejects.toThrow("Delete failed"); });
+    expect(hook.error).toBe("Nie udało się usunąć tej wersji. Zachowana wersja nadal jest dostępna."); expect(hook.items).toHaveLength(2); expect(hook.activeId).toBeUndefined();
+    storage.remove.mockResolvedValueOnce(undefined); await act(async () => { await hook.remove("a"); });
+    expect(hook.error).toBeUndefined(); expect(hook.items.map(({ id }) => id)).toEqual(["b"]);
+  });
 });
