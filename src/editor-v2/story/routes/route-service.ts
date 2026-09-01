@@ -33,8 +33,9 @@ function message(error: unknown) { return error instanceof Error ? error.message
 function workerFailureMessage(event: unknown) {
   if (!event || typeof event !== "object") return "Route worker failed.";
   const eventMessage = "message" in event && typeof event.message === "string" ? event.message.trim() : "";
-  const nestedError = "error" in event && event.error instanceof Error ? event.error.message.trim() : "";
-  const detail = eventMessage || nestedError;
+  const error = "error" in event ? event.error : undefined;
+  const nestedError = error && typeof error === "object" && "message" in error && typeof error.message === "string" ? error.message.trim() : "";
+  const detail = eventMessage && eventMessage !== "Script error." ? eventMessage : nestedError;
   return detail && detail !== "Script error." ? `Route worker failed: ${detail}` : "Route worker failed.";
 }
 

@@ -57,6 +57,11 @@ describe("story route calculation service", () => {
     expect(await failed).toMatchObject({ status: "error", error: "Route worker failed: chunk failed" });
     expect(failedWorker.workers[0]!.terminate).toHaveBeenCalledOnce();
 
+    const crossRealmWorker = fakeWorkers(); const crossRealmService = createStoryRouteCalculationService(crossRealmWorker.options);
+    const crossRealm = crossRealmService.calculate(project, query); crossRealmWorker.workers[0]!.onerror?.({ message: "Script error.", error: { message: "nested chunk failed" } });
+    expect(await crossRealm).toMatchObject({ status: "error", error: "Route worker failed: nested chunk failed" });
+    expect(crossRealmWorker.workers[0]!.terminate).toHaveBeenCalledOnce();
+
     const rejectedMessage = fakeWorkers();
     const rejectedService = createStoryRouteCalculationService({ ...rejectedMessage.options, workerFactory: () => {
       const worker = { postMessage: vi.fn(() => { throw new Error("clone failed"); }), terminate: vi.fn(), onmessage: null, onerror: null, onmessageerror: null };

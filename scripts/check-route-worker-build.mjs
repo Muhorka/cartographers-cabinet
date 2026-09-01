@@ -12,6 +12,74 @@ function filesBelow(directory) {
   });
 }
 
+function routeProject(id, name) {
+  return {
+    schemaVersion: 9,
+    id,
+    name,
+    updatedAt: "1970-01-01T00:00:00.000Z",
+    places: [],
+    elements: [],
+    surfaces: [],
+    constructions: [],
+    measureSettings: {
+      units: "metric",
+      gridVisible: false,
+      showAxes: false,
+      gridOpacity: 0.18,
+      gridSpacingMeters: 1,
+      snapToGrid: false,
+      showRoomAreas: false,
+      pencilSmoothing: 0.25,
+    },
+    roadJunctions: [],
+    story: {
+      version: 1,
+      world: [],
+      memberships: [],
+      propertyDefinitions: [],
+      objects: [],
+      groups: [],
+      zones: [],
+      lenses: [],
+      scenarios: [],
+      relations: [],
+      intentions: [],
+      evidence: [],
+      routes: [],
+    },
+  };
+}
+
+function denseOutdoorRouteProject() {
+  const project = routeProject("qa-route-outdoor-grid-v1", "QA route outdoor grid");
+  const worldId = "qa:route:world";
+  project.places.push({
+    id: worldId,
+    name: "QA grounds",
+    kind: "world",
+    transform: { x: 0, y: 0, rotation: 0 },
+    boundary: { kind: "rectangle", x: 0, y: 0, width: 240, height: 160 },
+    tags: [],
+    access: [],
+    properties: {},
+  });
+  project.elements = [20, 71, 122].flatMap((y, row) => Array.from({ length: 8 }, (_, column) => ({
+    id: `qa:barrier:r${row}:c${column}`,
+    belongsToId: worldId,
+    name: `Barrier ${row + 1}.${column + 1}`,
+    layerId: "terrain",
+    subjectId: "terrain.wall",
+    geometry: { kind: "region", shape: { kind: "rectangle", x: 25 + 25 * column, y, width: 18, height: 18 } },
+    visible: true,
+    locked: false,
+    tags: ["wall"],
+    access: [],
+    properties: {},
+  })));
+  return project;
+}
+
 async function executeRouteWorkerArtifact(workerPath, chunksPath) {
   const workerSource = readFileSync(workerPath, "utf8");
   const messages = [];
@@ -58,60 +126,39 @@ async function executeRouteWorkerArtifact(workerPath, chunksPath) {
     throw new Error("Compiled route Worker did not install onmessage.");
   }
 
-  vmContext.onmessage({
-    data: {
-      type: "calculate",
-      attemptId: 17,
-      project: {
-        schemaVersion: 9,
-        id: "route-worker-artifact-test",
-        name: "Route worker artifact test",
-        updatedAt: "1970-01-01T00:00:00.000Z",
-        places: [],
-        elements: [],
-        surfaces: [],
-        constructions: [],
-        measureSettings: {
-          units: "metric",
-          gridVisible: false,
-          showAxes: false,
-          gridOpacity: 0.18,
-          gridSpacingMeters: 1,
-          snapToGrid: false,
-          showRoomAreas: false,
-          pencilSmoothing: 0.25,
-        },
-        roadJunctions: [],
-        story: {
-          version: 1,
-          world: [],
-          memberships: [],
-          propertyDefinitions: [],
-          objects: [],
-          groups: [],
-          zones: [],
-          lenses: [],
-          scenarios: [],
-          relations: [],
-          intentions: [],
-          evidence: [],
-          routes: [],
-        },
-      },
-      query: {
-        from: { placeId: "missing", point: { x: 0, y: 0 } },
-        to: { placeId: "missing", point: { x: 1, y: 1 } },
-      },
-    },
-  });
-  await new Promise((done) => setImmediate(done));
-
-  if (messages.length !== 1) {
-    throw new Error(`Expected exactly one Worker response, got ${messages.length}.`);
+  async function calculate(attemptId, project, query) {
+    const before = messages.length;
+    vmContext.onmessage({ data: { type: "calculate", attemptId, project, query } });
+    await new Promise((done) => setImmediate(done));
+    const responses = messages.slice(before);
+    if (responses.length !== 1) {
+      throw new Error(`Expected exactly one Worker response for attempt ${attemptId}, got ${responses.length}.`);
+    }
+    return responses[0];
   }
-  const [message] = messages;
+
+  const message = await calculate(17, routeProject("route-worker-artifact-test", "Route worker artifact test"), {
+    from: { placeId: "missing", point: { x: 0, y: 0 } },
+    to: { placeId: "missing", point: { x: 1, y: 1 } },
+  });
   if (message?.type !== "result" || message.attemptId !== 17 || message.result?.status !== "unreachable") {
     throw new Error(`Unexpected Worker response: ${JSON.stringify(message)}`);
+  }
+
+  const dense = await calculate(18, denseOutdoorRouteProject(), {
+    from: { placeId: "qa:route:world", point: { x: 8, y: 80 } },
+    to: { placeId: "qa:route:world", point: { x: 232, y: 80 } },
+    profile: "foot",
+    width: 0.8,
+    preferences: { preferRoads: false, allowOffroad: true },
+  });
+  const route = dense?.result?.route;
+  if (dense?.type !== "result" || dense.attemptId !== 18 || dense.result?.status !== "ready"
+    || dense.result.routes?.length !== 1 || route?.segments?.length !== 1 || route.segments[0]?.kind !== "outdoor"
+    || route.distance <= 224 || route.distance >= 260
+    || route.points?.[0]?.x !== 8 || route.points?.[0]?.y !== 80
+    || route.points?.at(-1)?.x !== 232 || route.points?.at(-1)?.y !== 80) {
+    throw new Error(`Unexpected dense Worker response: ${JSON.stringify(dense)}`);
   }
 }
 
