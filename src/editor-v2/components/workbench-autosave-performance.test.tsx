@@ -63,7 +63,10 @@ describe("autosave follows the document rather than view updates", () => {
   it("flushes the latest document before switching through the library", async () => {
     const before = fixture.sheet!.project.measureSettings;
     act(() => fixture.sheet!.onMeasureSettingsChange?.({ ...before, gridVisible: !before.gridVisible }));
-    act(() => [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Biblioteka"))!.click());
+    await act(async () => {
+      [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Biblioteka"))!.click();
+      await vi.dynamicImportSettled();
+    });
     const row = [...host.querySelectorAll('[role="dialog"] article')].find((row) => row.textContent?.includes("Other project"))!;
     await act(async () => [...row.querySelectorAll("button")].find((button) => button.textContent === "Otwórz")!.click());
     expect(fixture.sheet!.project.id).toBe("q");

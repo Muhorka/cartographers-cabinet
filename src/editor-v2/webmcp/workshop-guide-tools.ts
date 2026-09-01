@@ -1,10 +1,13 @@
-import { workshopGuide } from "../help/workshop-guide-content";
-import { createWorkshopGuideChunkSearch } from "../help/workshop-guide-search";
+type GuideLocale = "pl" | "en";
+type GuideSearch = ReturnType<typeof import("../help/workshop-guide-search").createWorkshopGuideChunkSearch>;
+const searchByLocale: Partial<Record<GuideLocale, Promise<GuideSearch>>> = {};
 
-const search = {
-  pl: createWorkshopGuideChunkSearch(workshopGuide.pl),
-  en: createWorkshopGuideChunkSearch(workshopGuide.en),
-};
+function loadSearch(locale: GuideLocale) {
+  return searchByLocale[locale] ??= Promise.all([
+    import("../help/workshop-guide-content"),
+    import("../help/workshop-guide-search"),
+  ]).then(([content, search]) => search.createWorkshopGuideChunkSearch(content.workshopGuide[locale]));
+}
 
 const response = <T,>(value: T) => ({ content: [{ type: "text", text: JSON.stringify(value) }], structuredContent: value });
 
@@ -28,7 +31,8 @@ export function createWorkshopGuideTools(): WebMcpTool[] {
       if (typeof input.query !== "string" || !input.query.trim()) throw new TypeError("query must be a non-empty string");
       if (input.locale !== "pl" && input.locale !== "en") throw new TypeError("locale must be pl or en");
       if (input.limit !== undefined && (!Number.isInteger(input.limit) || (input.limit as number) < 1 || (input.limit as number) > 5)) throw new TypeError("limit must be an integer from 1 to 5");
-      const matches = search[input.locale](input.query, input.limit as number | undefined);
+      const search = await loadSearch(input.locale);
+      const matches = search(input.query, input.limit as number | undefined);
       return response({ query: input.query, locale: input.locale, count: matches.length, matches });
     },
   }];
