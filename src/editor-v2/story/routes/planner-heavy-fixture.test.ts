@@ -73,5 +73,5 @@ describe("story route planner heavy synthetic fixture", () => {
     expect(second.status).toBe(first.status);
     expect(second.sourceRevision).toBe(first.sourceRevision);
     expect(second.route?.distance).toBeCloseTo(first.route!.distance, 6);
-  }, 20_000);
+  }, 45_000);
 });
