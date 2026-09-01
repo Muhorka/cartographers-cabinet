@@ -8,6 +8,13 @@ type MarginaliaCopy = {
   open: string;
   publisher: string;
   contact: string;
+  footer: {
+    ariaLabel: string;
+    privacy: string;
+    terms: string;
+    licences: string;
+    contact: string;
+  };
   sections: Record<LegalMarginaliaSection, SectionCopy>;
 };
 
@@ -17,6 +24,7 @@ export const legalMarginaliaCopy: Record<EditorLocale, MarginaliaCopy> = {
     open: "Informacje o prywatności, zasadach korzystania i licencjach",
     publisher: "Niezależny, niekomercyjny projekt Varéra",
     contact: "Kontakt",
+    footer: { ariaLabel: "Stopka prawna", privacy: "Prywatność", terms: "Warunki", licences: "Licencje", contact: "Kontakt" },
     sections: {
       privacy: {
         label: "Privacy",
@@ -49,7 +57,7 @@ export const legalMarginaliaCopy: Record<EditorLocale, MarginaliaCopy> = {
         paragraphs: [
           "Wydawca: Varéra — niezależny, niekomercyjny projekt. Użytkownik zachowuje prawa do treści własnych projektów; aplikacja nie odbiera ani nie publikuje ich kopii.",
           "Połączony agent może na żądanie odczytać dane otwartego projektu przez narzędzia WebMCP. Korzystaj wyłącznie z zaufanego agenta i sprawdź zasady prywatności jego dostawcy. Sama aplikacja nie zawiera modelu AI ani klucza API.",
-          "Oryginalny kod źródłowy jest udostępniany na licencji MIT. Biblioteki, font Gelasio i inne składniki zewnętrzne zachowują własne licencje opisane w informacjach o licencjach zewnętrznych.",
+          "Oryginalny kod źródłowy jest udostępniany na licencji MIT. Biblioteki, fonty Gelasio i Italianno oraz inne składniki zewnętrzne zachowują własne licencje opisane w informacjach o licencjach zewnętrznych.",
         ],
       },
     },
@@ -59,6 +67,7 @@ export const legalMarginaliaCopy: Record<EditorLocale, MarginaliaCopy> = {
     open: "Privacy, terms of use and licensing information",
     publisher: "An independent, non-commercial Varéra project",
     contact: "Contact",
+    footer: { ariaLabel: "Legal footer", privacy: "Privacy", terms: "Terms", licences: "Licences", contact: "Contact" },
     sections: {
       privacy: {
         label: "Privacy",
@@ -91,7 +100,7 @@ export const legalMarginaliaCopy: Record<EditorLocale, MarginaliaCopy> = {
         paragraphs: [
           "Publisher: Varéra — an independent, non-commercial project. You retain rights to your own project content; the application does not receive or publish a copy.",
           "A connected agent can request data from the open project through WebMCP tools. Use only an agent you trust and review its provider's privacy terms. This application does not embed an AI model or API key.",
-          "Original source code is released under the MIT License. Libraries, the Gelasio font and other third-party components retain the licences described in the third-party notices.",
+          "Original source code is released under the MIT License. Libraries, the Gelasio and Italianno fonts and other third-party components retain the licences described in the third-party notices.",
         ],
       },
     },

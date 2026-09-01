@@ -4,13 +4,13 @@ import type { DrawingElement } from "../model/project-model";
 import { MAX_PROJECT_FILE_BYTES, PROJECT_FILE_FORMAT, PROJECT_FILE_VERSION, cloneImportedProject, parseProjectFile, projectExportFileName, renameProject, serializeProjectFile } from "./project-file";
 
 describe("editor v2 project files", () => {
-  const project = createStarterProject("project-original", "Dolina Rueve", "pl");
+  const project = createStarterProject("project-original", "Dolina Brzasku", "pl");
 
   it("exports a versioned application-specific envelope", () => {
     const exportedAt = "2026-08-29T20:00:00.000Z";
     const envelope = parseProjectFile(serializeProjectFile(project, exportedAt));
     expect(envelope).toMatchObject({ format: PROJECT_FILE_FORMAT, fileVersion: PROJECT_FILE_VERSION, exportedAt, project: { id: "project-original", schemaVersion: 9 } });
-    expect(projectExportFileName("Dolina Rêuve")).toBe("dolina-reuve.cartographer.json");
+    expect(projectExportFileName("Dolina Brzàsku")).toBe("dolina-brzasku.cartographer.json");
   });
 
   it("round-trips the complete V2 JSON payload and enforces the byte limit", () => {
@@ -48,7 +48,7 @@ describe("editor v2 project files", () => {
 
   it("imports only under a fresh id without mutating the source", () => {
     const copy = cloneImportedProject(project, "project-imported", "2026-08-29T21:00:00.000Z");
-    expect(copy).toMatchObject({ id: "project-imported", name: "Dolina Rueve", updatedAt: "2026-08-29T21:00:00.000Z" });
+    expect(copy).toMatchObject({ id: "project-imported", name: "Dolina Brzasku", updatedAt: "2026-08-29T21:00:00.000Z" });
     expect(project.id).toBe("project-original");
     expect(() => cloneImportedProject(project, project.id)).toThrow(/fresh identifier/);
   });
@@ -56,7 +56,7 @@ describe("editor v2 project files", () => {
   it("renames a clone and refuses an empty name", () => {
     const renamed = renameProject(project, "  Nowa nazwa  ", "2026-08-29T22:00:00.000Z");
     expect(renamed).toMatchObject({ id: project.id, name: "Nowa nazwa", updatedAt: "2026-08-29T22:00:00.000Z" });
-    expect(project.name).toBe("Dolina Rueve");
+    expect(project.name).toBe("Dolina Brzasku");
     expect(() => renameProject(project, "   ")).toThrow(/cannot be empty/);
   });
 

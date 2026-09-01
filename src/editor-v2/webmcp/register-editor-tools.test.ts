@@ -13,7 +13,7 @@ import { effectiveProjectStoryObject } from "../story/project-effective";
 afterEach(() => Reflect.deleteProperty(document, "modelContext"));
 
 function projectFixture() {
-  const base = createStarterProject("project", "Dolina Rueve", "pl"); const location = base.places.find(({ kind }) => kind === "location")!;
+  const base = createStarterProject("project", "Dolina Brzasku", "pl"); const location = base.places.find(({ kind }) => kind === "location")!;
   return addElement(base, { id: "river", name: "Rzeka Szeptów", description: "Szeroka rzeka przy starym mieście", layerId: "terrain", subjectId: "terrain.water", geometry: { kind: "path", points: [{ x: 0, y: 0 }, { x: 20, y: 10 }], closed: false }, visible: true, locked: false, tags: ["woda", "żeglowna"], access: [], properties: { depth: 4 } }, location.id);
 }
 
@@ -101,6 +101,7 @@ describe("read-only WebMCP tools for editor V2", () => {
     expect(tools.length).toBeGreaterThan(45); expect(tools.map(({ name }) => name)).toContain("prepare_align_objects");
     expect(tools.slice(0, 6).map(({ name }) => name)).toEqual(["inspect_cartographers_project", "list_project_hierarchy", "inspect_open_map", "search_project_objects", "inspect_project_object", "check_project_consistency"]);
     expect(tools.slice(0, 6).every(({ annotations }) => annotations?.readOnlyHint)).toBe(true);
+    expect(tools.find(({ name }) => name === "search_workshop_guide")?.annotations?.readOnlyHint).toBe(true);
     expect(tools.find(({ name }) => name === "prepare_create_map_object")?.annotations?.readOnlyHint).toBe(false);
     expect(registration).toMatchObject({ available: true, registered: tools.length });
     expect(getWebMcpDiagnostics()).toMatchObject({ state: "ready", registered: tools.length, total: tools.length, errors: [] });

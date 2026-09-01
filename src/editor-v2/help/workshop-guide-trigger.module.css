@@ -1,0 +1,10 @@
+.actions { position: absolute; z-index: 3; top: 8px; right: 8px; display: flex; align-items: center; gap: 10px; }
+.guide { padding: 10px 14px; color: #d9c99f; border: 1px solid #9f7d46; background: #1c292188; cursor: pointer; font: .72rem Georgia, serif; letter-spacing: .08em; text-transform: uppercase; }
+.guide:hover, .guide:focus-visible { color: #f4e0ac; border-color: #d0a75f; outline: 1px solid #d0a75f; outline-offset: 2px; }
+.languageChoice { order: -1; }
+.languageChoice i { padding-inline: 3px; color: #826d42; font-style: normal; }
+.currentLanguage { color: #f0d59a; text-decoration: underline; text-decoration-color: #b78d47; text-underline-offset: 3px; }
+
+@media (max-width: 760px) {
+  .guide { padding: 8px 10px; font-size: .64rem; }
+}

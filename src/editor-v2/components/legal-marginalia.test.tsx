@@ -1,7 +1,7 @@
-import { act } from "react";
+import { act, createRef } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
-import { LegalMarginalia } from "./legal-marginalia";
+import { LegalMarginalia, type LegalMarginaliaHandle } from "./legal-marginalia";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -22,6 +22,18 @@ describe("LegalMarginalia", () => {
     expect(host.querySelector<HTMLAnchorElement>('a[href="/THIRD_PARTY_NOTICES.md"]')).not.toBeNull();
     act(() => root.render(<LegalMarginalia locale="en"/>));
     expect(host.textContent).toContain("Publisher, WebMCP and licences");
+    act(() => root.unmount()); host.remove();
+  });
+
+  it("opens the requested page when reached from the global footer", () => {
+    const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+    const ref = createRef<LegalMarginaliaHandle>();
+    act(() => root.render(<LegalMarginalia ref={ref} locale="pl"/>));
+    act(() => ref.current?.openSection("terms"));
+    expect(host.querySelector("details")?.open).toBe(true);
+    expect(host.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="true"]')?.textContent).toBe("Terms");
+    expect(host.querySelector("#marginalia-terms")).not.toBeNull();
+    expect(host.querySelector("#legal-marginalia")).not.toBeNull();
     act(() => root.unmount()); host.remove();
   });
 });

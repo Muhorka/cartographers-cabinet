@@ -19,6 +19,7 @@
     "dexie": "latest",
     "jspdf": "4.2.1",
     "jsts": "^2.12.1",
+    "minisearch": "7.2.0",
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",

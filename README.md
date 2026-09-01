@@ -2,6 +2,8 @@
 
 A browser-based spatial worldbuilding workbench for people and WebMCP agents. Build hierarchical places, sketch plans, describe access rules, inspect routes and export maps. Work stays in the browser; the current editor needs no account, database server or model API key.
 
+**Live application:** [cabinet.varera.studio](https://cabinet.varera.studio/)
+
 Open `/` for the current editor. `/editor-v2/` remains an equivalent direct route for compatibility. This is a work in progress, not a claim that every workflow is finished or independently verified.
 
 ## Run locally

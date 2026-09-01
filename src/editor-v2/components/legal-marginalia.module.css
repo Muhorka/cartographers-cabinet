@@ -13,6 +13,7 @@
 .page h3 { margin: 0 0 12px; color: #dec58d; font-size: .76rem; font-weight: 400; letter-spacing: .08em; }
 .page p, .page li { color: #c8bda2; font-size: .72rem; line-height: 1.55; overflow-wrap: anywhere; }
 .page p { margin: 0 0 10px; }
+.page > :last-child { margin-bottom: 0; }
 .page ul { margin: 0; padding-left: 17px; }
 .page li + li { margin-top: 7px; }
 .body footer { display: grid; gap: 5px; margin-top: 12px; padding: 10px 2px 0; border-top: 1px solid #a57c3d44; font-size: .65rem; line-height: 1.45; }

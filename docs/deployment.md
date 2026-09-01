@@ -20,7 +20,7 @@ Before connecting the repository, review the approved license, exact public comm
 
 ## Address and domain
 
-The initial deployment receives an HTTPS `pages.dev` address. Use one canonical public address consistently in the README, video and submission. The intended custom address is `cabinet.varera.studio`; registration and DNS remain separate from hosting.
+The canonical public address is `https://cabinet.varera.studio/`, connected to the Cloudflare Pages project. The `pages.dev` address remains available as a hosting fallback. Use the canonical custom address consistently in the README, video and submission.
 
 IndexedDB belongs to the browser origin. Export/import JSON to move projects between localhost, `pages.dev` and custom-domain addresses. Neither Cloudflare nor the application can migrate private browser storage to another origin automatically.
 
