@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { basename, extname, join, relative } from "node:path";
+import { basename, extname, join, relative, resolve, sep } from "node:path";
+import { createContext, runInContext } from "node:vm";
 
 const staticRoot = join("out", "_next", "static");
 
@@ -9,6 +10,109 @@ function filesBelow(directory) {
     const path = join(directory, entry.name);
     return entry.isDirectory() ? filesBelow(path) : [path];
   });
+}
+
+async function executeRouteWorkerArtifact(workerPath, chunksPath) {
+  const workerSource = readFileSync(workerPath, "utf8");
+  const messages = [];
+  const chunksRoot = resolve(chunksPath);
+  let vmContext;
+
+  function loadWorkerDependency(url) {
+    const parsed = new URL(String(url), "https://route-worker-artifact.invalid");
+    if (parsed.origin !== "https://route-worker-artifact.invalid") {
+      throw new Error(`Worker dependency escaped origin: ${parsed.origin}`);
+    }
+    const prefix = "/_next/static/chunks/";
+    if (!parsed.pathname.startsWith(prefix)) {
+      throw new Error(`Worker dependency escaped chunks directory: ${parsed.pathname}`);
+    }
+    const name = parsed.pathname.slice(prefix.length);
+    if (!/^[A-Za-z0-9._-]+[.]js$/u.test(name) || name.includes("..")) {
+      throw new Error(`Unsafe Worker dependency name: ${name}`);
+    }
+    const dependencyPath = resolve(chunksRoot, name);
+    if (!dependencyPath.toLowerCase().startsWith(`${chunksRoot.toLowerCase()}${sep}`)) {
+      throw new Error(`Worker dependency escaped filesystem root: ${name}`);
+    }
+    if (!existsSync(dependencyPath)) throw new Error(`Missing Worker dependency: ${name}`);
+    runInContext(readFileSync(dependencyPath, "utf8"), vmContext, { filename: dependencyPath });
+  }
+
+  const sandbox = {
+    console,
+    URL,
+    structuredClone,
+    setTimeout,
+    clearTimeout,
+    postMessage: (message) => messages.push(message),
+    importScripts: (...urls) => urls.forEach(loadWorkerDependency),
+  };
+  sandbox.self = sandbox;
+  sandbox.globalThis = sandbox;
+  vmContext = createContext(sandbox);
+
+  runInContext(workerSource, vmContext, { filename: workerPath });
+  await new Promise((done) => setImmediate(done));
+  if (typeof vmContext.onmessage !== "function") {
+    throw new Error("Compiled route Worker did not install onmessage.");
+  }
+
+  vmContext.onmessage({
+    data: {
+      type: "calculate",
+      attemptId: 17,
+      project: {
+        schemaVersion: 9,
+        id: "route-worker-artifact-test",
+        name: "Route worker artifact test",
+        updatedAt: "1970-01-01T00:00:00.000Z",
+        places: [],
+        elements: [],
+        surfaces: [],
+        constructions: [],
+        measureSettings: {
+          units: "metric",
+          gridVisible: false,
+          showAxes: false,
+          gridOpacity: 0.18,
+          gridSpacingMeters: 1,
+          snapToGrid: false,
+          showRoomAreas: false,
+          pencilSmoothing: 0.25,
+        },
+        roadJunctions: [],
+        story: {
+          version: 1,
+          world: [],
+          memberships: [],
+          propertyDefinitions: [],
+          objects: [],
+          groups: [],
+          zones: [],
+          lenses: [],
+          scenarios: [],
+          relations: [],
+          intentions: [],
+          evidence: [],
+          routes: [],
+        },
+      },
+      query: {
+        from: { placeId: "missing", point: { x: 0, y: 0 } },
+        to: { placeId: "missing", point: { x: 1, y: 1 } },
+      },
+    },
+  });
+  await new Promise((done) => setImmediate(done));
+
+  if (messages.length !== 1) {
+    throw new Error(`Expected exactly one Worker response, got ${messages.length}.`);
+  }
+  const [message] = messages;
+  if (message?.type !== "result" || message.attemptId !== 17 || message.result?.status !== "unreachable") {
+    throw new Error(`Unexpected Worker response: ${JSON.stringify(message)}`);
+  }
 }
 
 const failures = [];
@@ -38,7 +142,7 @@ if (clientArtifact) {
   if (!workerChunkId) {
     failures.push("The route Worker launcher does not reference a verifiable Webpack chunk.");
   } else {
-    workerArtifact = scripts.find((path) => basename(path).startsWith(`${workerChunkId}.`));
+    workerArtifact = scripts.find((path) => new RegExp(`^${workerChunkId}(?:[-.]).+[.]js$`, "u").test(basename(path)));
     if (!workerArtifact) failures.push(`The route Worker references missing chunk ${workerChunkId}.`);
   }
 }
@@ -56,6 +160,11 @@ if (workerArtifact) {
   const syntaxCheck = spawnSync(process.execPath, ["--check", workerArtifact], { encoding: "utf8" });
   if (syntaxCheck.status !== 0) {
     failures.push(`The referenced route Worker chunk is not valid JavaScript:\n${syntaxCheck.stderr.trim()}`);
+  }
+  try {
+    await executeRouteWorkerArtifact(workerArtifact, join(staticRoot, "chunks"));
+  } catch (error) {
+    failures.push(`The referenced route Worker did not execute its production contract:\n${error instanceof Error ? error.stack ?? error.message : String(error)}`);
   }
 }
 
