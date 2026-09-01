@@ -61,11 +61,6 @@ export async function scanProjectLibrary(): Promise<ProjectLibraryScan> {
   return scanProjectRecords(records);
 }
 
-/** Compatibility adapter for callers that only need healthy projects. */
-export async function listSavedProjects() {
-  return (await scanProjectLibrary()).projects;
-}
-
 export async function saveProject(project: EditorProject) {
   const saved = editorProjectSchema.parse({ ...structuredClone(project), updatedAt: new Date().toISOString() });
   await db().projects.put(saved); return saved;
