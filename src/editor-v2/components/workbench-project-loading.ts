@@ -1,6 +1,6 @@
 import type { EditorProject } from "../model/project-model";
 import { createStarterProject } from "../model/starter-project";
-import { getPreference, listSavedProjects, saveProject } from "../persistence/project-library";
+import { getPreference, scanProjectLibrary, saveProject } from "../persistence/project-library";
 import { makeSession, viewportFor } from "./workbench-helpers";
 
 /** One restoration path for startup, library selection and imports. Never replaces a failed save. */
@@ -18,8 +18,10 @@ export async function restoreWorkbenchProject(project: EditorProject, locale: "p
 export async function loadInitialWorkbenchProject() {
   const stored = await getPreference("locale") ?? localStorage.getItem("cartographer-locale");
   const locale: "pl" | "en" = stored === "en" ? "en" : "pl";
-  let projects = await listSavedProjects();
-  if (!projects.length) projects = [await saveProject(createStarterProject(crypto.randomUUID(), locale === "pl" ? "Nowy projekt" : "New project", locale))];
+  const scan = await scanProjectLibrary();
+  let projects = scan.projects;
+  if (!projects.length && !scan.recoveryRecords.length) projects = [await saveProject(createStarterProject(crypto.randomUUID(), locale === "pl" ? "Nowy projekt" : "New project", locale))];
   const activeId = await getPreference("activeProjectId");
-  return { locale, projects, loaded: await restoreWorkbenchProject(projects.find(({ id }) => id === activeId) ?? projects[0], locale) };
+  const activeProject = projects.find(({ id }) => id === activeId) ?? projects[0];
+  return { locale, projects, recoveryRecords: scan.recoveryRecords, loaded: activeProject ? await restoreWorkbenchProject(activeProject, locale) : undefined };
 }

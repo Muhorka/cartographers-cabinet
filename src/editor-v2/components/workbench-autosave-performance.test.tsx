@@ -10,7 +10,7 @@ import type { useEditorV2Tools } from "../webmcp/use-editor-tools";
 const fixture = vi.hoisted(() => ({ project: undefined as EditorProject | undefined, sheet: undefined as ComponentProps<typeof MapSheet> | undefined, actions: undefined as Parameters<typeof useEditorV2Tools>[2] | undefined, save: vi.fn(), preference: vi.fn(), remove: vi.fn() }));
 vi.mock("../persistence/project-library", async (original) => ({
   ...await original<typeof import("../persistence/project-library")>(),
-  listSavedProjects: async () => [fixture.project!, createStarterProject("q", "Other project", "pl"), createStarterProject("r", "Third project", "pl")], getPreference: fixture.preference,
+  scanProjectLibrary: async () => ({ projects: [fixture.project!, createStarterProject("q", "Other project", "pl"), createStarterProject("r", "Third project", "pl")], recoveryRecords: [] }), getPreference: fixture.preference,
   setPreference: async () => {}, listProjectCheckpoints: async () => [], saveProject: fixture.save, removeProject: fixture.remove,
 }));
 vi.mock("../webmcp/use-editor-tools", () => ({ useEditorV2Tools: (_session: unknown, _place: unknown, actions: Parameters<typeof useEditorV2Tools>[2]) => { fixture.actions = actions; } }));

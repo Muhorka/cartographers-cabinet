@@ -18,7 +18,7 @@ import { useEditorPlanning } from "../planning/use-editor-planning";
 import { useEditorDrawing } from "./use-editor-drawing";
 import { useEditorSelection } from "./use-editor-selection";
 import { useSelectionDeleteShortcut } from "./use-selection-delete-shortcut"; import { useSelectionRotation } from "./use-selection-rotation";
-import { toolboxCopy } from "../i18n/toolbox-copy";
+import { toolboxCopy } from "../i18n/toolbox-copy"; import { projectLibraryCopy } from "../i18n/project-library-copy";
 import { workbenchCopy, type EditorLocale } from "../i18n/workbench-copy";
 import { createProjectAtScale, createStarterProject, type StartingScale } from "../model/starter-project";
 import { reparentPlace, updatePlaceDetails } from "../model/hierarchy-operations";
@@ -27,11 +27,10 @@ import { createWorkbenchLevel } from "./workbench-level-creation";
 import { projectRevision } from "../state/project-revision";
 import { reorderLevel } from "../model/level-operations";
 import { addMapLevel, type MapLevelKind } from "../model/add-containing-scale";
-import type { EditorProject, MapAppearance, ProjectMeasureSettings } from "../model/project-model";
+import type { EditorProject, MapAppearance, ProjectMeasureSettings } from "../model/project-model"; import type { ProjectLibraryRecoveryRecord } from "../persistence/project-library";
 import { availableWorkSubjects, workLayerAvailability } from "../model/work-context";
-import { removeProject, saveProject, setPreference } from "../persistence/project-library";
-import { EditorSession, type EditorSessionState } from "../state/editor-session";
-import { workLayers, type InstrumentId } from "../toolbox/toolbox-model";
+import { removeProject, saveProject, setPreference } from "../persistence/project-library"; import { exportProjectRecoveryFile } from "../persistence/project-file-browser";
+import { EditorSession, type EditorSessionState } from "../state/editor-session"; import { workLayers, type InstrumentId } from "../toolbox/toolbox-model";
 import type { SheetViewport } from "./map-sheet-geometry";
 import { buildingOverlapGroups, mergeBuildingOverlapGroup, type BuildingMergeMode } from "../drawing/building-overlap-operations";
 import styles from "./editor-workbench.module.css";
@@ -49,7 +48,7 @@ import { useWorkbenchProjectSwitch } from "./use-workbench-project-switch";
 import { useEditorV2Tools } from "../webmcp/use-editor-tools";
 import { requestStoryViewTransition } from "./story-view-transition";
 import { canContinueSemanticDraft } from "./toolbox-change-policy";
-import { TransitionCreationDialog } from "./transition-creation-dialog"; import { WorkbenchMasthead } from "./workbench-masthead"; import { useWorkbenchSessionRefresh } from "./use-workbench-session-refresh";
+import { TransitionCreationDialog } from "./transition-creation-dialog"; import { WorkbenchMasthead } from "./workbench-masthead"; import { useWorkbenchSessionRefresh } from "./use-workbench-session-refresh"; import { ProjectLibraryRecovery } from "./project-library-recovery";
 import { useEditorTransaction } from "./use-editor-transaction";
 const ProjectLibraryDialog = lazy(() => import("./project-library-dialog").then((module) => ({ default: module.ProjectLibraryDialog })));
 type Mode = "drawing" | "story";
@@ -72,7 +71,7 @@ export function EditorWorkbench() {
   const [viewport, setViewport] = useState<SheetViewport>({ center: { x: 60, y: 40 }, zoom: 6, rotation: 0 });
   const [operationError, setOperationError] = useState<string>();
   const autosave = useProjectAutosave(snapshot?.project, (saved) => setProjects((current) => [saved, ...current.filter(({ id }) => id !== saved.id)]));
-  const [bootError, setBootError] = useState<string>(); const workbenchRefresh = useWorkbenchSessionRefresh({ session, snapshot, setSnapshot, setSelections, setViewport, setExpandedIds, setCutoutActive, setAddOutlineActive });
+  const [bootError, setBootError] = useState<string>(); const [recoveryRecords, setRecoveryRecords] = useState<ProjectLibraryRecoveryRecord[]>([]); const workbenchRefresh = useWorkbenchSessionRefresh({ session, snapshot, setSnapshot, setSelections, setViewport, setExpandedIds, setCutoutActive, setAddOutlineActive });
   function installLoadedProject(loaded: Awaited<ReturnType<typeof restoreWorkbenchProject>>) {
     setSession(loaded.session); setSnapshot(loaded.snapshot); setSelections([]); setViewport(loaded.viewport);
     setExpandedIds(new Set(loaded.project.places.map(({ id }) => id))); setSketchVisible(loaded.sketchVisible); setSketchOpacity(loaded.sketchOpacity);
@@ -82,8 +81,8 @@ export function EditorWorkbench() {
   const { loadProject } = projectNavigation;
   const workbenchTransaction = useEditorTransaction(session, () => refresh(), (failure) => setOperationError(failure === "transaction-failed" ? copy.editingStatus.blocked["transaction-failed"] : undefined));
   useEffect(() => { let cancelled = false;
-    void loadInitialWorkbenchProject().then(({ locale, projects, loaded }) => {
-      if (!cancelled) { setLocale(locale); setProjects(projects); installLoadedProject(loaded); }
+    void loadInitialWorkbenchProject().then(({ locale, projects, recoveryRecords, loaded }) => {
+      if (!cancelled) { setLocale(locale); setProjects(projects); setRecoveryRecords(recoveryRecords); if (loaded) installLoadedProject(loaded); }
     }).catch((error: unknown) => { if (!cancelled) setBootError(error instanceof Error ? error.message : String(error)); });
     return () => { cancelled = true; };
   }, []);
@@ -211,7 +210,7 @@ export function EditorWorkbench() {
   const tree = useMemo(() => currentProject?.places ?? [], [currentProject]);
   const availableLayerIds = useMemo(() => new Set(workLayers.filter(({ id }) => currentProject && activePlaceId && workLayerAvailability(currentProject, activePlaceId, id).available).map(({ id }) => id)), [activePlaceId, currentProject]);
   const availableSubjectIds = useMemo(() => currentProject && activePlaceId ? new Set(availableWorkSubjects(currentProject, activePlaceId, "equipment").map(({ id }) => id)) : undefined, [activePlaceId, currentProject]);
-  if (!session || !snapshot || !currentProject || !activePlaceId) return <main className={styles.loading}>{bootError ? <section role="alert"><h1>Nie udało się wczytać projektu</h1><p>Zapisane projekty nie zostały usunięte ani zastąpione.</p><pre>{bootError}</pre><button type="button" onClick={() => window.location.reload()}>Spróbuj ponownie</button></section> : "✦"}</main>;
+  if (!session || !snapshot || !currentProject || !activePlaceId) return <main className={styles.loading}>{bootError ? <section role="alert"><h1>Nie udało się wczytać projektu</h1><p>Zapisane projekty nie zostały usunięte ani zastąpione.</p><pre>{bootError}</pre><button type="button" onClick={() => window.location.reload()}>Spróbuj ponownie</button></section> : recoveryRecords.length ? <ProjectLibraryRecovery records={recoveryRecords} copy={projectLibraryCopy[locale]} blocking onExport={exportProjectRecoveryFile}/> : "✦"}</main>;
   const selectionInstrument = cutoutActive || addOutlineActive ? outlineInstrument ?? outlineInstrumentFor(snapshot.toolbox) : snapshot.toolbox.byLayer[snapshot.toolbox.activeLayerId].instrumentId;
   const selecting = mode === "drawing" && (selectionInstrument === "select" || selectionInstrument === "marquee");
   const canClearLayer = !currentProject.places.find(({ id }) => id === activePlaceId)?.locked;
@@ -219,6 +218,7 @@ export function EditorWorkbench() {
   return <main className={styles.workshop}>
     <WorkbenchMasthead locale={locale} copy={copy} mode={mode} onLanguage={changeLocale} onModeToggle={() => mode === "story" ? setMode("drawing") : drawing.requestAfterDraft(() => requestAfterOverlap(enterStory))}/>
     <section className={styles.projectBar}><button type="button" className={styles.libraryButton} onClick={() => drawing.requestAfterDraft(() => setLibraryOpen(true))}><span>✦</span><small>{copy.project}</small><strong><b>{headerName}</b><i>{copy.projects}</i></strong></button><div className={styles.modes}><button type="button" className={mode === "drawing" ? styles.activeMode : undefined} onClick={() => setMode("drawing")}>{copy.drawing}</button><button type="button" className={mode === "story" ? styles.activeMode : undefined} onClick={() => drawing.requestAfterDraft(() => requestAfterOverlap(enterStory))}>{copy.story}</button><em role={autosave.saveFailed ? "alert" : undefined}>{autosave.saveFailed ? copy.saveFailed : autosave.saving ? copy.saving : copy.saved}</em>{autosave.saveFailed && <button type="button" onClick={() => void autosave.flushSession(session)}>{copy.retrySave}</button>}</div></section>
+    <ProjectLibraryRecovery records={recoveryRecords} copy={projectLibraryCopy[locale]} onExport={exportProjectRecoveryFile}/>
     {operationError && !libraryOpen && <p className={styles.operationError} role="alert">{operationError}</p>}
     <section className={`${styles.desk}${leftOpen ? "" : ` ${styles.leftClosed}`}${rightOpen ? "" : ` ${styles.rightClosed}`}`}>
       <aside className={styles.leftBook}><button type="button" className={styles.bookFold} title={locale === "pl" ? "Zwiń lewą księgę" : "Fold left book"} aria-label={locale === "pl" ? "Zwiń lewą księgę" : "Fold left book"} onClick={() => setLeftOpen(false)}>‹</button><header className={styles.bookHeading}><h2>{mode === "story" ? copy.story : copy.atlas}</h2></header><StoryDisclosureBook {...story.leftBookProps} tree={<HierarchyNavigator places={tree} surfaces={currentProject.surfaces} activePlaceId={activePlaceId} expandedPlaceIds={expandedIds} copy={copy.hierarchy} onOpenPlace={openPlace} onSelectSurface={selectSurfaceFromTree} onExpandedChange={(id, expanded) => setExpandedIds((current) => { const next = new Set(current); if (expanded) next.add(id); else next.delete(id); return next; })} onAddContainingPlace={addBroaderMap} onAddLevel={(buildingId, position) => drawing.requestAfterDraft(() => addLevel(buildingId, position))} onReorderLevel={(levelId, beforeLevelId) => drawing.requestAfterDraft(() => changeLevelOrder(levelId, beforeLevelId))}/>}/></aside>

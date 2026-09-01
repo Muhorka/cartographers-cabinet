@@ -12,7 +12,7 @@ import { EditorWorkbench } from "./editor-workbench";
 import { EditorSession } from "../state/editor-session";
 
 const fixture = vi.hoisted(() => ({ project: undefined as EditorProject | undefined, sheet: undefined as ComponentProps<typeof MapSheet> | undefined }));
-vi.mock("../persistence/project-library", async (original) => ({ ...await original<typeof import("../persistence/project-library")>(), listSavedProjects: async () => [fixture.project!], getPreference: async (key: string) => key === "locale" ? "pl" : key === "activePlaceId:p" ? "p:level" : undefined, setPreference: async () => {}, listProjectCheckpoints: async () => [], saveProject: async (project: EditorProject) => project }));
+vi.mock("../persistence/project-library", async (original) => ({ ...await original<typeof import("../persistence/project-library")>(), scanProjectLibrary: async () => ({ projects: [fixture.project!], recoveryRecords: [] }), getPreference: async (key: string) => key === "locale" ? "pl" : key === "activePlaceId:p" ? "p:level" : undefined, setPreference: async () => {}, listProjectCheckpoints: async () => [], saveProject: async (project: EditorProject) => project }));
 vi.mock("../webmcp/use-editor-tools", () => ({ useEditorV2Tools: vi.fn() }));
 vi.mock("./map-sheet", () => ({ MapSheet: (props: ComponentProps<typeof MapSheet>) => { fixture.sheet = props; return <svg aria-label="Test canvas"/>; } }));
 

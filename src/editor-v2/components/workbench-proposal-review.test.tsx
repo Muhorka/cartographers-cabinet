@@ -16,7 +16,7 @@ const fixture = vi.hoisted(() => ({ project: undefined as EditorProject | undefi
 
 vi.mock("../persistence/project-library", async (original) => ({
   ...await original<typeof import("../persistence/project-library")>(),
-  listSavedProjects: async () => fixture.project ? [fixture.project] : [],
+  scanProjectLibrary: async () => ({ projects: fixture.project ? [fixture.project] : [], recoveryRecords: [] }),
   getPreference: async (key: string) => key === "locale" ? "pl" : key === "activePlaceId:proposal-ui" ? "proposal-ui:level" : undefined,
   setPreference: async () => {},
   listProjectCheckpoints: async () => [],

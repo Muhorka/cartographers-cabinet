@@ -22,7 +22,7 @@ const fixture = vi.hoisted(() => ({
 // Only replace persistence/network adapters and inject completed canvas gestures.
 vi.mock("../persistence/project-library", async (importOriginal) => ({
   ...await importOriginal<typeof import("../persistence/project-library")>(),
-  listSavedProjects: async () => [fixture.saved ?? fixture.project!],
+  scanProjectLibrary: async () => ({ projects: [fixture.saved ?? fixture.project!], recoveryRecords: [] }),
   getPreference: async (key: string) => fixture.preferences.get(key),
   setPreference: async (key: string, value: string) => { fixture.preferences.set(key, value); },
   listProjectCheckpoints: async () => [],

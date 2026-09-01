@@ -15,7 +15,7 @@ import { EditorSession } from "../state/editor-session";
 const harness = vi.hoisted(() => ({ project: undefined as EditorProject | undefined, sheet: undefined as ComponentProps<typeof MapSheet> | undefined }));
 vi.mock("../persistence/project-library", async (original) => ({
   ...await original<typeof import("../persistence/project-library")>(),
-  listSavedProjects: async () => [harness.project!], getPreference: async (key: string) => key === "locale" ? "pl" : key === "activePlaceId:p" ? "p:level" : undefined,
+  scanProjectLibrary: async () => ({ projects: [harness.project!], recoveryRecords: [] }), getPreference: async (key: string) => key === "locale" ? "pl" : key === "activePlaceId:p" ? "p:level" : undefined,
   setPreference: async () => {}, listProjectCheckpoints: async () => [], saveProject: async (project: EditorProject) => project,
 }));
 vi.mock("../webmcp/use-editor-tools", () => ({ useEditorV2Tools: vi.fn() }));

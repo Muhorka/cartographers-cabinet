@@ -1,9 +1,21 @@
 import Dexie, { type EntityTable } from "dexie";
+import { z } from "zod";
 import type { EditorProject } from "../model/project-model";
 import { cloneImportedProject, editorProjectSchema, parseProjectFile } from "./project-file";
 import { checkpointSummary, createProjectCheckpoint, type ProjectCheckpoint, type ProjectCheckpointSummary } from "./project-checkpoint";
 
 type Preference = { key: string; value: string };
+
+export type ProjectLibraryRecoveryRecord = {
+  primaryKey: IDBValidKey;
+  rawRecord: unknown;
+  reason: string;
+};
+
+export type ProjectLibraryScan = {
+  projects: EditorProject[];
+  recoveryRecords: ProjectLibraryRecoveryRecord[];
+};
 
 class ProjectLibraryDatabase extends Dexie {
   projects!: EntityTable<EditorProject, "id">;
@@ -20,8 +32,38 @@ class ProjectLibraryDatabase extends Dexie {
 let database: ProjectLibraryDatabase | undefined;
 function db() { return database ??= new ProjectLibraryDatabase(); }
 
+function parseFailureReason(error: unknown) {
+  if (error instanceof z.ZodError) {
+    return error.issues.slice(0, 3).map((issue) => `${issue.path.join(".") || "projekt"}: ${issue.message}`).join("; ");
+  }
+  return error instanceof Error ? error.message : "Nieznany błąd walidacji projektu.";
+}
+
+export function scanProjectRecords(records: Iterable<{ primaryKey: IDBValidKey; rawRecord: unknown }>): ProjectLibraryScan {
+  const projects: EditorProject[] = [];
+  const recoveryRecords: ProjectLibraryRecoveryRecord[] = [];
+  for (const { primaryKey, rawRecord } of records) {
+    try {
+      projects.push(editorProjectSchema.parse(rawRecord));
+    } catch (error) {
+      recoveryRecords.push({ primaryKey, rawRecord: structuredClone(rawRecord), reason: parseFailureReason(error) });
+    }
+  }
+  projects.sort((first, second) => second.updatedAt.localeCompare(first.updatedAt));
+  return { projects, recoveryRecords };
+}
+
+export async function scanProjectLibrary(): Promise<ProjectLibraryScan> {
+  const records: { primaryKey: IDBValidKey; rawRecord: unknown }[] = [];
+  await db().projects.toCollection().each((rawRecord, cursor) => {
+    records.push({ primaryKey: cursor.primaryKey as IDBValidKey, rawRecord });
+  });
+  return scanProjectRecords(records);
+}
+
+/** Compatibility adapter for callers that only need healthy projects. */
 export async function listSavedProjects() {
-  return (await db().projects.toArray()).map((project) => editorProjectSchema.parse(project)).toSorted((first, second) => second.updatedAt.localeCompare(first.updatedAt));
+  return (await scanProjectLibrary()).projects;
 }
 
 export async function saveProject(project: EditorProject) {
