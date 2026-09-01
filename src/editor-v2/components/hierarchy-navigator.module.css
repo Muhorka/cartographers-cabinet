@@ -32,10 +32,12 @@
 
 .placeRow:hover { background: #f4dda610; }
 
-.active {
+.inspected {
   border-left-color: #d0a44a;
   background: linear-gradient(90deg, #8b553750, #d0a44a14);
 }
+
+.displayed:not(.inspected) { background: linear-gradient(90deg, #8ea69a18, transparent); }
 
 .disclosure,
 .placeButton {
@@ -75,7 +77,10 @@
 .placeText { display: grid; min-width: 0; gap: 2px; }
 .placeText strong { overflow-wrap: anywhere; color: #e8d8af; font-size: .78rem; font-weight: 600; line-height: 1.16; }
 .placeText small { overflow-wrap: anywhere; color: #9f9780; font-size: .59rem; line-height: 1.1; letter-spacing: .035em; }
-.active .placeText strong { color: #fff2c9; }
+.placeMeta { display: flex; min-width: 0; align-items: center; gap: 4px; }
+.displayedMark { display: inline-grid; flex: 0 0 auto; width: 13px; height: 10px; place-items: center; color: #b9c8bc; }
+.displayedMark svg { width: 13px; height: 10px; margin: 0; fill: none; stroke: currentColor; stroke-width: 1.15; }
+.inspected .placeText strong { color: #fff2c9; }
 .rowAction,
 .dragHandle {
   display: grid;

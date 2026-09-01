@@ -12,10 +12,12 @@ import { validContainingPlaces, validElementOwners } from "../model/hierarchy-op
 import type { ReactNode } from "react";
 import type { VerticalTransition } from "../construction/wall-features";
 import { defaultElementColor } from "../model/element-appearance";
+import { InspectorPlaceContext } from "./inspector-place-context";
 
 type Props = {
   project: EditorProject;
   activePlaceId: string;
+  inspectedPlaceId?: string;
   selections?: MapSelection[];
   copy: WorkbenchCopy;
   onUpdatePlace(placeId: string, details: { name?: string; description?: string; tags?: string[]; appearance?: MapAppearance }): void;
@@ -36,10 +38,12 @@ type Props = {
   geometryTools?: ReactNode;
   footer?: ReactNode;
   bottom?: ReactNode;
+  onInspectActivePlace?(): void;
 };
 
 export function InspectorPanel(props: Props) {
-  const selection = props.selections?.at(-1); const placeId = selection?.kind === "place" ? selection.id : props.activePlaceId;
+  const inspectedPlaceId = props.inspectedPlaceId && props.project.places.some(({ id }) => id === props.inspectedPlaceId) ? props.inspectedPlaceId : props.activePlaceId;
+  const selection = props.selections?.at(-1); const placeId = selection?.kind === "place" ? selection.id : inspectedPlaceId;
   const place = props.project.places.find(({ id }) => id === placeId);
   const formProps = { ...props, readOnly: props.readOnly || selectionIsLocked(props.project, selection ?? { kind: "place", id: placeId }) };
   const form = (props.selections?.length ?? 0) > 1 ? <p className={styles.selectionKind}>{props.copy.selectedCount(props.selections!.length)}</p> : !selection || selection.kind === "place" ? place ? <PlaceForm place={place} project={props.project} copy={props.copy} onUpdate={props.onUpdatePlace} onDelete={props.onDeletePlace} onAddLevel={props.onAddLevel} onReparent={props.onReparentPlace} readOnly={formProps.readOnly}/> : <p className={styles.empty}>{props.copy.noSelection}</p> : <SelectionForm {...formProps} selection={selection}/>;
@@ -48,6 +52,7 @@ export function InspectorPanel(props: Props) {
     : form;
   const storyEditor = props.selectionEditor ?? props.detailsEditor;
   return <aside className={styles.panel}>
+    <InspectorPlaceContext project={props.project} activePlaceId={props.activePlaceId} inspectedPlaceId={inspectedPlaceId} hidden={Boolean(props.selections?.length)} copy={props.copy.inspectorContext} onInspectActivePlace={props.onInspectActivePlace}/>
     {storyEditor && <div className={styles.storyEditor}>{storyEditor}</div>}
     {!props.selectionEditor && nativeForm && <div className={styles.nativeEditor}>{!props.detailsEditor && <h2>{selection ? props.copy.selection : props.copy.openPlace}</h2>}{nativeForm}{!props.readOnly && props.geometryTools}</div>}
     {props.footer}

@@ -12,6 +12,7 @@ import { viewportFor } from "./workbench-helpers";
 import type { useProjectAutosave } from "./use-project-autosave";
 import { useWorkbenchProjectSwitch } from "./use-workbench-project-switch";
 import { expandedPlaceIds, reconcileMapSelections, useWorkbenchSessionRefresh } from "./use-workbench-session-refresh";
+import { inspectorFocus, type InspectorFocus } from "./workbench-inspector-focus";
 
 const storage = vi.hoisted(() => ({ read: vi.fn(), preference: vi.fn().mockResolvedValue(undefined), error: vi.fn() }));
 vi.mock("../persistence/project-library", async (original) => ({ ...await original<typeof import("../persistence/project-library")>(), readProjectCheckpoint: storage.read, setPreference: storage.preference }));
@@ -36,19 +37,20 @@ function projectWithEverySelection(): EditorProject {
   };
 }
 
-type Ui = { snapshot: ReturnType<EditorSession["getViewState"]>; selections: MapSelection[]; viewport: ReturnType<typeof viewportFor>; expanded: Set<string>; cutout: boolean; addOutline: boolean };
+type Ui = { snapshot: ReturnType<EditorSession["getViewState"]>; selections: MapSelection[]; inspectorFocus?: InspectorFocus; viewport: ReturnType<typeof viewportFor>; expanded: Set<string>; cutout: boolean; addOutline: boolean };
 let live!: { refresh(): void; restore(): Promise<unknown>; ui: Ui };
 
 function Probe({ session, initialSelections }: { session: EditorSession; initialSelections: MapSelection[] }) {
   const [snapshot, setSnapshot] = useState(session.getViewState()); const [selections, setSelections] = useState(initialSelections);
+  const [focus, setInspectorFocus] = useState<InspectorFocus | undefined>(() => inspectorFocus(snapshot.project, "building"));
   const [viewport, setViewport] = useState(viewportFor(snapshot.project, snapshot.activePlaceId)); const [expanded, setExpandedIds] = useState(new Set<string>());
   const [cutout, setCutoutActive] = useState(true); const [addOutline, setAddOutlineActive] = useState(true);
-  const reconciler = useWorkbenchSessionRefresh({ session, snapshot, setSnapshot, setSelections, setViewport, setExpandedIds, setCutoutActive, setAddOutlineActive });
+  const reconciler = useWorkbenchSessionRefresh({ session, snapshot, setSnapshot, setSelections, setInspectorFocus, setViewport, setExpandedIds, setCutoutActive, setAddOutlineActive });
   const navigation = useWorkbenchProjectSwitch({ session, locale: "pl", autosave: {} as ReturnType<typeof useProjectAutosave>, install: vi.fn(), onError: storage.error });
   useLayoutEffect(() => { live = {
     refresh: () => reconciler.refresh(session),
     restore: async () => { const result = await navigation.restoreCheckpoint("checkpoint", async () => "safety"); if (result) reconciler.refresh(result.session); return result; },
-    ui: { snapshot, selections, viewport, expanded, cutout, addOutline },
+    ui: { snapshot, selections, inspectorFocus: focus, viewport, expanded, cutout, addOutline },
   }; });
   return null;
 }
@@ -75,6 +77,7 @@ describe("workbench project snapshot reconciliation", () => {
     const undo = createEditorAgentTools({ getSession: () => session, getActivePlaceId: () => session.getViewState().activePlaceId!, refresh: () => live.refresh() }).find(({ name }) => name === "undo_editor_change")!;
     await act(async () => { await undo.execute({}); });
     expect(live.ui.snapshot.activePlaceId).toBe("ground"); expect(live.ui.selections).toEqual([]);
+    expect(live.ui.inspectorFocus).toEqual({ projectId: "project", placeId: "building" });
     expect(live.ui.cutout).toBe(false); expect(live.ui.addOutline).toBe(false);
     expect(live.ui.expanded).toEqual(new Set(["ground", "building", "world"]));
     expect(live.ui.viewport).toEqual(viewportFor(base, "ground")); expect(live.ui.snapshot.toolbox.activeLayerId).toBe("construction");
@@ -87,6 +90,7 @@ describe("workbench project snapshot reconciliation", () => {
     expect(session.executeTransaction({ id: "remove-element", apply: (current) => ({ ...current, elements: current.elements.filter(({ id }) => id !== "element") }) }).changed).toBe(true);
     await act(async () => live.refresh());
     expect(live.ui.snapshot.activePlaceId).toBe("ground"); expect(live.ui.selections).toEqual([]);
+    expect(live.ui.inspectorFocus).toEqual({ projectId: "project", placeId: "building" });
     expect(live.ui.cutout).toBe(true); expect(live.ui.addOutline).toBe(true); expect(storage.preference).not.toHaveBeenCalled();
   });
 

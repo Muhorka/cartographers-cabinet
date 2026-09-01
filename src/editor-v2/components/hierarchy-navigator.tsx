@@ -1,7 +1,7 @@
 import type { ConstructionSurface, PlaceNode } from "../model/project-model";
 import styles from "./hierarchy-navigator.module.css";
 import { useState } from "react";
-import { AddLevelGlyph, ChevronGlyph, PlaceGlyph } from "./hierarchy-glyphs";
+import { AddLevelGlyph, ChevronGlyph, DisplayedPlaceGlyph, PlaceGlyph } from "./hierarchy-glyphs";
 
 export type HierarchyNavigatorCopy = {
   ariaLabel: string;
@@ -26,6 +26,7 @@ type HierarchyNavigatorProps = {
   places: PlaceNode[];
   surfaces?: ConstructionSurface[];
   activePlaceId?: string;
+  inspectedPlaceId?: string;
   expandedPlaceIds: ReadonlySet<string>;
   copy: HierarchyNavigatorCopy;
   onOpenPlace(placeId: string): void;
@@ -39,6 +40,7 @@ type HierarchyNavigatorProps = {
 export function HierarchyNavigator({
   places,
   activePlaceId,
+  inspectedPlaceId,
   expandedPlaceIds,
   copy,
   onOpenPlace,
@@ -51,11 +53,11 @@ export function HierarchyNavigator({
 }: HierarchyNavigatorProps) {
   const byContainer = groupPlacesByContainer(places);
   const roots = places.filter((place) => !place.parentId || !places.some((candidate) => candidate.id === place.parentId));
-  const activePlace = places.find(({ id }) => id === activePlaceId);
-  const choices = activePlace ? levelChoices(activePlace) : [];
-  const canAddContainingPlace = Boolean(onAddContainingPlace && activePlace && choices.length);
+  const inspectedPlace = places.find(({ id }) => id === inspectedPlaceId) ?? places.find(({ id }) => id === activePlaceId);
+  const choices = inspectedPlace ? levelChoices(inspectedPlace) : [];
+  const canAddContainingPlace = Boolean(onAddContainingPlace && inspectedPlace && choices.length);
   const [adding, setAdding] = useState(false); const [kind, setKind] = useState<"world" | "location" | "building" | "level" | "custom">("custom"); const [name, setName] = useState("");
-  const openAdding = () => { if (!activePlace) return; setKind(levelChoices(activePlace)[0] ?? "custom"); setName(""); setAdding(true); };
+  const openAdding = () => { if (!inspectedPlace) return; setKind(levelChoices(inspectedPlace)[0] ?? "custom"); setName(""); setAdding(true); };
 
   return (
     <nav className={styles.navigator} aria-label={copy.ariaLabel}>
@@ -68,6 +70,7 @@ export function HierarchyNavigator({
               byContainer={byContainer}
               surfaces={surfaces}
               activePlaceId={activePlaceId}
+              inspectedPlaceId={inspectedPlaceId}
               expandedPlaceIds={expandedPlaceIds}
               copy={copy}
               onOpenPlace={onOpenPlace}
@@ -88,7 +91,7 @@ export function HierarchyNavigator({
           <span>{copy.addContainingPlace}</span>
         </button>
       )}
-      {adding && activePlace && onAddContainingPlace && <form className={styles.addForm} onSubmit={(event) => { event.preventDefault(); onAddContainingPlace(activePlace.id, kind, name.trim() || undefined); setAdding(false); }}>
+      {adding && inspectedPlace && onAddContainingPlace && <form className={styles.addForm} onSubmit={(event) => { event.preventDefault(); onAddContainingPlace(inspectedPlace.id, kind, name.trim() || undefined); setAdding(false); }}>
         <label><span>{copy.containingKind}</span><select value={kind} onChange={(event) => setKind(event.currentTarget.value as typeof kind)}>{choices.map((choice) => <option key={choice} value={choice}>{copy.kindLabels[choice]}</option>)}</select></label>
         <label><span>{copy.containingName}</span><input value={name} onChange={(event) => setName(event.currentTarget.value)} placeholder={copy.kindLabels[kind]}/></label>
         <div><button type="submit">{copy.createContaining}</button><button type="button" onClick={() => setAdding(false)}>{copy.cancel}</button></div>
@@ -115,6 +118,7 @@ function PlaceBranch({
   place,
   byContainer,
   activePlaceId,
+  inspectedPlaceId,
   expandedPlaceIds,
   copy,
   onOpenPlace,
@@ -128,12 +132,12 @@ function PlaceBranch({
   const ownedSurfaces = surfaces.filter(({ belongsToId }) => belongsToId === place.id);
   const hasNestedPlaces = nestedPlaces.length > 0 || ownedSurfaces.length > 0;
   const expanded = hasNestedPlaces && expandedPlaceIds.has(place.id);
-  const active = place.id === activePlaceId;
+  const displayed = place.id === activePlaceId; const inspected = place.id === (inspectedPlaceId ?? activePlaceId);
   const [addingLevel, setAddingLevel] = useState(false);
 
   return (
-    <li className={styles.branch} role="treeitem" aria-expanded={hasNestedPlaces ? expanded : undefined} aria-current={active ? "page" : undefined} aria-selected={active}>
-      <div className={`${styles.placeRow}${active ? ` ${styles.active}` : ""}`} onDragOver={(place.kind === "building" || place.kind === "level") && onReorderLevel ? (event) => event.preventDefault() : undefined} onDrop={(place.kind === "building" || place.kind === "level") && onReorderLevel ? (event) => { event.preventDefault(); event.stopPropagation(); const id = event.dataTransfer.getData("application/x-cartographer-level"); if (id && id !== place.id) onReorderLevel(id, place.kind === "level" ? place.id : undefined); } : undefined}>
+    <li className={styles.branch} role="treeitem" aria-expanded={hasNestedPlaces ? expanded : undefined} aria-current={displayed ? "page" : undefined} aria-selected={inspected}>
+      <div className={`${styles.placeRow}${inspected ? ` ${styles.inspected}` : ""}${displayed ? ` ${styles.displayed}` : ""}`} onDragOver={(place.kind === "building" || place.kind === "level") && onReorderLevel ? (event) => event.preventDefault() : undefined} onDrop={(place.kind === "building" || place.kind === "level") && onReorderLevel ? (event) => { event.preventDefault(); event.stopPropagation(); const id = event.dataTransfer.getData("application/x-cartographer-level"); if (id && id !== place.id) onReorderLevel(id, place.kind === "level" ? place.id : undefined); } : undefined}>
         {hasNestedPlaces ? (
           <button
             type="button"
@@ -158,7 +162,7 @@ function PlaceBranch({
           <PlaceGlyph kind={place.kind} />
           <span className={styles.placeText}>
             <strong>{place.name}</strong>
-            <small>{copy.kindLabels[place.kind]}</small>
+            <span className={styles.placeMeta}><small>{copy.kindLabels[place.kind]}</small>{displayed && <span className={styles.displayedMark} title={copy.openPlace}><DisplayedPlaceGlyph /></span>}</span>
           </span>
         </button>
         {place.kind === "level" && onReorderLevel && <span className={styles.dragHandle} draggable title={copy.reorderLevel} aria-label={copy.reorderLevel} onDragStart={(event) => { event.stopPropagation(); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("application/x-cartographer-level", place.id); }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); const id = event.dataTransfer.getData("application/x-cartographer-level"); if (id && id !== place.id) onReorderLevel(id, place.id); }}>⋮⋮</span>}
@@ -176,6 +180,7 @@ function PlaceBranch({
               byContainer={byContainer}
               surfaces={surfaces}
               activePlaceId={activePlaceId}
+              inspectedPlaceId={inspectedPlaceId}
               expandedPlaceIds={expandedPlaceIds}
               copy={copy}
               onOpenPlace={onOpenPlace}

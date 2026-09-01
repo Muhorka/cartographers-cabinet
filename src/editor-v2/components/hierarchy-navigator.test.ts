@@ -1,5 +1,6 @@
-import { createElement } from "react";
+import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
 import type { PlaceNode } from "../model/project-model";
 import { HierarchyNavigator, type HierarchyNavigatorCopy } from "./hierarchy-navigator";
@@ -84,6 +85,21 @@ describe("editor v2 hierarchy navigator", () => {
     const openHtml = renderNavigator(new Set(["world", "town", "house"]));
     expect(openHtml).toContain('aria-current="page"');
     expect(openHtml).toContain('aria-expanded="true"');
+  });
+
+  it("marks the edited building separately from the level displayed on the map", () => {
+    const host = document.createElement("div"); host.innerHTML = renderToStaticMarkup(createElement(HierarchyNavigator, { places, activePlaceId: "ground", inspectedPlaceId: "house", expandedPlaceIds: new Set(["world", "town", "house"]), copy, onOpenPlace: vi.fn(), onExpandedChange: vi.fn() }));
+    const item = (name: string) => [...host.querySelectorAll('li[role="treeitem"]')].find((candidate) => candidate.querySelector("button[title]")?.getAttribute("title") === name)!;
+    expect(item("The Cartographer's House").getAttribute("aria-selected")).toBe("true"); expect(item("The Cartographer's House").hasAttribute("aria-current")).toBe(false);
+    expect(item("Ground floor").getAttribute("aria-selected")).toBe("false"); expect(item("Ground floor").getAttribute("aria-current")).toBe("page");
+  });
+
+  it("bases the broader-level action on the inspected place, not the displayed sheet", () => {
+    const host = document.createElement("div"); const root = createRoot(host); const add = vi.fn();
+    act(() => root.render(createElement(HierarchyNavigator, { places, activePlaceId: "ground", inspectedPlaceId: "house", expandedPlaceIds: new Set(["world", "town", "house"]), copy, onOpenPlace: vi.fn(), onExpandedChange: vi.fn(), onAddContainingPlace: add })));
+    act(() => [...host.querySelectorAll("button")].find(({ textContent }) => textContent?.includes(copy.addContainingPlace))!.click());
+    act(() => host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(add).toHaveBeenCalledWith("house", "level", undefined); act(() => root.unmount());
   });
 
   it("contains only navigable places and keeps the broader-level action available inside a branch", () => {

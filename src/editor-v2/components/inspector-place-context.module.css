@@ -1,0 +1,28 @@
+.context {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 6px 8px;
+  margin: 8px;
+  padding: 9px;
+  color: #d8c99f;
+  border: 1px solid #9d7a3f88;
+  background: linear-gradient(135deg, #23382dcc, #16271fcc);
+  font: italic .67rem/1.4 Georgia, "Times New Roman", serif;
+}
+
+.context p { margin: 0; overflow-wrap: anywhere; }
+.eye { display: grid; width: 20px; height: 18px; place-items: center; color: #d8b45e; }
+.eye svg { width: 19px; fill: none; stroke: currentColor; stroke-width: 1.25; }
+.context button {
+  grid-column: 2;
+  justify-self: start;
+  padding: 5px 8px;
+  color: #f0dba8;
+  border: 1px solid #a57c3d99;
+  background: #4b3829;
+  cursor: pointer;
+  font: inherit;
+  font-style: normal;
+}
+.context button:hover,
+.context button:focus-visible { color: #fff3cf; border-color: #d6aa58; outline: none; }

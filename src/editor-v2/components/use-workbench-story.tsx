@@ -34,8 +34,9 @@ import { replaceProjectScenarios } from "../story/scenario-commands";
 import { useStoryRouteInteraction } from "./use-story-route-interaction";
 
 const empty = emptyStoryData();
-export function useWorkbenchStory({ session, snapshot, selections, locale, mode, refresh, zoom, onSelect, onFocus, onOpenPlace, onOpenWorldbook }: {
+export function useWorkbenchStory({ session, snapshot, selections, inspectedPlaceId, locale, mode, refresh, zoom, onSelect, onFocus, onOpenPlace, onOpenWorldbook }: {
   session?: EditorSession; snapshot?: EditorSessionState; selections: MapSelection[]; locale: "pl" | "en";
+  inspectedPlaceId?: string;
   mode: "drawing" | "story"; refresh(): void; zoom: number; onSelect(selection: MapSelection): void; onFocus(refs: StoryObjectRef[]): boolean; onOpenPlace(id: string): void; onOpenWorldbook(): void;
 }) {
   const project = snapshot?.project; const copy = storyCopy[locale];
@@ -77,7 +78,7 @@ export function useWorkbenchStory({ session, snapshot, selections, locale, mode,
   const renderedProject = useMemo(() => project ? displayProject(project, { scenarioId, stepId }) : undefined, [project, scenarioId, stepId]);
   const rawRefs = project ? scopedSelectionRefs(project, selections, snapshot?.activePlaceId) : [];
   const inspectingOpenPlace = !selections.length;
-  const inspectedRefs = inspectingOpenPlace && project && snapshot?.activePlaceId ? scopedSelectionRefs(project, [{ kind: "place", id: snapshot.activePlaceId }], snapshot.activePlaceId) : rawRefs;
+  const inspectedRefs = inspectingOpenPlace && project && inspectedPlaceId ? scopedSelectionRefs(project, [{ kind: "place", id: inspectedPlaceId }], snapshot?.activePlaceId) : rawRefs;
   const selected = inspectedRefs.flatMap(({ type, id, scopeId }) => {
     const result = project ? effectiveProjectStoryObject(project, { kind: type, id, scopeId }, { scenarioId: inspectorScenarioId, stepId: inspectorStepId }) : undefined;
     return result && project ? [{ ...result, name: storyObjectDisplayName(project, result, workbenchCopy[locale].objectList) }] : [];

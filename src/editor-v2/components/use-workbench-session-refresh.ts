@@ -7,6 +7,7 @@ import type { EditorSession, EditorSessionState } from "../state/editor-session"
 import type { SheetViewport } from "./map-sheet-geometry";
 import type { MapSelection } from "./map-sheet-types";
 import { activatePreferredLayer, viewportFor } from "./workbench-helpers";
+import { reconcileInspectorFocus, type InspectorFocus } from "./workbench-inspector-focus";
 
 function constructionSelectionExists(project: EditorProject, selection: MapSelection) {
   return project.constructions.some((construction) => {
@@ -40,6 +41,7 @@ type Input = {
   session?: EditorSession; snapshot?: EditorSessionState;
   setSnapshot(snapshot: EditorSessionState): void;
   setSelections: Dispatch<SetStateAction<MapSelection[]>>;
+  setInspectorFocus: Dispatch<SetStateAction<InspectorFocus | undefined>>;
   setViewport: Dispatch<SetStateAction<SheetViewport>>;
   setExpandedIds: Dispatch<SetStateAction<Set<string>>>;
   setCutoutActive: Dispatch<SetStateAction<boolean>>;
@@ -59,6 +61,7 @@ export function useWorkbenchSessionRefresh(input: Input) {
     }
     snapshotRef.current = after; input.setSnapshot(after);
     input.setSelections((current) => activeChanged ? [] : reconcileMapSelections(after.project, current));
+    input.setInspectorFocus((current) => reconcileInspectorFocus(current, after.project, after.activePlaceId));
     if (!activeChanged) return;
     input.setCutoutActive(false); input.setAddOutlineActive(false); input.setViewport(viewportFor(after.project, after.activePlaceId));
     if (!after.activePlaceId) return;

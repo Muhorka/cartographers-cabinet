@@ -66,6 +66,15 @@ describe("editor v2 inspector", () => {
     expect(html).toContain(workbenchCopy.pl.hierarchy.addLevelBelow ?? "Dodaj piętro poniżej");
   });
 
+  it("uses the inspected building for native actions while its level remains displayed", () => {
+    const project = createStarterProject("project", "Project", "pl"); const building = project.places.find(({ kind }) => kind === "building")!; const level = project.places.find(({ kind }) => kind === "level")!;
+    const html = renderToStaticMarkup(<InspectorPanel project={project} activePlaceId={level.id} inspectedPlaceId={building.id} copy={workbenchCopy.pl} onInspectActivePlace={vi.fn()} {...actions}/>);
+    expect(html).toContain(workbenchCopy.pl.inspectorContext.buildingLevel(building.name, level.name));
+    expect(html).toContain(workbenchCopy.pl.inspectorContext.editLevel);
+    expect(html).toContain(workbenchCopy.pl.hierarchy.addLevelAbove ?? "Dodaj piętro powyżej");
+    expect(html).toContain(workbenchCopy.pl.hierarchy.addLevelBelow ?? "Dodaj piętro poniżej");
+  });
+
   it("keeps working checkpoints above the catalogue and informational marginalia at the very bottom", () => {
     const project = createStarterProject("project", "Project", "pl");
     const html = renderToStaticMarkup(<InspectorPanel project={project} activePlaceId={project.places[0].id} copy={workbenchCopy.pl} footer={<div>CHECKPOINTS</div>} bottom={<div>MARGINALIA</div>} {...actions}/>);
