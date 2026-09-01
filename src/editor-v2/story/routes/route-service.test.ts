@@ -28,6 +28,39 @@ describe("story route calculation service", () => {
     const timed = service.calculate(project, query); await new Promise((resolve) => setTimeout(resolve, 35)); expect(await timed).toMatchObject({ status: "timeout" }); expect(fake.workers[1]!.terminate).toHaveBeenCalledOnce(); service.dispose();
   });
 
+  it("ignores a delayed response from another attempt", async () => {
+    const fake = fakeWorkers(); const service = createStoryRouteCalculationService(fake.options);
+    const pending = service.calculate(project, query);
+    fake.workers[0]!.onmessage?.({ data: { type: "result", attemptId: 99, result } });
+    expect(fake.workers[0]!.terminate).not.toHaveBeenCalled();
+    fake.workers[0]!.onmessage?.({ data: { type: "result", attemptId: 1, result } });
+    expect(await pending).toMatchObject({ status: "ready", result, attemptId: 1 });
+  });
+
+  it("reports Worker execution and message delivery failures without leaving it active", async () => {
+    const failedWorker = fakeWorkers(); const failedService = createStoryRouteCalculationService(failedWorker.options);
+    const failed = failedService.calculate(project, query); failedWorker.workers[0]!.onerror?.(new Error("boom"));
+    expect(await failed).toMatchObject({ status: "error", error: "Route worker failed." });
+    expect(failedWorker.workers[0]!.terminate).toHaveBeenCalledOnce();
+
+    const rejectedMessage = fakeWorkers();
+    const rejectedService = createStoryRouteCalculationService({ ...rejectedMessage.options, workerFactory: () => {
+      const worker = { postMessage: vi.fn(() => { throw new Error("clone failed"); }), terminate: vi.fn(), onmessage: null, onerror: null };
+      rejectedMessage.workers.push(worker); return worker;
+    } });
+    expect(await rejectedService.calculate(project, query)).toMatchObject({ status: "error", error: "clone failed" });
+    expect(rejectedMessage.workers[0]!.terminate).toHaveBeenCalledOnce();
+  });
+
+  it("does not create another Worker after disposal", async () => {
+    const worker = { postMessage: vi.fn(), terminate: vi.fn(), onmessage: null, onerror: null };
+    const createWorker = vi.fn(() => worker);
+    const service = createStoryRouteCalculationService({ workerFactory: createWorker });
+    service.dispose();
+    expect(await service.calculate(project, query)).toMatchObject({ status: "error", error: "Route service is disposed." });
+    expect(createWorker).not.toHaveBeenCalled();
+  });
+
   it("keeps an explicit inline adapter available for Node tests", async () => {
     const service = createInlineStoryRouteCalculationService(); const value = emptyProject("p", "Test"); const output = await service.calculate(value, query);
     expect(output.status).toBe("ready"); service.dispose();
