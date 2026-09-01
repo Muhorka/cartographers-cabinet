@@ -9,13 +9,19 @@ import { StoryEntryEditor } from "./story-entry-editor";
 import flow from "./story-worldbook-flow.module.css";
 import styles from "./story-workbench.module.css";
 
-const collections: StoryCollection[] = ["characters", "factions", "accessGroups", "keys", "propertyDefinitions", "objectGroups", "zones", "relations", "scenarios", "intentions", "routes"];
-type Props = { story: StoryDocumentLike; copy: StoryCopy; controller: StoryViewController; resolvedObjects?: StoryResolvedObject[]; excludedCollections?: readonly StoryCollection[]; renderEntry?(collection: StoryCollection, entry: StoryRecord): ReactNode };
+const collections: StoryCollection[] = ["characters", "factions", "accessGroups", "keys", "propertyDefinitions", "relations", "scenarios", "intentions"];
+type CollectionGroup = { label: string; collections: readonly StoryCollection[] };
+type Props = { story: StoryDocumentLike; copy: StoryCopy; controller: StoryViewController; resolvedObjects?: StoryResolvedObject[]; excludedCollections?: readonly StoryCollection[]; includedCollections?: readonly StoryCollection[]; heading?: string; renderEntry?(collection: StoryCollection, entry: StoryRecord): ReactNode };
 
-export function StoryWorldbook({ story, copy, controller, resolvedObjects = [], excludedCollections = [], renderEntry }: Props) {
+export function StoryWorldbook({ story, copy, controller, resolvedObjects = [], excludedCollections = [], includedCollections, heading, renderEntry }: Props) {
   const { view, collections: items, chooseCollection, selectEntry, editCollection } = controller;
   const [creating, setCreating] = useState<StoryCollection>();
-  const availableCollections = collections.filter((collection) => !excludedCollections.includes(collection));
+  const availableCollections = collections.filter((collection) => !excludedCollections.includes(collection) && (!includedCollections || includedCollections.includes(collection)));
+  const peopleGroupsLabel = copy.locale === "pl" ? "Grupy" : "Groups";
+  const collectionGroups: CollectionGroup[] = [
+    { label: copy.peopleGroup, collections: ["characters", "factions", "accessGroups", "keys"] },
+    { label: copy.worldGroup, collections: ["scenarios", "intentions", "relations"] },
+  ];
   const requestedActive = view.activeCollection === "lenses" ? "characters" : view.activeCollection;
   const active = availableCollections.includes(requestedActive) ? requestedActive : availableCollections[0] ?? "characters";
   const entries = items[active]; const help = worldbookHelp(copy); const labels = worldbookEntryCopy(active, copy);
@@ -24,8 +30,8 @@ export function StoryWorldbook({ story, copy, controller, resolvedObjects = [], 
   function updateEntry(next: StoryRecord) { editCollection(active, entries.map((entry) => entry.id === next.id ? next : entry), copy.updateStory, resolvedObjects); }
   function removeEntry() { if (!selected) return; editCollection(active, entries.filter(({ id }) => id !== selected.id), `${copy.remove} ${selected.name}`, resolvedObjects); selectEntry(undefined); }
   return <section className={styles.bookPanel} aria-label={copy.worldbook}>
-    <div className={styles.collectionRail}>{availableCollections.map((collection) => <button key={collection} type="button" className={active === collection ? styles.isActive : undefined} aria-pressed={active === collection} onClick={() => { setCreating(undefined); chooseCollection(collection); }}>{copy[collection]}</button>)}</div>
-    <header className={styles.panelHeading}><div><span className={styles.kicker}>{copy.worldbook}</span><h2>{copy[active]}</h2></div><span className={styles.count}>{entries.length}</span></header>
+    <div className={styles.collectionGroups}>{collectionGroups.map((group) => { const groupCollections = group.collections.filter((collection) => availableCollections.includes(collection)); if (!groupCollections.length) return null; return <section className={styles.collectionGroup} key={group.label} aria-label={group.label}><h3 className={styles.collectionGroupHeading}>{group.label}</h3><div className={styles.collectionRail}>{groupCollections.map((collection) => <button key={collection} type="button" className={active === collection ? styles.isActive : undefined} aria-pressed={active === collection} onClick={() => { setCreating(undefined); chooseCollection(collection); }}>{collection === "accessGroups" ? peopleGroupsLabel : copy[collection]}</button>)}</div></section>; })}</div>
+    <header className={styles.panelHeading}><div><span className={styles.kicker}>{heading ?? copy.worldbook}</span><h2>{copy[active]}</h2></div><span className={styles.count}>{entries.length}</span></header>
     <p className={flow.intro}>{labels.hint}</p>
     {active !== "routes" && !isCreating && <div className={flow.toolbar}><button type="button" onClick={() => setCreating(active)}>{labels.add}</button></div>}
     {entries.length > 0 && <p className={flow.hint}>{help.chooseEntry}</p>}

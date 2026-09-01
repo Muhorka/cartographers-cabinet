@@ -8,6 +8,10 @@
   font-family: Georgia, "Times New Roman", serif;
 }
 
+.storyEditor,
+.nativeEditor { min-width: 0; }
+.storyEditor + .nativeEditor { margin-top: 20px; }
+
 .panel h2 {
   position: relative;
   margin: 0 0 22px;

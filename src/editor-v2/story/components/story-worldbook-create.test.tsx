@@ -10,6 +10,22 @@ import { useStoryView } from "./use-story-view";
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe("worldbook creation uses the same live object catalogue as editing", () => {
+  it("groups worldbook collections by their narrative purpose", async () => {
+    const story = { ...emptyStoryData(), world: [{ id: "guards", kind: "access-group" as const, name: "Guards", tags: [], properties: {} }] };
+    function Harness() {
+      const controller = useStoryView(story);
+      return <StoryWorldbook story={story} copy={storyCopy.en} controller={controller}/>;
+    }
+    const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+    await act(async () => root.render(<Harness/>));
+    expect([...host.querySelectorAll("h3")].map((heading) => heading.textContent)).toEqual(["People", "World"]);
+    const buttons = [...host.querySelectorAll("button")].map((button) => button.textContent);
+    expect(buttons).toContain("Groups");
+    expect(buttons).not.toContain("People groups");
+    expect(buttons).not.toContain("Object groups");
+    await act(async () => root.unmount()); host.remove();
+  });
+
   it.each(["relations", "intentions"] as const)("creates %s targeting a room without pre-existing narrative metadata", async (collection) => {
     const room = { kind: "room" as const, id: "room", scopeId: "construction" };
     let latest: StoryData = { ...emptyStoryData(), world: [{ id: "anna", name: "Anna", kind: "character", tags: [], properties: {} }] };

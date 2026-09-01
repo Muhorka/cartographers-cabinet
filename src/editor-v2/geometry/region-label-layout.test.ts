@@ -24,7 +24,7 @@ describe("region label layout", () => {
   });
 
   it("follows the real upper boundary of a broad ellipse", () => {
-    const label = regionLabelLayout("Dolina Rzeki", { kind: "ellipse", cx: 40, cy: 30, rx: 36, ry: 7 }, 1, true);
+    const label = regionLabelLayout("Dolina Rueve", { kind: "ellipse", cx: 40, cy: 30, rx: 36, ry: 7 }, 1, true);
     expect(label?.kind).toBe("boundary");
     if (label?.kind === "boundary") expect(label.path).toContain("23");
   });

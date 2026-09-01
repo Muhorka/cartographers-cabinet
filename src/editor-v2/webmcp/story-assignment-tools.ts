@@ -59,7 +59,7 @@ export function createStoryAssignmentTools(bridge: Bridge, coordinator: EditorCo
     {
       name: "prepare_assign_door_key",
       title: "Prepare assigning a door key",
-      description: "Prepare assigning an existing key and its character/faction/access-group holders to one exact scoped opening. Without keyId, create only when a holder is selected; multiple-key openings require keyId. Preserve access and unrelated memberships.",
+      description: "Assign a key and character/faction/access-group holders to one scoped opening. keyName allows creation without holders; an entirely empty assignment is a no-op. Multiple attached keys require keyId. Preserve access/unrelated memberships.",
       inputSchema: z.toJSONSchema(keyHoldersSchema, { io: "input" }),
       annotations: { readOnlyHint: false },
       execute: async (raw) => {

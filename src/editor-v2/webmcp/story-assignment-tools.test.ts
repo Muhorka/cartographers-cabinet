@@ -52,6 +52,21 @@ async function structured<T>(value: unknown) {
 }
 
 describe("Story assignment WebMCP tools", () => {
+  it("creates a named holderless key for a scoped door and undoes it atomically", async () => {
+    const { tools, session } = setup();
+    const before = session.getState().project;
+    const prepared = await structured<{ status: string; token: string }>(tool(tools, "prepare_assign_door_key").execute({ ref: opening, holderIds: [], keyName: "Lost key", target: "base" }));
+    expect(prepared.status).toBe("prepared");
+    await tool(tools, "apply_prepared_editor_change").execute({ token: prepared.token });
+    const story = session.getState().project.story;
+    const key = story.world.find(({ name }) => name === "Lost key");
+    expect(key?.kind).toBe("key");
+    expect(story.objects[0].metadata.access?.keyIds).toEqual([key?.id]);
+    expect(story.memberships).toEqual(before.story.memberships);
+    expect(session.undo().changed).toBe(true);
+    expect(session.getState().project).toEqual(before);
+  });
+
   it("prepares exact scoped assignments without mutating before apply and preserves the owner", async () => {
     const { tools, session } = setup();
     const before = structuredClone(session.getState().project);

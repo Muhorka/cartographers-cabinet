@@ -1,4 +1,5 @@
 import { storyRefKey } from "../types";
+import type { StoryLensView } from "../lens-view";
 import type { StoryData, StoryObjectMetadata, StoryObjectRef } from "../types";
 
 export type StoryLocale = "en" | "pl";
@@ -11,7 +12,7 @@ export type StoryDocumentLike = StoryData;
 export type StoryResolvedObject = { ref: StoryObjectRef; name?: string; description?: string; metadata?: StoryObjectMetadata; ownerPlaceId?: string };
 export type StorySelection = { id: string; kind?: string; scopeId?: string; ref?: StoryObjectRef; name?: string; metadata?: Record<string, unknown> };
 export type StoryTransaction = { id: string; label: string; scope: "story" | "selection" | "view"; changedIds?: string[] };
-export type StoryViewState = { tab: StoryTab; activeCollection: StoryCollection; selectedEntryId?: string; selectedGroupId?: string; activeLensId?: string; activeScenarioId?: string; activeStepId?: string; activeRouteId?: string; scenarioContext: "base" | "active" };
+export type StoryViewState = StoryLensView & { tab: StoryTab; activeCollection: StoryCollection; selectedEntryId?: string; selectedGroupId?: string; activeScenarioId?: string; activeStepId?: string; activeRouteId?: string; scenarioContext: "base" | "active" };
 
 function record(value: Record<string, unknown>, fallbackId?: string): StoryRecord { const ref = value.ref && typeof value.ref === "object" ? value.ref as Record<string, unknown> : undefined; const id = String(value.id ?? ref?.id ?? fallbackId ?? ""); return { ...value, id, name: String(value.name ?? ref?.id ?? value.text ?? id ?? "Untitled") } as StoryRecord; }
 function records(values: unknown): StoryRecord[] { return Array.isArray(values) ? values.flatMap((value) => value && typeof value === "object" ? [record(value as Record<string, unknown>)] : []) : []; }

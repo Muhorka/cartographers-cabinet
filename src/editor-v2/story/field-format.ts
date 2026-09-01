@@ -13,8 +13,8 @@ const ACCESS_LABELS = {
 } as const;
 
 const ENUM_LABELS = {
-  pl: { permission: { open: "Każdy", restricted: "Wybrane osoby i grupy" }, physicalState: { open: "Otwarte", closed: "Zamknięte" }, lock: { none: "Bez zamka", locked: "Zamknięte na klucz", sealed: "Zapieczętowane" } },
-  en: { permission: { open: "Everyone", restricted: "Selected people and groups" }, physicalState: { open: "Open", closed: "Closed" }, lock: { none: "No lock", locked: "Locked with a key", sealed: "Sealed" } },
+  pl: { permission: { open: "Każdy", restricted: "Wybrane osoby i grupy osób" }, physicalState: { open: "Otwarte", closed: "Zamknięte" }, lock: { none: "Bez zamka", locked: "Zamknięte na klucz", sealed: "Zapieczętowane" } },
+  en: { permission: { open: "Everyone", restricted: "Selected characters and people groups" }, physicalState: { open: "Open", closed: "Closed" }, lock: { none: "No lock", locked: "Locked with a key", sealed: "Sealed" } },
 } as const;
 
 function worldName(project: EditorProject, id: string) {

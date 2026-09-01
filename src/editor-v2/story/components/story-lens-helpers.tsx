@@ -13,7 +13,8 @@ const actorKinds = new Set(["character", "faction", "access-group"]);
 export function ExpressionRules({ expression, copy, story, objects, onRemove, path = [] }: { expression: StoryLensExpression; copy: StoryCopy; story: StoryDocumentLike; objects: ObjectChoice[]; onRemove(path: number[]): void; path?: number[] }) {
   if (expression.kind === "predicate") return <div className={styles.predicateRow}><span>{predicateExplanation(expression.predicate, copy, story, objects)}</span><button type="button" onClick={() => onRemove(path)}>{copy.remove}</button></div>;
   const children = expression.kind === "not" ? [expression.item] : expression.items;
-  return <fieldset className={styles.subsection}><legend>{copy[expression.kind]}</legend>{children.map((item, index) => <ExpressionRules key={`${path.join("-")}-${index}`} expression={item} copy={copy} story={story} objects={objects} onRemove={onRemove} path={[...path, index]} />)}</fieldset>;
+  const groupLabel = expression.kind === "not" ? lensUi(copy).exclude : copy[expression.kind];
+  return <div className={styles.expressionGroup} data-expression-kind={expression.kind}><span className={styles.expressionKind}>{groupLabel}</span><div className={styles.expressionChildren}>{children.map((item, index) => <ExpressionRules key={`${path.join("-")}-${index}`} expression={item} copy={copy} story={story} objects={objects} onRemove={onRemove} path={[...path, index]} />)}</div></div>;
 }
 
 export function predicateChoices(story: StoryDocumentLike, kind: PredicateKind, objects: ObjectChoice[], resolved: readonly StoryResolvedObject[] = []): Choice[] {
@@ -44,7 +45,7 @@ export function propertyControl(definition: StoryPropertyDefinition | undefined,
 
 function MultiChoiceList({ options, value, setValue, copy }: { options: string[]; value: string | string[]; setValue: (value: string | string[]) => void; copy: StoryCopy }) {
   const selected = Array.isArray(value) ? value : [];
-  return <fieldset className={styles.subsection}><legend>{copy.value}</legend>{options.map((option) => <label className={styles.field} key={option}><input type="checkbox" checked={selected.includes(option)} onChange={(event) => setValue(event.currentTarget.checked ? [...selected, option] : selected.filter((item) => item !== option))} /><span>{option}</span></label>)}</fieldset>;
+  return <div className={styles.subsection} role="group" aria-label={copy.value}>{options.map((option) => <label className={styles.field} key={option}><input type="checkbox" checked={selected.includes(option)} onChange={(event) => setValue(event.currentTarget.checked ? [...selected, option] : selected.filter((item) => item !== option))} /><span>{option}</span></label>)}</div>;
 }
 
 export function propertyValue(definition: StoryPropertyDefinition | undefined, raw: string | string[], entityOptions: readonly StoryEntityOption[] = []): StoryPropertyValue | undefined {
@@ -62,10 +63,6 @@ export function predicateLabel(kind: PredicateKind, copy: StoryCopy, ui: Record<
   if (kind === "property") return ui.hasTrait;
   if (kind === "tag") return ui.legacyTag;
   return copy[kind === "object" ? "objects" : kind];
-}
-
-export function predicateName(predicate: StoryLensPredicate, story: StoryDocumentLike, objects: ObjectChoice[], copy: StoryCopy) {
-  return predicateExplanation(predicate, copy, story, objects).replace(/^.*?:\s*/, "");
 }
 
 function predicateExplanation(predicate: StoryLensPredicate, copy: StoryCopy, story: StoryDocumentLike, objects: ObjectChoice[]) {
@@ -93,8 +90,8 @@ export function explanationFor(expression: unknown, copy: StoryCopy, story: Stor
 
 export function lensUi(copy: StoryCopy): Record<string, string> {
   return copy.locale === "pl" ? {
-    saved: "Zapisane soczewki", question: "Co chcesz zobaczyć?", newLens: "Nowa soczewka", quickUse: "Użyj tego filtra", filterType: "Filtr", belongs: "Należy do", available: "Dostępne dla", hasTrait: "Ma cechę", legacyTag: "Stary tag", accessState: "Rodzaj dostępu", choose: "Wybierz wpis", autoName: "Nazwa soczewki", editName: "Nazwa", create: "Utwórz soczewkę", advanced: "Zaawansowane wyrażenie", advancedHint: "Zachowuje układ Wszystkie / Dowolne / Nie.", chooseLens: "Wybierz soczewkę albo utwórz szybką.", nameHint: "np. Miejsca Anny", note: "Soczewka zmienia tylko widok; dane mapy pozostają bez zmian."
+    saved: "Zapisane soczewki", question: "Co chcesz zobaczyć?", builder: "Nowy filtr", builderHint: "Wybierz, co chcesz podświetlić na mapie. Zapisz soczewkę, jeśli chcesz wrócić do tego wyszukiwania później.", newLens: "Nowa soczewka", showOnMap: "Pokaż na mapie", show: "Pokaż", hide: "Ukryj", active: "Aktywna", filterType: "Filtr", belongs: "Należy do", available: "Dostępne dla", hasTrait: "Ma cechę", legacyTag: "Stary tag", accessState: "Rodzaj dostępu", choose: "Wybierz wpis", autoName: "Nazwa soczewki", editName: "Nazwa", create: "Zapisz soczewkę", saveChanges: "Zapisz zmiany", savedStatus: "Zapisano zmiany.", cancel: "Anuluj", edit: "Edytuj", deleteLens: "Usuń soczewkę", clearAll: "Wyłącz wszystko", color: "Kolor podświetlenia", exclude: "Wyklucz te wyniki", conditions: "Warunki filtra", conditionsHint: "Wszystkie — obiekt spełnia każdy warunek. Dowolne — przynajmniej jeden.", noConditions: "Dodaj co najmniej jeden warunek.", previewActive: "Pokazano tymczasowy filtr; zapisane soczewki pozostały bez zmian.", advanced: "Warunki filtra", chooseLens: "Zbuduj filtr po prawej albo wybierz Edytuj przy zapisanej soczewce.", nameHint: "np. Miejsca Anny", temporaryName: "Filtr tymczasowy", intro: "Soczewki wyróżniają kolorem obiekty pasujące do wybranych warunków, aby łatwiej je znaleźć na mapie. Możesz łączyć warunki, włączać kilka soczewek naraz i wypróbować filtr bez zapisywania. Zapisz soczewkę, jeśli chcesz do niej wracać. Soczewki nie zmieniają właściwości obiektów.", note: "Podgląd na mapie jest jednorazowy i nie zapisuje soczewki do ponownego użycia. Aby wrócić do niej później, wybierz «Zapisz soczewkę»."
   } : {
-    saved: "Saved lenses", question: "What do you want to see?", newLens: "New lens", quickUse: "Use this filter", filterType: "Filter", belongs: "Belongs to", available: "Available to", hasTrait: "Has trait", legacyTag: "Legacy tag", accessState: "Access kind", choose: "Choose an entry", autoName: "Lens name", editName: "Name", create: "Create lens", advanced: "Advanced expression", advancedHint: "Keeps the All / Any / Not structure.", chooseLens: "Choose a lens or create a quick filter.", nameHint: "e.g. Anna's places", note: "A lens changes the view only; map data stays unchanged."
+    saved: "Saved lenses", question: "What do you want to see?", builder: "New filter", builderHint: "Choose what you want to highlight on the map. Save a lens if you want to return to this search later.", newLens: "New lens", showOnMap: "Show on map", show: "Show", hide: "Hide", active: "Active", filterType: "Filter", belongs: "Belongs to", available: "Available to", hasTrait: "Has trait", legacyTag: "Legacy tag", accessState: "Access kind", choose: "Choose an entry", autoName: "Lens name", editName: "Name", create: "Save lens", saveChanges: "Save changes", savedStatus: "Changes saved.", cancel: "Cancel", edit: "Edit", deleteLens: "Delete lens", clearAll: "Turn off all", color: "Highlight color", exclude: "Exclude these results", conditions: "Filter conditions", conditionsHint: "All — an object matches every condition. Any — at least one.", noConditions: "Add at least one condition.", previewActive: "A temporary filter is shown; saved lenses stayed unchanged.", advanced: "Filter conditions", chooseLens: "Build a filter on the right or choose Edit beside a saved lens.", nameHint: "e.g. Anna's places", temporaryName: "Temporary filter", intro: "Lenses highlight objects matching your conditions in color, making them easier to find on the map. Combine conditions, activate several lenses at once and try a filter without saving it. Save a lens to use it again later. Lenses do not change object properties.", note: "Map preview is one-time and does not save the lens for later use. To return to it later, choose “Save lens”."
   };
 }

@@ -1,0 +1,10 @@
+.picker { position: relative; min-width: 0; flex: 0 1 230px; }
+.caption { display: block; color: #beaa7c; font: .58rem Georgia, serif; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 3px; }
+.picker summary { color: #eadab2; font: italic .78rem/1.4 Georgia, serif; cursor: pointer; padding: 5px; border-bottom: 1px solid #ac874b; overflow-wrap: anywhere; }
+.picker summary:focus-visible { outline: 2px solid #c7a063; outline-offset: 2px; }
+.menu { position: absolute; z-index: 12; top: 100%; left: 0; width: min(280px, 68vw); max-height: 45vh; overflow: auto; padding: 10px; background: #1a2a21; border: 1px solid #a57c3d; box-shadow: 0 5px 12px #0006; }
+.picker .menu label { display: flex; min-width: 0; align-items: center; gap: 7px; padding: 5px 0; font: .75rem/1.4 Georgia, serif; letter-spacing: normal; text-transform: none; }
+.menu label span { overflow-wrap: anywhere; }
+.menu p { color: #bdb091; font: italic .72rem/1.4 Georgia, serif; margin: 7px 0; }
+.menu button { width: 100%; margin-top: 6px; }
+.color { width: .65rem; height: .65rem; flex: 0 0 auto; border: 1px solid #bfa16d; border-radius: 50%; }

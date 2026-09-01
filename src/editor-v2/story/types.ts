@@ -37,12 +37,16 @@ type StoryMembership = { subjectId: string; groupId: string; kind: StoryMembersh
 export type StoryAccessPolicy = {
   allow: string[];
   deny: string[];
-  permission: "open" | "restricted";
+  permission: "open" | "restricted" | "nobody";
   physicalState: "open" | "closed";
   lock?: "none" | "locked" | "sealed";
   keyIds: string[];
   guardIds: string[];
   secretKnowledge: string[];
+  /** Hide the object from actor-specific route discovery when true. */
+  hidden?: boolean;
+  /** Actor or membership ids that know about a hidden object. */
+  knownBy?: string[];
 };
 
 export function defaultStoryAccessPolicy(): StoryAccessPolicy {
@@ -106,7 +110,7 @@ export type StoryScenario = { id: string; name: string; description?: string; pa
 export type StoryViewContext = { scenarioId?: string; stepId?: string; lensId?: string };
 
 type StoryRelationKind = "owns" | "knows" | "visits" | "guards" | "uses" | "contains" | "custom";
-export type StoryRelation = { id: string; from: StoryObjectRef | { entryId: string }; to: StoryObjectRef | { entryId: string }; kind: StoryRelationKind; label?: string; source?: string };
+export type StoryRelation = { id: string; from: StoryObjectRef | { entryId: string }; to: StoryObjectRef | { entryId: string }; kind: StoryRelationKind; label?: string; description?: string; source?: string };
 type StoryIntentionKind = "reachability" | "must-pass" | "avoid-zone" | "access-rule" | "custom";
 type StoryIntention = { id: string; authorId?: string; subject: StoryObjectRef; kind: StoryIntentionKind; text: string; status: "draft" | "accepted" | "rejected"; target?: StoryObjectRef; through?: StoryObjectRef[]; avoidZoneId?: string; accessEntryId?: string };
 export type StoryEvidence = { id: string; text: string; refs: StoryObjectRef[]; source: "local"; locator?: string };

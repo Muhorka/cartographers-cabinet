@@ -19,12 +19,12 @@ type Props = {
   context: StoryViewContext; refs: StoryObjectRef[];
   reviewOpen: boolean; onReviewOpenChange(open: boolean): void;
   commit(transaction: ProjectTransaction): void; setContext(patch: EditorStoryView): void;
-  onFocus(refs: StoryObjectRef[]): boolean; onOpenDetails(): void; onOpenWorldbook(): void;
+  onFocus(refs: StoryObjectRef[]): boolean; onOpenDetails(): void; onOpenWorldbook(): void; onOpenRoutes?(): void;
   onError(message: string): void; onPreviewRoute(route: StoryRouteRecord | undefined): void;
 };
 
 /** Connects story workspaces to the same session, selection and inspector as drawing. */
-export function useStoryWorkspacePanels({ project, controller, locale, context, refs, reviewOpen, onReviewOpenChange, commit, setContext, onFocus, onOpenDetails, onOpenWorldbook, onError, onPreviewRoute }: Props) {
+export function useStoryWorkspacePanels({ project, controller, locale, context, refs, reviewOpen, onReviewOpenChange, commit, setContext, onFocus, onOpenDetails, onOpenWorldbook, onOpenRoutes, onError, onPreviewRoute }: Props) {
   const c = storyWorkspaceCopy[locale];
   const [notice, setNotice] = useState<string>();
   function apply(change: ProjectTransaction["apply"]) {
@@ -35,7 +35,7 @@ export function useStoryWorkspacePanels({ project, controller, locale, context, 
     if (onFocus(targets)) { setNotice(undefined); return true; }
     setNotice(c.focusFailed); return false;
   }
-  function openCollection(collection: StoryCollection) { onReviewOpenChange(false); setNotice(undefined); controller.chooseCollection(collection); onOpenWorldbook(); }
+  function openCollection(collection: StoryCollection) { onReviewOpenChange(false); setNotice(undefined); controller.chooseCollection(collection); if (collection === "routes") onOpenRoutes?.(); else onOpenWorldbook(); }
   function openRoute(id?: string) { openCollection("routes"); setContext({ routeId: id }); }
   function renderEntry(collection: StoryCollection, entry: StoryRecord) {
     if (!project || collection !== "scenarios") return undefined;
@@ -44,7 +44,7 @@ export function useStoryWorkspacePanels({ project, controller, locale, context, 
     const active = context.scenarioId === scenario.id;
     const stepId = active && scenario.steps.some(({ id }) => id === context.stepId) ? context.stepId : undefined;
     const activate = (activeStepId?: string) => setContext({ scenarioId: scenario.id, stepId: activeStepId, editTarget: "scenario" });
-    return <div>
+    return <div className={styles.scenarioEntry}>
       {!active && <p>{c.inactiveScenario}</p>}
       <StoryScenarioEditor project={project} scenarioId={scenario.id} activeStepId={stepId} locale={locale} selectionCount={refs.length}
         onActivate={activate} onChange={(next) => apply((current) => replaceScenario(current, next))}

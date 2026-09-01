@@ -50,8 +50,8 @@ function uniqueKeyName(world: EditorProject["story"]["world"], requested: string
  * Atomically assigns the holders of one key on one opening.
  *
  * The operation intentionally requires `keyId` when the opening has multiple
- * keys. With no selected key and no holders it is a no-op, so an empty UI form
- * never creates an orphan key. Existing holds-key records for other keys and
+ * keys. With no selected key, no holders and no explicit keyName it is a no-op;
+ * keyName permits intentional creation of a holderless key. Existing records for other keys and
  * all other membership kinds are left untouched.
  */
 export function assignProjectKeyHolders(project: EditorProject, input: AssignProjectKeyHoldersInput): EditorProject {
@@ -69,7 +69,7 @@ export function assignProjectKeyHolders(project: EditorProject, input: AssignPro
   holderIds.forEach((id) => {
     const entry = world.find((candidate) => candidate.id === id);
     if (!entry) reject(`holder ${id} does not exist`);
-    if (!holderKinds.has(entry.kind)) reject(`holder ${id} must be a character, faction or access group`);
+    if (!holderKinds.has(entry.kind)) reject(`holder ${id} must be a character, faction or people group`);
   });
 
   // Read keys from the same view that is being edited. A scenario may add or
@@ -83,7 +83,10 @@ export function assignProjectKeyHolders(project: EditorProject, input: AssignPro
   let selectedKeyId = input.keyId;
   let createdKey: EditorProject["story"]["world"][number] | undefined;
   if (selectedKeyId === undefined) {
-    if (!holderIds.length) return project;
+    // A key may exist without a current holder (lost key, ruin, or unknown owner).
+    // The UI supplies keyName for this explicit create action; an unqualified
+    // empty assignment remains a no-op for backwards compatibility.
+    if (!holderIds.length && !input.keyName?.trim()) return project;
     if (currentKeyIds.length > 1) reject("keyId is required when the opening has multiple keys");
     selectedKeyId = currentKeyIds[0];
     if (!selectedKeyId) {

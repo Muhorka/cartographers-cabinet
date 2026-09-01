@@ -3,9 +3,9 @@
 import { useId, useState, type ReactNode, type SyntheticEvent } from "react";
 import styles from "./story-workbench.module.css";
 
-export type StoryDisclosureSection = "tree" | "zones" | "worldbook" | "lenses";
+export type StoryDisclosureSection = "tree" | "worldbook" | "zones" | "lenses" | "routes" | "properties";
 
-type StoryDisclosureBookLabels = Record<StoryDisclosureSection, string>;
+type StoryDisclosureBookLabels = Record<"tree" | "zones" | "worldbook" | "lenses", string> & Partial<Record<"routes" | "properties", string>>;
 
 type StoryDisclosureBookProps = {
   labels: StoryDisclosureBookLabels;
@@ -13,6 +13,8 @@ type StoryDisclosureBookProps = {
   zones: ReactNode;
   worldbook: ReactNode;
   lenses: ReactNode;
+  routes?: ReactNode;
+  properties?: ReactNode;
   visibleSections?: readonly StoryDisclosureSection[];
   defaultOpen?: Partial<Record<StoryDisclosureSection, boolean>>;
   openSections?: Partial<Record<StoryDisclosureSection, boolean>>;
@@ -20,11 +22,11 @@ type StoryDisclosureBookProps = {
   onOpenChange?(section: StoryDisclosureSection, open: boolean): void;
 };
 
-const sections: readonly StoryDisclosureSection[] = ["tree", "zones", "worldbook", "lenses"];
+const sections: readonly StoryDisclosureSection[] = ["tree", "worldbook", "zones", "lenses", "routes", "properties"];
 
-export function StoryDisclosureBook({ labels, tree, zones, worldbook, lenses, visibleSections = sections, defaultOpen, openSections, onOpenSectionsChange, onOpenChange }: StoryDisclosureBookProps) {
+export function StoryDisclosureBook({ labels, tree, zones, worldbook, lenses, routes, properties, visibleSections = sections, defaultOpen, openSections, onOpenSectionsChange, onOpenChange }: StoryDisclosureBookProps) {
   const idPrefix = useId();
-  const content = { tree, zones, worldbook, lenses } satisfies Record<StoryDisclosureSection, ReactNode>;
+  const content = { tree, worldbook, zones, lenses, routes, properties } satisfies Record<StoryDisclosureSection, ReactNode>;
   const [internalOpenSections, setInternalOpenSections] = useState<Record<StoryDisclosureSection, boolean>>(() => Object.fromEntries(
     sections.map((section) => [section, defaultOpen?.[section] ?? (section === "tree" || section === "zones")]),
   ) as Record<StoryDisclosureSection, boolean>);
@@ -44,10 +46,10 @@ export function StoryDisclosureBook({ labels, tree, zones, worldbook, lenses, vi
   }
 
   return <aside className={styles.disclosureBook} aria-label={labels.tree}>
-    {sections.filter((section) => visibleSections.includes(section)).map((section) => {
+    {sections.filter((section) => visibleSections.includes(section) && content[section] !== undefined).map((section) => {
       const contentId = `${idPrefix}-${section}`;
       return <details className={styles.disclosureSection} key={section} open={visibleOpenSections[section]} onToggle={(event) => handleToggle(section, event)}>
-        <summary className={styles.disclosureSummary} aria-controls={contentId} aria-expanded={visibleOpenSections[section]}>{labels[section]}</summary>
+        <summary className={styles.disclosureSummary} aria-controls={contentId} aria-expanded={visibleOpenSections[section]}>{labels[section] ?? section}</summary>
         <div id={contentId} className={styles.disclosureContent}>{content[section]}</div>
       </details>;
     })}

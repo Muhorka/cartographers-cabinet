@@ -10,6 +10,7 @@ import { StoryInspector, StoryLenses, StoryTopBar, StoryWorldbook, useStoryView 
 import { storyCopy } from "../story/i18n/story-copy";
 import { workbenchCopy } from "../i18n/workbench-copy";
 import { storyObjectDisplayName } from "../story/object-display-name";
+import { activeStoryLensIds } from "../story/lens-view";
 import { emptyStoryData, storyRefKey, type StoryObjectMetadata, type StoryObjectRef } from "../story/types";
 import { storyDataSchema } from "../story/schema";
 import { createAndAssignStoryEntry } from "../story/project-quick-assignment";
@@ -24,6 +25,7 @@ import { displayProject } from "../story/project-view";
 import { StoryMapOverlay } from "./story-map-overlay";
 import { StoryRouteOverlay } from "./story-route-overlay";
 import { StoryRoutePanel } from "../story/components/story-route-panel";
+import { StoryWorldDescription } from "../story/components/story-world-description";
 import { storyRouteRevision } from "../story/routes/planner";
 import { createStoryRouteCalculationService } from "../story/routes/route-service";
 import styles from "./workbench-story.module.css";
@@ -41,6 +43,7 @@ export function useWorkbenchStory({ session, snapshot, selections, locale, mode,
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [bookOpen, setBookOpen] = useState<Partial<Record<StoryDisclosureSection, boolean>>>({ tree: true, zones: true });
   const showWorldbook = () => { setBookOpen((current) => ({ ...current, worldbook: true })); onOpenWorldbook(); };
+  const showRoutes = () => { setBookOpen((current) => ({ ...current, routes: true })); };
   function commit(transaction: ProjectTransaction) {
     if (!session) return false;
     const result = session.executeTransaction(transaction);
@@ -54,8 +57,9 @@ export function useWorkbenchStory({ session, snapshot, selections, locale, mode,
       return { ...validated, story: { ...story, scenarios: validated.story.scenarios } };
     } }); }
     catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
-  });
+  }, [], project?.id ?? "no-project");
   const { view, updateView } = controller;
+  const lensIds = activeStoryLensIds(view).filter((id) => project?.story.lenses.some((lens) => lens.id === id));
   const [reviewProject, setReviewProject] = useState<string>();
   const [routeSelectionVersion, setRouteSelectionVersion] = useState(0);
   const reviewOpen = Boolean(project && reviewProject === project.id);
@@ -63,8 +67,8 @@ export function useWorkbenchStory({ session, snapshot, selections, locale, mode,
   const routeService = useMemo(() => createStoryRouteCalculationService(), []);
   useEffect(() => () => routeService.cancel(), [routeService]);
   const scenarioId = mode === "story" && project?.story.scenarios.some(({ id }) => id === view.activeScenarioId) ? view.activeScenarioId : undefined;
-  const context = { scenarioId, stepId, lensId: mode === "story" ? view.activeLensId : undefined };
-  const routeOwner = mode !== "story" || !bookOpen.worldbook ? undefined : reviewOpen ? "scene-review" : view.activeCollection === "routes" ? "route-editor" : undefined;
+  const context = { scenarioId, stepId, lensId: mode === "story" ? lensIds[0] : undefined };
+  const routeOwner = mode !== "story" ? undefined : reviewOpen && bookOpen.worldbook ? "scene-review" : bookOpen.routes ? "route-editor" : undefined;
   const routeInteraction = useStoryRouteInteraction({ project, context, mode, owner: routeOwner, activeRouteId: view.activeRouteId, activePlaceId: snapshot?.activePlaceId, selectionVersion: routeSelectionVersion });
   const { pointRequest, pointPicker } = routeInteraction;
   const editTarget = view.scenarioContext === "active" && scenarioId ? "scenario" as const : "base" as const;
@@ -90,17 +94,23 @@ export function useWorkbenchStory({ session, snapshot, selections, locale, mode,
     if ("scenarioId" in patch) { next.activeScenarioId = patch.scenarioId; next.scenarioContext = patch.scenarioId ? "active" : "base"; setStepId(undefined); }
     if ("stepId" in patch) setStepId(patch.stepId);
     if ("lensId" in patch) next.activeLensId = patch.lensId;
+    if ("lensIds" in patch) next.activeLensIds = patch.lensIds;
+    if ("previewLens" in patch) next.previewLens = patch.previewLens ?? undefined;
     if ("routeId" in patch) { next.activeRouteId = patch.routeId; setRouteSelectionVersion((version) => version + 1); }
     if ("editTarget" in patch) next.scenarioContext = patch.editTarget === "scenario" ? "active" : "base";
     updateView(next);
   }
-  const liveContext = { selections: rawRefs, mode, view: { ...context, routeId: mode === "story" ? view.activeRouteId : undefined, editTarget } };
+  const liveContext = { selections: rawRefs, mode, view: { ...context, lensIds: mode === "story" ? lensIds : [], previewLens: mode === "story" ? view.previewLens : undefined, routeId: mode === "story" ? view.activeRouteId : undefined, editTarget } };
   const selectedOwnership = project && selected.length === 1
     ? resolveStoryOwnership(project, project.story, selected[0].ref, { scenarioId: inspectorScenarioId, stepId: inspectorStepId })
     : undefined;
   const ownershipResetSource = editTarget === "base" ? "local" : inspectorStepId ? "step" : "scenario";
   const canResetOwnership = Boolean(selectedOwnership?.directPresent && selectedOwnership.directSource?.kind === ownershipResetSource);
-  const openWorldbook = (collection: Parameters<typeof controller.chooseCollection>[0]) => { setReviewProject(undefined); controller.chooseCollection(collection); showWorldbook(); };
+  const openWorldbook = (collection: Parameters<typeof controller.chooseCollection>[0]) => {
+    setReviewProject(undefined);
+    if (collection === "routes") { controller.chooseCollection(collection); showRoutes(); return; }
+    controller.chooseCollection(collection); showWorldbook();
+  };
   const metadataChange = (refs: typeof selected[number]["ref"][], metadata: StoryObjectMetadata, action: "add" | "remove" | "replace", options?: { accessFields?: Array<keyof import("../story/types").StoryAccessPolicy> }) => {
     if (!session) return false;
     try { return commit({ id: `story-metadata:${crypto.randomUUID()}`, apply: (current) => applyProjectStoryMetadata(current, { refs, metadata, action, ...options, target: liveContext.view.editTarget, context }) }); }
@@ -128,27 +138,38 @@ export function useWorkbenchStory({ session, snapshot, selections, locale, mode,
     try { commit({ id: `story-key:${crypto.randomUUID()}`, apply: (current) => assignProjectKeyHolders(current, { ...assignment, ref: selectedOpening, target: liveContext.view.editTarget, context }) }); }
     catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
   }}/> : undefined;
-  const workspace = useStoryWorkspacePanels({ project, controller, locale, context, refs: rawRefs.map(({ type, ...ref }) => ({ ...ref, kind: type })), reviewOpen, onReviewOpenChange: (open) => setReviewProject(open ? project?.id : undefined), commit, setContext: setView, onFocus, onOpenDetails: () => setDetailsOpen(true), onOpenWorldbook: showWorldbook, onError: setError, onPreviewRoute: routeInteraction.previewReview });
+  const workspace = useStoryWorkspacePanels({ project, controller, locale, context, refs: rawRefs.map(({ type, ...ref }) => ({ ...ref, kind: type })), reviewOpen, onReviewOpenChange: (open) => setReviewProject(open ? project?.id : undefined), commit, setContext: setView, onFocus, onOpenDetails: () => setDetailsOpen(true), onOpenWorldbook: showWorldbook, onOpenRoutes: showRoutes, onError: setError, onPreviewRoute: routeInteraction.previewReview });
   const scenario = project?.story.scenarios.find(({ id }) => id === scenarioId);
   const savedRoute = project?.story.routes.find(({ id }) => id === view.activeRouteId);
   const staleRoute = project && savedRoute && savedRoute.sourceRevision !== storyRouteRevision(project);
   const zones = useWorkbenchZones({ project, activePlaceId: snapshot?.activePlaceId, selectionRefs: rawRefs.map(({ type, ...ref }) => ({ ...ref, kind: type })), inspectedRefs: selected.map(({ ref }) => ref), resolvedObjects, locale, commit, onError: setError });
+  const worldRoot = project?.places.find(({ kind, parentId }) => kind === "world" && !parentId) ?? project?.places.find(({ parentId }) => !parentId);
+  const worldDescription = project && worldRoot ? <StoryWorldDescription locale={locale} value={worldRoot.description ?? ""} onChange={(description) => commit({ id: `world-description:${worldRoot.id}`, apply: (current) => ({ ...current, places: current.places.map((place) => place.id === worldRoot.id ? { ...place, description } : place) }) })}/> : undefined;
   // Effective selection is a read-only view model; commands always start from the untouched project.
   const inspectorStory = project ? { ...project.story, objects: [...project.story.objects.filter(({ ref }) => !selected.some((item) => storyRefKey(item.ref) === storyRefKey(ref))), ...selected.map(({ ref, metadata }) => ({ ref, metadata }))] } : empty;
   return {
     liveContext, setView, zoneInspector: zones.inspector ? <>{error && <p role="alert">{error}</p>}{zones.inspector}</> : undefined, clearZone: zones.clear, displayProject: renderedProject, pointPicker,
-    leftBookProps: { labels: { tree: workbenchCopy[locale].projectTree, zones: copy.zones, worldbook: copy.worldbook, lenses: copy.lenses }, zones: zones.list, visibleSections: mode === "drawing" ? ["tree", "zones"] as const : undefined, openSections: bookOpen, onOpenSectionsChange: setBookOpen, worldbook: !project ? undefined : <div className={styles.book}>
-      {workspace.reviewOpen ? workspace.reviewPanel
-        : view.activeCollection === "routes" ? <><button type="button" onClick={() => controller.chooseCollection("characters")}>{copy.worldbook}</button><StoryRoutePanel key={view.activeRouteId ?? "new"} initialRoute={project.story.routes.find(({ id }) => id === view.activeRouteId)} onDelete={(id) => { controller.commit({ ...project.story, routes: project.story.routes.filter((route) => route.id !== id) }, { id: `story-route-remove:${id}`, label: copy.remove, scope: "story" }); routeInteraction.previewEditor(); updateView({ activeRouteId: undefined }); }} onRequestPoint={routeInteraction.requestPoint} project={project} activePlaceId={snapshot?.activePlaceId} locale={locale} context={context} routeService={routeService} onPreview={routeInteraction.previewEditor} onSave={(route) => { controller.commit({ ...project.story, routes: [...project.story.routes.filter(({ id }) => id !== route.id), route] }, { id: `story-route:${route.id}`, label: copy.save, scope: "story" }); routeInteraction.previewEditor(route); updateView({ activeRouteId: route.id }); }} onOpenPlace={onOpenPlace}/></>
-        : <StoryWorldbook story={project.story} copy={copy} controller={controller} resolvedObjects={resolvedObjects} renderEntry={workspace.renderEntry} excludedCollections={["zones", "objectGroups"]}/>}
-    </div>, lenses: project ? <StoryLenses story={project.story} resolvedObjects={resolvedObjects} copy={copy} lenses={controller.collections.lenses} activeLensId={view.activeLensId} onSelect={(activeLensId) => updateView({ activeLensId })} onChange={(items) => controller.editCollection("lenses", items, copy.updateStory)}/> : undefined },
+    leftBookProps: {
+      labels: { tree: workbenchCopy[locale].projectTree, worldbook: copy.worldbook, zones: copy.zones, lenses: copy.lenses, routes: copy.routes, properties: copy.propertyDictionary },
+      zones: zones.list,
+      visibleSections: mode === "drawing" ? ["tree", "zones"] as const : undefined,
+      openSections: bookOpen,
+      onOpenSectionsChange: setBookOpen,
+      worldbook: !project ? undefined : <div className={styles.book}>
+        {worldDescription}
+        {workspace.reviewOpen ? workspace.reviewPanel : <StoryWorldbook story={project.story} copy={copy} controller={controller} resolvedObjects={resolvedObjects} renderEntry={workspace.renderEntry} excludedCollections={["zones", "propertyDefinitions", "routes"]}/>}
+      </div>,
+      lenses: project ? <StoryLenses key={project.id} story={project.story} resolvedObjects={resolvedObjects} copy={copy} lenses={controller.collections.lenses} activeLensId={view.activeLensId} activeLensIds={lensIds} previewLens={view.previewLens} onToggle={(id) => updateView({ activeLensIds: lensIds.includes(id) ? lensIds.filter((value) => value !== id) : [...lensIds, id] })} onPreview={(previewLens) => updateView({ previewLens })} onSelect={(activeLensId) => updateView({ activeLensId })} onChange={(items) => controller.editCollection("lenses", items, copy.updateStory)}/> : undefined,
+      routes: !project ? undefined : <div className={styles.book}><StoryRoutePanel key={view.activeRouteId ?? "new"} initialRoute={project.story.routes.find(({ id }) => id === view.activeRouteId)} onDelete={(id) => { controller.commit({ ...project.story, routes: project.story.routes.filter((route) => route.id !== id) }, { id: `story-route-remove:${id}`, label: copy.remove, scope: "story" }); routeInteraction.previewEditor(); updateView({ activeRouteId: undefined }); }} onRequestPoint={routeInteraction.requestPoint} project={project} activePlaceId={snapshot?.activePlaceId} locale={locale} context={context} routeService={routeService} onPreview={routeInteraction.previewEditor} onSave={(route) => { controller.commit({ ...project.story, routes: [...project.story.routes.filter(({ id }) => id !== route.id), route] }, { id: `story-route:${route.id}`, label: copy.save, scope: "story" }); routeInteraction.previewEditor(route); updateView({ activeRouteId: route.id }); }} onOpenPlace={onOpenPlace}/></div>,
+      properties: !project ? undefined : <div className={styles.book}><StoryWorldbook story={project.story} copy={copy} controller={controller} resolvedObjects={resolvedObjects} includedCollections={["propertyDefinitions"]} heading={copy.propertyDictionary}/></div>,
+    },
     toolbar: <div className={styles.toolbar}><StoryTopBar copy={copy} view={view} lenses={controller.collections.lenses} scenarios={controller.collections.scenarios} steps={scenario?.steps} onStep={setStepId} routes={controller.collections.routes} onChange={(patch) => { updateView(patch); if ("activeScenarioId" in patch) setStepId(undefined); if ("activeRouteId" in patch) setRouteSelectionVersion((version) => version + 1); }} onScenario={(id) => setView({ scenarioId: id || undefined })}/>
       {workspace.controls}{workspace.notice}
       <div className={styles.history}><button type="button" disabled={!session?.getHistoryState().canUndo} onClick={() => { session?.undo(); refresh(); }}>{locale === "pl" ? "Cofnij" : "Undo"}</button><button type="button" disabled={!session?.getHistoryState().canRedo} onClick={() => { session?.redo(); refresh(); }}>{locale === "pl" ? "Ponów" : "Redo"}</button></div>
       {pointRequest && <p role="status">{locale === "pl" ? `Wskaż ${pointRequest.endpoint === "from" ? "początek" : "koniec"} trasy na mapie.` : `Pick the route ${pointRequest.endpoint} point on the map.`}<button type="button" onClick={routeInteraction.cancelPoint}>{locale === "pl" ? "Anuluj" : "Cancel"}</button></p>}
       {staleRoute && <p role="status">{locale === "pl" ? "Plan lub reguły się zmieniły — zapisana trasa wymaga przeliczenia." : "The plan or rules changed — recalculate the saved route."}<button type="button" onClick={() => openWorldbook("routes")}>{locale === "pl" ? "Otwórz trasę" : "Open route"}</button></p>}
     </div>,
-    inspector: <div>{error && <p role="alert">{locale === "pl" ? "Nie zapisano zmiany: " : "Change not saved: "}{error}<button type="button" onClick={() => setError(undefined)}>×</button></p>}<StoryInspector key={`${project?.id}:${selection.map(storyRefKey).join("|")}:${scenarioId}:${stepId}:${liveContext.view.editTarget}:${JSON.stringify(selected.map(({ name, description, metadata, editor }) => ({ name, description, metadata, locked: editor.locked })))}`} scope={inspectingOpenPlace ? "open-place" : "selection"} readOnly={selected.some(({ editor }) => editor.locked)} story={inspectorStory} selections={selection} resolvedObjects={resolvedInspectorObjects} ownership={selectedOwnership} canResetOwnership={canResetOwnership} detailsOpen={detailsOpen} onDetailsOpenChange={setDetailsOpen} copy={copy} editTarget={liveContext.view.editTarget} onQuickAssign={quickAssign} onOpenWorldbook={openWorldbook} onSelectCurrentPlace={snapshot?.activePlaceId ? () => onSelect({ kind: "place", id: snapshot.activePlaceId! }) : undefined} keyHoldersEditor={doorKeys} onMetadataChange={metadataChange} onResetOwnership={resetOwnership} agentContext={{ label: copy.agent, detail: locale === "pl" ? `Zaznaczone obiekty: ${rawRefs.length}. Agent odczytuje je przez narzędzia strony.` : `Selected objects: ${rawRefs.length}. Available through page tools.` }}/>{zones.membership}</div>,
-    overlay: project && snapshot?.activePlaceId ? <><ZoneMapOverlay project={project} activePlaceId={snapshot.activePlaceId} zoom={zoom} selectedZoneId={zones.selectedId}/>{mode === "story" && <><StoryMapOverlay project={project} activePlaceId={snapshot.activePlaceId} context={context} zoom={zoom}/><StoryRouteOverlay project={project} activePlaceId={snapshot.activePlaceId} context={context} route={routeInteraction.route}/></>}</> : undefined,
+    inspector: <div className={styles.inspectorStack}>{error && <p role="alert">{locale === "pl" ? "Nie zapisano zmiany: " : "Change not saved: "}{error}<button type="button" onClick={() => setError(undefined)}>×</button></p>}<StoryInspector key={`${project?.id}:${selection.map(storyRefKey).join("|")}:${scenarioId}:${stepId}:${liveContext.view.editTarget}:${JSON.stringify(selected.map(({ name, description, metadata, editor }) => ({ name, description, metadata, locked: editor.locked })))}`} scope={inspectingOpenPlace ? "open-place" : "selection"} readOnly={selected.some(({ editor }) => editor.locked)} story={inspectorStory} selections={selection} resolvedObjects={resolvedInspectorObjects} ownership={selectedOwnership} canResetOwnership={canResetOwnership} detailsOpen={detailsOpen} onDetailsOpenChange={setDetailsOpen} copy={copy} editTarget={liveContext.view.editTarget} onQuickAssign={quickAssign} onOpenWorldbook={openWorldbook} onSelectCurrentPlace={snapshot?.activePlaceId ? () => onSelect({ kind: "place", id: snapshot.activePlaceId! }) : undefined} keyHoldersEditor={doorKeys} onMetadataChange={metadataChange} onResetOwnership={resetOwnership} agentContext={{ label: copy.agent, detail: locale === "pl" ? `Zaznaczone obiekty: ${rawRefs.length}. Agent odczytuje je przez narzędzia strony.` : `Selected objects: ${rawRefs.length}. Available through page tools.` }}/>{zones.membership}</div>,
+    overlay: project && snapshot?.activePlaceId ? <><ZoneMapOverlay project={project} activePlaceId={snapshot.activePlaceId} zoom={zoom} selectedZoneId={zones.selectedId}/>{mode === "story" && <><StoryMapOverlay lensView={{ activeLensIds: lensIds, previewLens: view.previewLens }} project={project} activePlaceId={snapshot.activePlaceId} context={context} zoom={zoom}/><StoryRouteOverlay project={project} activePlaceId={snapshot.activePlaceId} context={context} route={routeInteraction.route}/></>}</> : undefined,
   };
 }

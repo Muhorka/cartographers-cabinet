@@ -1,23 +1,26 @@
 .panel {
   composes: buttons fields from "./book-controls.module.css";
-  margin: 18px 15px;
-  padding-top: 12px;
-  border-top: 3px double #a57c3d55;
+  margin: 20px 0;
+  padding: 10px 12px;
+  border: 1px solid #a57c3d66;
   color: #ddc994;
+  background: linear-gradient(110deg, #17251e99, #3f302833);
+  box-shadow: inset 0 0 14px #0003;
   font-family: Georgia, "Times New Roman", serif;
 }
-.panel summary { cursor: pointer; color: #d6ba7c; font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; }
+.panel summary { cursor: pointer; color: #d6ba7c; font-size: .68rem; letter-spacing: .1em; line-height: 1.35; text-transform: uppercase; }
 .panel summary small { float: right; color: #a98b55; font-size: .62rem; }
 .explanation { composes: description from "./book-typography.module.css"; }
 .empty { composes: description from "./book-typography.module.css"; }
-.create { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px; }
+.create { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px; margin-bottom: 12px; }
+.panel > details > details { margin-top: 10px; }
 .opacity { display: grid; gap: 3px; margin: 10px 0; color: #cdb783; font-size: .66rem; }
 .opacity input { width: 100%; accent-color: #a84639; }
 .panel ol { display: grid; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
 .panel li { padding: 7px; border-left: 2px solid #6e603d; background: #192e2677; }
 .panel li.active { border-left-color: #b2473b; background: #22382f; }
-.panel li > div:first-child { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
-.panel strong { overflow: hidden; font-size: .72rem; text-overflow: ellipsis; white-space: nowrap; }
+.panel li > div:first-child { display: flex; min-width: 0; align-items: baseline; justify-content: space-between; gap: 6px; }
+.panel strong { min-width: 0; flex: 1 1 auto; overflow-wrap: anywhere; font-size: .72rem; line-height: 1.3; white-space: normal; }
 .panel time { flex: none; color: #998d72; font-size: .58rem; }
 .actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .confirm { margin-top: 6px; padding: 6px; border: 1px solid #9c493e66; background: #2a211de6; }

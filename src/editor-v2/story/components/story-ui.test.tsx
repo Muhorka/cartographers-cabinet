@@ -22,8 +22,9 @@ describe("story UI contract", () => {
 
   it("keeps the top bar outside the atlas slot and exposes neutral choices", () => {
     const html = renderToStaticMarkup(<StoryTopBar copy={storyCopy.en} view={{ tab: "atlas", activeCollection: "characters", scenarioContext: "base" }} lenses={[]} scenarios={[]} routes={[]} onChange={vi.fn()} onScenario={vi.fn()}/>);
-    expect(html.indexOf("storyStrip")).toBeLessThan(html.indexOf("All neutral"));
-    expect(html).toContain("Neutral");
+    expect(html.indexOf("storyStrip")).toBeLessThan(html.indexOf("Restore base view"));
+    expect(html).toContain("No active lenses");
+    expect(html).toContain("No active route");
   });
 
   it("emits scoped refs and a working bulk action for multi-selection", async () => {
@@ -52,7 +53,7 @@ describe("story UI contract", () => {
     await act(async () => root.unmount()); host.remove();
   });
 
-  it("builds owner and group predicates as a canonical all expression", async () => {
+  it("builds owner and group predicates in a local draft before saving", async () => {
     const story = { ...emptyStoryData(), world: [{ id: "alice", kind: "character" as const, name: "Alice", tags: [], properties: {} }], groups: [{ id: "wardens", name: "Wardens", memberRefs: [], entryIds: [], metadata: {} }], lenses: [{ id: "lens", name: "Quiet", color: "#123456", expression: { kind: "all" as const, items: [] } }] };
     let latest = story.lenses;
     const onChange = vi.fn((items) => { latest = items as typeof latest; });
@@ -64,9 +65,8 @@ describe("story UI contract", () => {
     await act(async () => { valueSelect.value = "alice"; valueSelect.dispatchEvent(new Event("change", { bubbles: true })); });
     const addButtons = [...host.querySelectorAll("button")].filter((button) => button.textContent === "Add");
     await act(async () => (addButtons.at(-1) as HTMLButtonElement).click());
-    expect(onChange).toHaveBeenCalled();
-    const expression = latest[0]?.expression;
-    expect(expression).toMatchObject({ kind: "all", items: [{ kind: "predicate", predicate: { kind: "owner", entryId: "alice" } }] });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(host.textContent).toContain("Alice");
     await act(async () => root.unmount()); host.remove();
   });
 
@@ -135,19 +135,30 @@ describe("story UI contract", () => {
     expect(html).toContain("Own value");
   });
 
-  it("creates a named quick lens without requiring a name first", async () => {
+  it("previews a temporary lens without writing, then saves it explicitly", async () => {
     const story = { ...emptyStoryData(), world: [{ id: "anna", kind: "character" as const, name: "Anna", tags: [], properties: {} }] };
     const onSelect = vi.fn();
     const onChange = vi.fn();
+    const onPreview = vi.fn();
     const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
-    await act(async () => root.render(<StoryLenses story={story} copy={storyCopy.en} lenses={[]} onSelect={onSelect} onChange={onChange} />));
+    await act(async () => root.render(<StoryLenses story={story} copy={storyCopy.en} lenses={[]} onSelect={onSelect} onChange={onChange} onPreview={onPreview} />));
     const selects = [...host.querySelectorAll("select")];
     await act(async () => { (selects[1] as HTMLSelectElement).value = "anna"; selects[1]?.dispatchEvent(new Event("change", { bubbles: true })); });
-    const quick = [...host.querySelectorAll("button")].find((button) => button.textContent === "Use this filter") as HTMLButtonElement;
-    await act(async () => quick.click());
+    const add = [...host.querySelectorAll("button")].find((button) => button.textContent === "Add") as HTMLButtonElement;
+    await act(async () => add.click());
+    const preview = [...host.querySelectorAll("button")].find((button) => button.textContent === "Show on map") as HTMLButtonElement;
+    await act(async () => preview.click());
+    expect(onChange).not.toHaveBeenCalled();
+    expect(onPreview).toHaveBeenCalledWith(expect.objectContaining({ id: "temporary-lens", name: "Temporary filter", expression: { kind: "all", items: [{ kind: "predicate", predicate: { kind: "owner", entryId: "anna" } }] } }));
+    const save = [...host.querySelectorAll("button")].find((button) => button.textContent === "Save lens") as HTMLButtonElement;
+    await act(async () => save.click());
+    const name = host.querySelector('input[placeholder="e.g. Anna\'s places"]') as HTMLInputElement;
+    await act(async () => { const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set; setter?.call(name, "Anna's places"); name.dispatchEvent(new Event("input", { bubbles: true })); });
+    const explicitSave = [...host.querySelectorAll("button")].find((button) => button.textContent === "Save lens") as HTMLButtonElement;
+    await act(async () => explicitSave.click());
     const created = onChange.mock.lastCall?.[0] as Array<{ name: string; expression: unknown }>;
-    expect(created[0]).toMatchObject({ name: "Anna", expression: { kind: "all", items: [{ kind: "predicate", predicate: { kind: "owner", entryId: "anna" } }] } });
-    expect(onSelect).toHaveBeenCalledWith(expect.stringMatching(/^lens-/));
+    expect(created[0]).toMatchObject({ name: "Anna's places", expression: { kind: "all", items: [{ kind: "predicate", predicate: { kind: "owner", entryId: "anna" } }] } });
+    expect(onSelect).not.toHaveBeenCalledWith(expect.stringMatching(/^lens-/));
     await act(async () => root.unmount()); host.remove();
   });
 
@@ -181,7 +192,7 @@ describe("story UI contract", () => {
     await act(async () => { propertySelect.value = "visible"; propertySelect.dispatchEvent(new Event("change", { bubbles: true })); });
     expect([...host.querySelectorAll("select")[2].options].map((option) => option.textContent)).toEqual(["Neutralnie", "Tak", "Nie"]);
     await act(async () => { propertySelect.value = "mood"; propertySelect.dispatchEvent(new Event("change", { bubbles: true })); });
-    expect(host.querySelectorAll('input[type="checkbox"]')).toHaveLength(2);
+    expect([...host.querySelectorAll('input[type="checkbox"]')].filter((input) => ["spokojny", "czujny"].includes(input.closest("label")?.textContent ?? ""))).toHaveLength(2);
     expect(host.querySelector('select[multiple]')).toBeNull();
     await act(async () => root.unmount()); host.remove();
   });

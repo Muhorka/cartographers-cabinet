@@ -19,6 +19,51 @@ function tool(tools: WebMcpTool[], name: string) { const found = tools.find((can
 async function structured<T>(value: unknown) { return (await Promise.resolve(value) as { structuredContent: T }).structuredContent; }
 
 describe("Story WebMCP integration", () => {
+  it("returns authored and effective group traits without adding another tool", async () => {
+    const { tools, session } = setup();
+    session.executeTransaction({ id: "fixture-effective-world", apply: (project) => ({ ...project, story: { ...project.story, world: [...project.story.world, { id: "alice", kind: "character", name: "Alice", tags: [], properties: {} }, { id: "watch", kind: "access-group", name: "Watch", tags: [], properties: { duty: "guard" } }], memberships: [...project.story.memberships, { subjectId: "alice", groupId: "watch", kind: "member-of", source: "manual" }] } }) });
+    const read = await structured<{ entries: { id: string }[]; effectiveEntries: { id: string; properties: Record<string, unknown> }[] }>(tool(tools, "inspect_story_catalog").execute({ collection: "world" }));
+    expect(read.entries.find(({ id }) => id === "alice")).toBeDefined();
+    expect(read.effectiveEntries.find(({ id }) => id === "alice")?.properties).toMatchObject({ duty: "guard" });
+  });
+
+  it("shows a temporary lens beside saved lenses without saving or changing project history", async () => {
+    const { tools, session, context } = setup();
+    const before = session.getState().project;
+    const history = session.getHistoryState();
+    const revision = context().projectRevision;
+    const previewLens = { id: "temporary-lens", name: "Preview", color: "#abcdef", expression: { kind: "predicate", predicate: { kind: "object", ref: { kind: "place", id: "room" } } } };
+    await tool(tools, "set_story_view").execute({ lensIds: ["locked"], previewLens });
+    expect(context().view).toMatchObject({ lensIds: ["locked"], previewLens });
+    const read = await structured<{ objects: { lenses: { lensId: string; match: boolean; color: string }[] }[] }>(tool(tools, "inspect_story_objects").execute({ refs: [{ kind: "place", id: "room" }] }));
+    expect(read.objects[0].lenses).toEqual(expect.arrayContaining([expect.objectContaining({ lensId: "locked", match: false }), expect.objectContaining({ lensId: "temporary-lens", match: true, color: "#abcdef" })]));
+    expect(session.getState().project).toEqual(before);
+    expect(context().projectRevision).toBe(revision);
+    expect(session.getHistoryState()).toEqual(history);
+    await tool(tools, "set_story_view").execute({ neutral: true });
+    expect(context().view).toMatchObject({ lensIds: [], previewLens: null, editTarget: "base" });
+    expect(session.getState().project).toEqual(before);
+    expect(session.getHistoryState()).toEqual(history);
+  });
+
+  it("validates temporary expressions with the saved-lens schema before touching the view", async () => {
+    const { tools, context } = setup();
+    const view = context().view;
+    await expect(tool(tools, "set_story_view").execute({ previewLens: { id: "bad", name: "Bad", color: "#123456", expression: { kind: "unknown" } } })).rejects.toThrow();
+    await expect(tool(tools, "set_story_view").execute({ lensIds: ["missing"] })).rejects.toThrow("Lens not found");
+    await expect(tool(tools, "set_story_view").execute({ lensId: "locked", lensIds: [] })).rejects.toThrow("conflicting");
+    expect(context().view).toEqual(view);
+  });
+
+  it("accepts hidden passage knowledge and nobody access through the shared metadata command", async () => {
+    const { tools, session } = setup();
+    const access = { ...session.getState().project.story.objects[0].metadata.access!, permission: "nobody", hidden: true, knownBy: ["staff"] };
+    const prepared = await structured<{ status: string; token: string }>(tool(tools, "prepare_set_story_metadata").execute({ refs: [{ type: "place", id: "room" }], metadata: { access }, accessFields: ["permission", "hidden", "knownBy"], target: "base" }));
+    expect(prepared.status).toBe("prepared");
+    await tool(tools, "apply_prepared_editor_change").execute({ token: prepared.token });
+    expect(session.getState().project.story.objects[0].metadata.access).toMatchObject({ permission: "nobody", hidden: true, knownBy: ["staff"], keyIds: ["brass"] });
+  });
+
   it("returns deferred when the host guards a Story view transition", async () => {
     const { tools, setViewResult } = setup(); setViewResult({ status: "deferred", reason: "draft" });
     const result = await structured<{ status: string; reason: string }>(tool(tools, "set_story_view").execute({ scenarioId: "night" }));

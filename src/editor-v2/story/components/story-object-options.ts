@@ -1,12 +1,12 @@
 import { storyRefKey, type StoryData, type StoryObjectRef } from "../types";
 import type { StoryResolvedObject } from "./story-types";
 
-export type StoryObjectOptionPurpose = "all" | "zone-membership" | "group-membership" | "membership" | "route";
+export type StoryObjectOptionPurpose = "all" | "zone-membership" | "group-membership" | "membership" | "route" | "narrative";
 type StoryObjectOption = { id: string; name: string; ref: StoryObjectRef };
 
 function includeForPurpose(ref: StoryObjectRef, purpose: StoryObjectOptionPurpose) {
   // Construction walls are technical segments. Openings remain selectable for route/key/access work.
-  return !(["zone-membership", "group-membership", "membership"] as StoryObjectOptionPurpose[]).includes(purpose) || ref.kind !== "wall";
+  return !(["zone-membership", "group-membership", "membership", "narrative"] as StoryObjectOptionPurpose[]).includes(purpose) || ref.kind !== "wall";
 }
 
 function ownerPath(object: StoryResolvedObject, byPlaceId: ReadonlyMap<string, StoryResolvedObject>) {

@@ -1,7 +1,7 @@
-import { sameStoryRef, storyRefKey, type StoryData, type StoryLensExpression, type StoryObjectMetadata, type StoryObjectRef, type StoryViewContext } from "./types";
+import { sameStoryRef, storyRefKey, type StoryData, type StoryLens, type StoryLensExpression, type StoryObjectMetadata, type StoryObjectRef, type StoryViewContext } from "./types";
 import type { EditorProject } from "../model/project-model";
 import { canonicalProjectStoryRef, zoneMatchesProject } from "./project-adapter";
-import { effectiveProjectStoryObject, projectStoryData } from "./project-effective";
+import { canonicalLensExpression, effectiveProjectStoryObject, projectStoryData } from "./project-effective";
 import { effectiveStoryMetadata, effectiveStoryObject, storyAccessForMetadata, type StoryAccessResult } from "./effective";
 import { migrateStoryData } from "./migration";
 export { effectiveStoryMetadata, effectiveStoryObject, type StoryAccessResult } from "./effective";
@@ -39,9 +39,25 @@ export function evaluateLens(story: StoryData, lensId: string, ref: StoryObjectR
   const reasons: string[] = []; return { lensId, color: lens.color, match: evaluateExpression(canonical, ref, lens.expression, reasons, context), reasons };
 }
 export function evaluateProjectLens(project: EditorProject, story: StoryData, lensId: string, ref: StoryObjectRef, context: StoryViewContext = {}): LensEvaluation | undefined {
-  const effectiveProject = { ...project, story }; const canonicalStory = projectStoryData(effectiveProject); const lens = canonicalStory.lenses.find(({ id }) => id === lensId); if (!lens) return undefined;
-  const canonicalRef = canonicalProjectStoryRef(project, ref); const resolve: MetadataResolver = (target, view) => effectiveProjectStoryObject(effectiveProject, target, view)?.metadata;
-  const reasons: string[] = []; return { lensId, color: lens.color, match: evaluateExpression(canonicalStory, canonicalRef, lens.expression, reasons, context, (zoneId, target) => zoneMatchesProject(effectiveProject, canonicalStory, zoneId, target).matches, resolve), reasons };
+  const lens = story.lenses.find(({ id }) => id === lensId); if (!lens) return undefined;
+  return createProjectLensEvaluator(project, story, context)(lens, ref);
+}
+
+/** Saved and temporary lenses share evaluation; cache lives only for this read. */
+export function createProjectLensEvaluator(project: EditorProject, story: StoryData, context: StoryViewContext = {}) {
+  const effectiveProject = { ...project, story }; const canonicalStory = projectStoryData(effectiveProject);
+  const metadata = new Map<string, StoryObjectMetadata | undefined>();
+  const expressions = new Map<StoryLensExpression, StoryLensExpression>();
+  const resolve: MetadataResolver = (target) => {
+    const key = storyRefKey(target);
+    if (!metadata.has(key)) metadata.set(key, effectiveProjectStoryObject(effectiveProject, target, context)?.metadata);
+    return metadata.get(key);
+  };
+  return (lens: StoryLens, ref: StoryObjectRef): LensEvaluation => {
+    const canonicalRef = canonicalProjectStoryRef(project, ref); const reasons: string[] = [];
+    if (!expressions.has(lens.expression)) expressions.set(lens.expression, canonicalLensExpression(project, lens.expression));
+    return { lensId: lens.id, color: lens.color, match: evaluateExpression(canonicalStory, canonicalRef, expressions.get(lens.expression)!, reasons, context, (zoneId, target) => zoneMatchesProject(effectiveProject, canonicalStory, zoneId, target).matches, resolve), reasons };
+  };
 }
 
 export type StorySearchHit = { kind: "object" | "world" | "evidence"; id: string; label: string; refs: StoryObjectRef[]; score: number };

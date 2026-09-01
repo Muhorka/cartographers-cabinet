@@ -17,6 +17,7 @@
 .precision summary { cursor: pointer; color: #d6ba7c; font-size: .75rem; font-weight: 400; }
 .precision p { color: #bbae91; font-size: .8em; }
 .panel [role="alert"] { color: #e7a99b; font-size: .72rem; }
+.result { display: grid; gap: .4rem; }
 .panel .override { display: flex; grid-template-columns: auto 1fr; align-items: center; gap: .4rem; margin: .4rem 0; }
 .override input { width: auto; }
 .preferences { display: grid; gap: .4rem; }

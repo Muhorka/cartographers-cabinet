@@ -1,0 +1,33 @@
+.accessFields {
+  composes: buttons fields from "../../components/book-controls.module.css";
+  display: grid;
+  gap: .5rem;
+  min-width: 0;
+}
+
+.section {
+  min-width: 0;
+  margin: 0;
+  padding: .45rem;
+  border: 1px solid #b58a4644;
+  background: #18271f55;
+}
+
+.section > summary {
+  color: #d6ba7c;
+  cursor: pointer;
+  font: normal 400 .75rem/1.35 Georgia, "Times New Roman", serif;
+}
+
+.body {
+  display: grid;
+  min-width: 0;
+  gap: .5rem;
+  padding: .55rem .15rem .1rem;
+}
+
+.body > fieldset { min-width: 0; margin: 0; padding: 0; border: 0; background: transparent; }
+.check { display: flex; align-items: center; gap: .45rem; color: #b89b67; font: normal .68rem/1.35 Georgia, "Times New Roman", serif; }
+.check input { flex: 0 0 auto; accent-color: #943c34; }
+.hint { margin: 0; color: #bdb091; font: italic .68rem/1.35 Georgia, "Times New Roman", serif; }
+.actions { display: flex; flex-wrap: wrap; gap: .4rem; }

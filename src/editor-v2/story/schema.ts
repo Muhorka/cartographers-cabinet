@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { StoryData, StoryGroup, StoryObjectMetadata } from "./types";
+import type { StoryData, StoryGroup, StoryLensExpression, StoryObjectMetadata, StoryPropertyValue } from "./types";
 import { routeRecordSchema } from "./routes/schema";
 
 const id = z.string().trim().min(1).max(512);
@@ -10,7 +10,7 @@ const ref = z.object({ kind, id, scopeId: id.optional() }).strict();
 export const storyObjectRefSchema = ref;
 const scalar = z.union([text, z.number().finite(), z.boolean(), z.null()]);
 const worldRef = z.object({ entityId: id }).strict();
-const value: z.ZodTypeAny = z.lazy(() => z.union([scalar, z.array(text).max(10_000), ref, z.array(ref).max(10_000), worldRef, z.array(worldRef).max(10_000)]));
+const value: z.ZodType<StoryPropertyValue> = z.lazy(() => z.union([scalar, z.array(text).max(10_000), ref, z.array(ref).max(10_000), worldRef, z.array(worldRef).max(10_000)]));
 const properties = z.record(id, value).superRefine((record, context) => {
   if (Object.keys(record).length > 10_000) context.addIssue({ code: "custom", message: "Too many story properties." });
   for (const key of Object.keys(record)) if (["__proto__", "prototype", "constructor"].includes(key)) context.addIssue({ code: "custom", message: `Unsafe property name: ${key}` });
@@ -21,7 +21,7 @@ const unique = (values: string[], context: z.RefinementCtx, label: string) => {
 };
 const worldEntry = z.object({ id, kind: z.enum(["character", "faction", "access-group", "key"]), name: shortText, description: text.optional(), tags: z.array(shortText).max(10_000), properties }).strict();
 const membership = z.object({ subjectId: id, groupId: id, kind: z.enum(["member-of", "holds-key", "knows"]), source: z.enum(["manual", "imported", "legacy"]), note: text.optional() }).strict();
-const access = z.object({ allow: z.array(id).max(10_000), deny: z.array(id).max(10_000), permission: z.enum(["open", "restricted"]), physicalState: z.enum(["open", "closed"]), lock: z.enum(["none", "locked", "sealed"]).default("none"), keyIds: z.array(id).max(10_000), guardIds: z.array(id).max(10_000), secretKnowledge: z.array(id).max(10_000) }).strict();
+const access = z.object({ allow: z.array(id).max(10_000), deny: z.array(id).max(10_000), permission: z.enum(["open", "restricted", "nobody"]), physicalState: z.enum(["open", "closed"]), lock: z.enum(["none", "locked", "sealed"]).default("none"), keyIds: z.array(id).max(10_000), guardIds: z.array(id).max(10_000), secretKnowledge: z.array(id).max(10_000), hidden: z.boolean().optional(), knownBy: z.array(id).max(10_000).optional() }).strict();
 const objectMetadata = z.object({ narrativeLabel: shortText.optional(), narrativeDescription: text.optional(), owners: z.array(id).max(10_000).optional(), access: access.optional(), tags: z.array(shortText).max(10_000).optional(), properties: properties.optional() }).strict();
 export const storyMetadataSchema = objectMetadata as typeof objectMetadata & z.ZodType<StoryObjectMetadata>;
 const objectRecord = z.object({ ref, metadata: objectMetadata }).strict();
@@ -40,7 +40,7 @@ const predicate = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("owner"), entryId: id }).strict(),
   z.object({ kind: z.literal("zone"), zoneId: id }).strict(),
 ]);
-const expression: z.ZodTypeAny = z.lazy(() => z.union([
+const expression: z.ZodType<StoryLensExpression> = z.lazy(() => z.union([
   z.object({ kind: z.literal("all"), items: z.array(expression).max(100) }).strict(),
   z.object({ kind: z.literal("any"), items: z.array(expression).max(100) }).strict(),
   z.object({ kind: z.literal("not"), item: expression }).strict(),
@@ -51,7 +51,7 @@ const patch = z.object({ id, target: ref, title: shortText.optional(), descripti
 const step = z.object({ id, name: shortText, description: text.optional(), patches: z.array(patch).max(100_000) }).strict();
 const scenario = z.object({ id, name: shortText, description: text.optional(), patches: z.array(patch).max(100_000), steps: z.array(step).max(100_000) }).strict();
 const actor = z.union([ref, z.object({ entryId: id }).strict()]);
-const relation = z.object({ id, from: actor, to: actor, kind: z.enum(["owns", "knows", "visits", "guards", "uses", "contains", "custom"]), label: shortText.optional(), source: text.optional() }).strict();
+const relation = z.object({ id, from: actor, to: actor, kind: z.enum(["owns", "knows", "visits", "guards", "uses", "contains", "custom"]), label: shortText.optional(), description: text.optional(), source: text.optional() }).strict();
 const intention = z.object({ id, authorId: id.optional(), subject: ref, kind: z.enum(["reachability", "must-pass", "avoid-zone", "access-rule", "custom"]), text, status: z.enum(["draft", "accepted", "rejected"]), target: ref.optional(), through: z.array(ref).max(100_000).optional(), avoidZoneId: id.optional(), accessEntryId: id.optional() }).strict();
 const evidence = z.object({ id, text, refs: z.array(ref).max(100_000), source: z.literal("local"), locator: shortText.optional() }).strict();
 export const storyViewContextSchema = z.object({ scenarioId: id.optional(), stepId: id.optional(), lensId: id.optional() }).strict();

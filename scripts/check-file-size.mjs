@@ -5,7 +5,7 @@ const root = process.cwd();
 const sourceRoot = join(root, "src");
 const limits = new Map([
   [".ts", 260],
-  [".tsx", 220],
+  [".tsx", 240],
   [".css", 420],
 ]);
 

@@ -24,7 +24,7 @@ export function projectStoryData(project: EditorProject): StoryData {
   return { ...migrated, objects, zones, scenarios, lenses, relations, intentions, evidence };
 }
 
-function canonicalLensExpression(project: EditorProject, expression: StoryLensExpression): StoryLensExpression {
+export function canonicalLensExpression(project: EditorProject, expression: StoryLensExpression): StoryLensExpression {
   if (expression.kind === "predicate") return expression.predicate.kind === "object" ? { ...expression, predicate: { ...expression.predicate, ref: canonicalProjectStoryRef(project, expression.predicate.ref) } } : expression;
   if (expression.kind === "not") return { ...expression, item: canonicalLensExpression(project, expression.item) };
   return { ...expression, items: expression.items.map((item) => canonicalLensExpression(project, item)) };
@@ -32,7 +32,8 @@ function canonicalLensExpression(project: EditorProject, expression: StoryLensEx
 
 function joinAccess(first: StoryAccessPolicy, second: StoryAccessPolicy): StoryAccessPolicy {
   const lock = first.lock === "sealed" || second.lock === "sealed" ? "sealed" : first.lock === "locked" || second.lock === "locked" ? "locked" : "none";
-  return { ...defaultStoryAccessPolicy(), ...first, ...second, allow: [...new Set([...first.allow, ...second.allow])], deny: [...new Set([...first.deny, ...second.deny])], keyIds: [...new Set([...first.keyIds, ...second.keyIds])], guardIds: [...new Set([...first.guardIds, ...second.guardIds])], secretKnowledge: [...new Set([...first.secretKnowledge, ...second.secretKnowledge])], permission: first.permission === "restricted" || second.permission === "restricted" ? "restricted" : "open", physicalState: first.physicalState === "closed" || second.physicalState === "closed" ? "closed" : "open", lock };
+  const permission: StoryAccessPolicy["permission"] = first.permission === "nobody" || second.permission === "nobody" ? "nobody" : first.permission === "restricted" || second.permission === "restricted" ? "restricted" : "open";
+  return { ...defaultStoryAccessPolicy(), ...first, ...second, allow: [...new Set([...first.allow, ...second.allow])], deny: [...new Set([...first.deny, ...second.deny])], keyIds: [...new Set([...first.keyIds, ...second.keyIds])], guardIds: [...new Set([...first.guardIds, ...second.guardIds])], secretKnowledge: [...new Set([...first.secretKnowledge, ...second.secretKnowledge])], permission, physicalState: first.physicalState === "closed" || second.physicalState === "closed" ? "closed" : "open", lock, hidden: Boolean(first.hidden || second.hidden), knownBy: [...new Set([...(first.knownBy ?? []), ...(second.knownBy ?? [])])] };
 }
 
 /** Zone membership is always resolved against project geometry and canonical refs. */

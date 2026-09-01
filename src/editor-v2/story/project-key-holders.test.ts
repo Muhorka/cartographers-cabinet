@@ -57,14 +57,18 @@ describe("assignProjectKeyHolders", () => {
     expect(() => assignProjectKeyHolders(project, { ref: opening, holderIds: ["anna"] })).toThrow(/keyId is required/);
   });
 
-  it("rejects key holders and unknown ids, and never creates an orphan key for an empty assignment", () => {
+  it("rejects invalid holders, keeps an unqualified empty assignment a no-op, and allows an explicit holderless key", () => {
     const project = fixture();
-    expect(() => assignProjectKeyHolders(project, { ref: opening, holderIds: ["other-key"] })).toThrow(/character, faction or access group/);
+    expect(() => assignProjectKeyHolders(project, { ref: opening, holderIds: ["other-key"] })).toThrow(/character, faction or people group/);
     expect(() => assignProjectKeyHolders(project, { ref: opening, holderIds: ["missing"] })).toThrow(/does not exist/);
     const before = structuredClone(project);
     const next = assignProjectKeyHolders(project, { ref: opening, holderIds: [] });
     expect(next).toEqual(before);
     expect(next.story.world.filter(({ kind }) => kind === "key")).toHaveLength(1);
+    const holderless = assignProjectKeyHolders(project, { ref: opening, holderIds: [], keyName: "Lost front key" });
+    expect(holderless.story.world).toEqual(expect.arrayContaining([{ id: "key-passage-door", kind: "key", name: "Lost front key", tags: [], properties: {} }]));
+    expect(holderless.story.objects[0]?.metadata.access?.keyIds).toEqual(["key-passage-door"]);
+    expect(holderless.story.memberships.filter(({ kind }) => kind === "holds-key")).toEqual(expect.arrayContaining([{ subjectId: "anna", groupId: "other-key", kind: "holds-key", source: "imported", note: "archive" }]));
   });
 
   it("clears only the selected key's holder memberships when holders become empty", () => {

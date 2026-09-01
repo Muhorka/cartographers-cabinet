@@ -1,4 +1,4 @@
-import { defaultStoryAccessPolicy, sameStoryRef, type StoryData, type StoryObject, type StoryObjectMetadata, type StoryObjectRef, type StoryPropertyValue, type StoryScenario, type StoryTextPatch, type StoryViewContext, type StoryZone } from "./types";
+import { defaultStoryAccessPolicy, sameStoryRef, type StoryAccessPolicy, type StoryData, type StoryObject, type StoryObjectMetadata, type StoryObjectRef, type StoryPropertyValue, type StoryScenario, type StoryTextPatch, type StoryViewContext, type StoryZone } from "./types";
 import { migrateStoryData } from "./migration";
 
 type StoryView = { scenario?: StoryScenario; stepId?: string; patches: StoryTextPatch[] };
@@ -16,6 +16,26 @@ type CompleteMetadata = { narrativeLabel?: string; narrativeDescription?: string
 type StoryMetadataContributor = { kind: "zone" | "native" | "parent"; id: string; metadata: StoryObjectMetadata };
 export type EffectiveStoryOptions = { applicableZones?: readonly StoryZone[]; contributors?: readonly StoryMetadataContributor[] };
 
+function mergeAccess(first: ReturnType<typeof defaultStoryAccessPolicy>, second: ReturnType<typeof defaultStoryAccessPolicy>) {
+  const permission: StoryAccessPolicy["permission"] = first.permission === "nobody" || second.permission === "nobody" ? "nobody" : first.permission === "restricted" || second.permission === "restricted" ? "restricted" : "open";
+  const physicalState: StoryAccessPolicy["physicalState"] = first.physicalState === "closed" || second.physicalState === "closed" ? "closed" : "open";
+  const lock: StoryAccessPolicy["lock"] = first.lock === "sealed" || second.lock === "sealed" ? "sealed" : first.lock === "locked" || second.lock === "locked" ? "locked" : "none";
+  return {
+    ...first,
+    ...second,
+    allow: [...new Set([...first.allow, ...second.allow])],
+    deny: [...new Set([...first.deny, ...second.deny])],
+    keyIds: [...new Set([...first.keyIds, ...second.keyIds])],
+    guardIds: [...new Set([...first.guardIds, ...second.guardIds])],
+    secretKnowledge: [...new Set([...first.secretKnowledge, ...second.secretKnowledge])],
+    permission,
+    physicalState,
+    lock,
+    hidden: Boolean(first.hidden || second.hidden),
+    knownBy: [...new Set([...(first.knownBy ?? []), ...(second.knownBy ?? [])])],
+  };
+}
+
 function mergeMetadata(contributors: readonly StoryMetadataContributor[], local?: StoryObjectMetadata): { metadata: StoryObjectMetadata; conflicts: string[] } {
   const conflicts = new Set<string>(); const zoneProperties = new Map<string, StoryPropertyValue>(); const inherited: CompleteMetadata = { owners: [], access: defaultStoryAccessPolicy(), tags: [], properties: {} };
   for (const contributor of contributors) {
@@ -32,10 +52,7 @@ function mergeMetadata(contributors: readonly StoryMetadataContributor[], local?
       }
       inherited.properties[key] = value;
     }
-    if (metadata.access) {
-      const access = metadata.access;
-      inherited.access = { ...inherited.access, allow: [...new Set([...inherited.access.allow, ...access.allow])], deny: [...new Set([...inherited.access.deny, ...access.deny])], keyIds: [...new Set([...inherited.access.keyIds, ...access.keyIds])], guardIds: [...new Set([...inherited.access.guardIds, ...access.guardIds])], secretKnowledge: [...new Set([...inherited.access.secretKnowledge, ...access.secretKnowledge])], permission: inherited.access.permission === "restricted" || access.permission === "restricted" ? "restricted" : "open", physicalState: inherited.access.physicalState === "closed" || access.physicalState === "closed" ? "closed" : "open", lock: inherited.access.lock === "sealed" || access.lock === "sealed" ? "sealed" : inherited.access.lock === "locked" || access.lock === "locked" ? "locked" : "none" };
-    }
+    if (metadata.access) inherited.access = mergeAccess(inherited.access, { ...defaultStoryAccessPolicy(), ...metadata.access });
   }
   if (!local) return { metadata: inherited, conflicts: [...conflicts] };
   const localProperties = local.properties ?? {};
@@ -75,7 +92,9 @@ export function storyActorGroups(story: StoryData, actorId: string) {
 export type StoryAccessResult = { allowed: boolean; physicalOpen: boolean; reason: string; unknown?: boolean };
 export function storyAccessForMetadata(story: StoryData, metadata: StoryObjectMetadata, actorId?: string): StoryAccessResult {
   const access = { ...defaultStoryAccessPolicy(), ...(metadata.access ?? {}) }; const groups = actorId ? storyActorGroups(story, actorId) : new Set<string>();
+  if (access.permission === "nobody") return { allowed: false, physicalOpen: access.physicalState === "open", reason: "nobody" };
   if (access.deny.some((id) => groups.has(id))) return { allowed: false, physicalOpen: access.physicalState === "open", reason: "explicit-deny" };
+  if (actorId && access.hidden && !(access.knownBy ?? []).some((id) => groups.has(id))) return { allowed: false, physicalOpen: access.physicalState === "open", reason: "hidden", unknown: true };
   if ((metadata.owners ?? []).some((id) => groups.has(id))) return { allowed: true, physicalOpen: access.physicalState === "open", reason: "owner" };
   const permission = access.permission === "open" || access.allow.some((id) => groups.has(id));
   if (!actorId && access.permission === "restricted") return { allowed: false, physicalOpen: access.physicalState === "open", reason: "actor-required", unknown: true };

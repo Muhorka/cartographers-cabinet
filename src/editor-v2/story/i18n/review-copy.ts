@@ -28,7 +28,7 @@ const statusEn: Record<ReviewStatus, string> = { satisfied: "Satisfied", conditi
 export const reviewCopy = {
   pl: {
     title: "Sprawdź założenia sceny", intro: "Sprawdź istniejące intencje dla wskazanych obiektów. Wynik nie zmienia zamysłu autora ani danych projektu.",
-    actor: "Postać lub grupa", defaultActor: "Według intencji lub trasy", route: "Trasa do sprawdzenia", noRoute: "Bez trasy — tylko reguły dostępu", requestRoute: "Przygotuj trasę", openRoute: "Otwórz trasę", all: "Wszystkie intencje projektu", scope: "Intencje w zakresie", empty: "Brak intencji dla tego zakresu. Dodaj intencję albo zmień zaznaczenie.",
+    actor: "Postać, frakcja lub grupa osób", defaultActor: "Według intencji lub trasy", route: "Trasa do sprawdzenia", noRoute: "Bez trasy — tylko reguły dostępu", requestRoute: "Przygotuj trasę", openRoute: "Otwórz trasę", all: "Wszystkie intencje projektu", scope: "Intencje w zakresie", empty: "Brak intencji dla tego zakresu. Dodaj intencję albo zmień zaznaczenie.",
     scenario: "Scenariusz", base: "Dane bazowe", step: "Krok", check: "Sprawdź założenia", running: "Sprawdzanie…", cancel: "Anuluj", stale: "Dane, zaznaczenie lub kontekst się zmieniły. Wynik jest nieaktualny — sprawdź ponownie.", cancelled: "Sprawdzanie anulowane. Nie zapisano wyniku jako faktu.", error: "Sprawdzanie nie zostało ukończone.", coverage: "Sprawdzono", of: "z", limited: "Raport obejmuje tylko część zakresu. Zawęź zaznaczenie, aby sprawdzić pozostałe intencje.",
     reasons: reasonsPl, statuses: statusPl, author: { accepted: "Zaakceptowana przez autora", draft: "Szkic intencji", rejected: "Odrzucona przez autora" },
     proof: { permission: "Ocena prawa dostępu. Nie potwierdza fizycznego przejścia.", "single-route": "Dotyczy tylko tej obliczonej trasy. Nie dowodzi, że wszystkie możliwe trasy spełniają założenie.", author: "Wymaga interpretacji autora." },
@@ -38,7 +38,7 @@ export const reviewCopy = {
   },
   en: {
     title: "Check scene intentions", intro: "Check existing author intentions for the specified objects. Results do not change author intent or project data.",
-    actor: "Character or group", defaultActor: "From intention or route", route: "Route to check", noRoute: "No route — access rules only", requestRoute: "Prepare a route", openRoute: "Open route", all: "All project intentions", scope: "Intentions in scope", empty: "No intentions in this scope. Add an intention or change the selection.",
+    actor: "Character, faction or people group", defaultActor: "From intention or route", route: "Route to check", noRoute: "No route — access rules only", requestRoute: "Prepare a route", openRoute: "Open route", all: "All project intentions", scope: "Intentions in scope", empty: "No intentions in this scope. Add an intention or change the selection.",
     scenario: "Scenario", base: "Base facts", step: "Step", check: "Check intentions", running: "Checking…", cancel: "Cancel", stale: "The data, selection or context changed. This result is out of date — check again.", cancelled: "Check cancelled. No result was saved as a fact.", error: "The check did not complete.", coverage: "Checked", of: "of", limited: "This report covers only part of the scope. Narrow the selection to check the remaining intentions.",
     reasons: reasonsEn, statuses: statusEn, author: { accepted: "Accepted by author", draft: "Draft intention", rejected: "Rejected by author" },
     proof: { permission: "Checks permission only. Does not prove physical passage.", "single-route": "Applies only to this calculated route. It does not prove that every possible route satisfies the intention.", author: "Requires author interpretation." },
@@ -51,7 +51,7 @@ export const reviewCopy = {
 /** The geometry/access engine supplies diagnostics, not authored prose. Translate its known messages. */
 export function reviewDiagnostic(text: string, locale: "pl" | "en", name: (id: string) => string) {
   if (locale === "en") return text;
-  const plain: Record<string, string> = { "actor-required": "Wskaż postać lub grupę.", "object-not-found": "Nie znaleziono obiektu.", "explicit-deny": "Jawny zakaz dostępu.", "not-allowed": "Brak pozwolenia.", allowed: "Dostęp dozwolony.", owner: "Dostęp właściciela." };
+  const plain: Record<string, string> = { "actor-required": "Wskaż postać, frakcję lub grupę osób.", "object-not-found": "Nie znaleziono obiektu.", "explicit-deny": "Jawny zakaz dostępu.", "not-allowed": "Brak pozwolenia.", allowed: "Dostęp dozwolony.", owner: "Dostęp właściciela." };
   if (plain[text]) return plain[text];
   const patterns: Array<[RegExp, (id: string) => string]> = [
     [/^Unlock and open (.+)\.$/, (id) => `Odblokuj i otwórz: ${name(id)}.`],

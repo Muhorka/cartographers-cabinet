@@ -3,8 +3,9 @@ import type { AgentObjectRef } from "./agent-command-types";
 import { projectRevision, valueRevision } from "../state/project-revision";
 import { inspectProjectObject } from "./project-read-model";
 import type { EditorProject } from "../model/project-model";
+import type { StoryLens } from "../story/types";
 
-export type EditorStoryView = { scenarioId?: string; stepId?: string; lensId?: string; routeId?: string; editTarget?: "base" | "scenario" };
+export type EditorStoryView = { scenarioId?: string; stepId?: string; lensId?: string; lensIds?: string[]; previewLens?: StoryLens | null; routeId?: string; editTarget?: "base" | "scenario" };
 export type StoryViewUpdateResult = { status: "applied" } | { status: "deferred"; reason: "draft" | "overlap" };
 export type EditorLiveContext = { selections: AgentObjectRef[]; mode: "drawing" | "story"; view: EditorStoryView };
 export type EditorContextBridge = {

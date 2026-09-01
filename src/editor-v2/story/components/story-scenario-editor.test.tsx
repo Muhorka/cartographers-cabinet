@@ -58,7 +58,7 @@ describe("StoryScenarioEditor", () => {
     const project = fixture(); const scenario = project.story.scenarios[0]!;
     scenario.patches[0]!.metadata = { owners: ["anna"], access: { allow: ["anna"], deny: [], permission: "restricted", physicalState: "open", lock: "none", keyIds: [], guardIds: [], secretKnowledge: [] } };
     const html = renderToStaticMarkup(<StoryScenarioEditor {...props(project)} />);
-    expect(html).toContain("Właściciele"); expect(html).toContain("Kto może wejść"); expect(html).toContain("Anna"); expect(html).toContain("Wybrane osoby i grupy"); expect(html).not.toContain(">anna<");
+    expect(html).toContain("Właściciele"); expect(html).toContain("Kto może wejść"); expect(html).toContain("Anna"); expect(html).toContain("Wybrane osoby i grupy osób"); expect(html).not.toContain(">anna<");
   });
 
   it("keeps unchanged authored overrides behind a collapsed count", () => {

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { emptyProject } from "../model/project-model";
 import { storyAccessDecision } from "./routes/access";
-import { emptyStoryData } from "./types";
+import { emptyStoryData, defaultStoryAccessPolicy } from "./types";
+import { effectiveStoryMetadata } from "./effective";
 import { evaluateLens, evaluateProjectLens, storyAccess } from "./evaluation";
 
 function fixture() {
@@ -45,5 +46,31 @@ describe("canonical story access", () => {
     expect(route).toMatchObject({ allowed: true, conditions: ["Unlock and open door."] });
     const excluded = storyAccessDecision(project, opening, { actorId: "intruder" });
     expect(typeof excluded).toBe("object"); if (typeof excluded !== "boolean") { expect(excluded.allowed).toBe(false); expect(excluded.reason).toContain("explicit-deny"); }
+  });
+
+  it("supports nobody and actor-specific hidden route knowledge independently", () => {
+    const nobody = fixture(); nobody.story.objects[0]!.metadata.access!.permission = "nobody";
+    expect(storyAccessDecision(nobody, opening, { actorId: "anna" })).toMatchObject({ allowed: false, reason: "door: nobody." });
+
+    const hidden = fixture();
+    hidden.story.objects[0]!.metadata = { ...hidden.story.objects[0]!.metadata, owners: ["owner"], access: { ...hidden.story.objects[0]!.metadata.access!, permission: "open", hidden: true, knownBy: ["staff"] } };
+    expect(storyAccessDecision(hidden, opening, { actorId: "stranger" })).toMatchObject({ allowed: false, unknown: true, reason: "door: hidden." });
+    expect(storyAccessDecision(hidden, opening, { actorId: "anna" })).toMatchObject({ allowed: true });
+    expect(storyAccessDecision(hidden, opening, { actorId: "owner" })).toMatchObject({ allowed: false, unknown: true, reason: "door: hidden." });
+  });
+
+  it("inherits nobody through a zone without materializing an object-local rule", () => {
+    const story = fixture().story;
+    story.objects[0]!.metadata = {};
+    story.zones = [{ id: "private", name: "Private", members: [{ ref: opening, relation: "inside", partial: false }], tags: [], metadata: { access: { ...defaultStoryAccessPolicy(), permission: "nobody" } } }];
+    expect(effectiveStoryMetadata(story, opening).metadata.access?.permission).toBe("nobody");
+    expect(story.objects[0]?.metadata.access).toBeUndefined();
+  });
+
+  it("lets an ordinary closed door be opened and never treats a sealed door as a key unlock", () => {
+    const ordinary = fixture(); ordinary.story.objects[0]!.metadata.access = { ...ordinary.story.objects[0]!.metadata.access!, permission: "open", physicalState: "closed", lock: "none", keyIds: [] };
+    expect(storyAccessDecision(ordinary, opening, { actorId: "anna" })).toMatchObject({ allowed: true, conditions: ["Open door."] });
+    const sealed = fixture(); sealed.story.objects[0]!.metadata.access = { ...sealed.story.objects[0]!.metadata.access!, permission: "open", physicalState: "closed", lock: "sealed", keyIds: ["brass"] };
+    expect(storyAccessDecision(sealed, opening, { actorId: "anna" })).toMatchObject({ allowed: false, unknown: true, reason: "door is sealed." });
   });
 });

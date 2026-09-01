@@ -5,7 +5,7 @@ import { EditorSession } from "../state/editor-session";
 import { registerEditorV2Tools } from "./register-editor-tools";
 import { getWebMcpDiagnostics } from "./diagnostics";
 import { buildMetadataChange } from "./agent-object-command";
-import { hierarchySnapshot } from "./project-read-model";
+import { hierarchySnapshot, projectOverview } from "./project-read-model";
 import { addConstructionSurface } from "../model/hierarchy-operations";
 import { editorProjectSchema } from "../persistence/project-file";
 import { effectiveProjectStoryObject } from "../story/project-effective";
@@ -13,7 +13,7 @@ import { effectiveProjectStoryObject } from "../story/project-effective";
 afterEach(() => Reflect.deleteProperty(document, "modelContext"));
 
 function projectFixture() {
-  const base = createStarterProject("project", "Dolina Rzeki", "pl"); const location = base.places.find(({ kind }) => kind === "location")!;
+  const base = createStarterProject("project", "Dolina Rueve", "pl"); const location = base.places.find(({ kind }) => kind === "location")!;
   return addElement(base, { id: "river", name: "Rzeka Szeptów", description: "Szeroka rzeka przy starym mieście", layerId: "terrain", subjectId: "terrain.water", geometry: { kind: "path", points: [{ x: 0, y: 0 }, { x: 20, y: 10 }], closed: false }, visible: true, locked: false, tags: ["woda", "żeglowna"], access: [], properties: { depth: 4 } }, location.id);
 }
 
@@ -67,6 +67,12 @@ describe("read-only WebMCP tools for editor V2", () => {
     const project = projectFixture(); const location = project.places.find(({ kind }) => kind === "location")!;
     const withSurface = addConstructionSurface(project, { id: "deck", belongsToId: location.id, name: "Deck", kind: "terrace", shape: { kind: "rectangle", x: 1, y: 1, width: 2, height: 2 }, attachment: "free", elevation: 0, visible: true, locked: false, tags: [], access: [], properties: {} }, location.id);
     expect(hierarchySnapshot(withSurface)).toContainEqual(expect.objectContaining({ id: "deck", kind: "surface", ownerId: location.id, ref: { type: "surface", id: "deck" } }));
+  });
+
+  it("exposes the root world description as shared agent context", () => {
+    const project = projectFixture(); const world = project.places.find(({ kind }) => kind === "world")!;
+    world.description = "A river realm built around seasonal crossings.";
+    expect(projectOverview(project)).toMatchObject({ worldDescription: world.description });
   });
 
   it("distinguishes registration from a successful agent call", async () => {

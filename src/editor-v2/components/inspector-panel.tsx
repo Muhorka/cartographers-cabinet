@@ -35,6 +35,7 @@ type Props = {
   selectionEditor?: ReactNode;
   geometryTools?: ReactNode;
   footer?: ReactNode;
+  bottom?: ReactNode;
 };
 
 export function InspectorPanel(props: Props) {
@@ -45,7 +46,14 @@ export function InspectorPanel(props: Props) {
   const nativeForm = props.detailsEditor
     ? !props.readOnly && (props.selections?.length ?? 0) <= 1 ? form : undefined
     : form;
-  return <aside className={styles.panel}>{props.selectionEditor ?? <>{props.detailsEditor}{nativeForm && <>{!props.detailsEditor && <h2>{selection ? props.copy.selection : props.copy.openPlace}</h2>}{nativeForm}{!props.readOnly && props.geometryTools}</>}</>}<SheetObjectList project={props.project} activePlaceId={props.activePlaceId} selections={props.selections} copy={props.copy.objectList} onSelect={props.onSelect} onUpdateElement={props.readOnly ? undefined : props.onUpdateElement} onUpdateSelection={props.readOnly ? undefined : props.onUpdateSelection} onDelete={props.readOnly ? undefined : props.onDeleteSelection}/>{props.footer}</aside>;
+  const storyEditor = props.selectionEditor ?? props.detailsEditor;
+  return <aside className={styles.panel}>
+    {storyEditor && <div className={styles.storyEditor}>{storyEditor}</div>}
+    {!props.selectionEditor && nativeForm && <div className={styles.nativeEditor}>{!props.detailsEditor && <h2>{selection ? props.copy.selection : props.copy.openPlace}</h2>}{nativeForm}{!props.readOnly && props.geometryTools}</div>}
+    {props.footer}
+    <SheetObjectList project={props.project} activePlaceId={props.activePlaceId} selections={props.selections} copy={props.copy.objectList} onSelect={props.onSelect} onUpdateElement={props.readOnly ? undefined : props.onUpdateElement} onUpdateSelection={props.readOnly ? undefined : props.onUpdateSelection} onDelete={props.readOnly ? undefined : props.onDeleteSelection}/>
+    {props.bottom}
+  </aside>;
 }
 
 function SelectionForm(props: Props & { selection: MapSelection }) {

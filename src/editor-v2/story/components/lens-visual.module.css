@@ -1,0 +1,22 @@
+.lens {
+  display: inline-block;
+  width: 1.55rem;
+  height: 1.55rem;
+  flex: 0 0 auto;
+  border: 2px solid #bc9650;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 30%, #fff8 0 16%, transparent 38%),
+    var(--lens-color, #8a7043);
+  box-shadow: inset 3px 3px 9px #fff3, 0 2px 6px #0008;
+}
+
+.small { width: 1.25rem; height: 1.25rem; }
+
+.large { width: 2rem; height: 2rem; }
+
+.clear {
+  background:
+    radial-gradient(circle, #d8caa8 0 28%, transparent 31%),
+    repeating-linear-gradient(45deg, #d8caa833 0 2px, transparent 2px 5px);
+}

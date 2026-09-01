@@ -81,7 +81,9 @@ export function hierarchySnapshot(project: EditorProject) {
 
 export function projectOverview(project: EditorProject, activePlaceId?: string) {
   const records = projectObjectRecords(project); const count = (type: ProjectObjectType) => records.filter(({ ref }) => ref.type === type).length;
-  return { id: project.id, name: project.name, schemaVersion: project.schemaVersion, updatedAt: project.updatedAt, activePlace: project.places.find(({ id }) => id === activePlaceId), roots: project.places.filter(({ parentId }) => !parentId).map(({ id, name, kind }) => ({ id, name, kind })), counts: { places: count("place"), rooms: count("room"), elements: count("element"), surfaces: count("surface"), walls: count("wall"), openings: count("opening"), transitions: count("transition") } };
+  const roots = project.places.filter(({ parentId }) => !parentId);
+  const world = roots.find(({ kind }) => kind === "world") ?? roots[0];
+  return { id: project.id, name: project.name, worldDescription: world?.description, schemaVersion: project.schemaVersion, updatedAt: project.updatedAt, activePlace: project.places.find(({ id }) => id === activePlaceId), roots: roots.map(({ id, name, kind }) => ({ id, name, kind })), counts: { places: count("place"), rooms: count("room"), elements: count("element"), surfaces: count("surface"), walls: count("wall"), openings: count("opening"), transitions: count("transition") } };
 }
 
 export function currentMapSnapshot(project: EditorProject, activePlaceId: string) {

@@ -16,23 +16,32 @@ function renderBook(overrides: Partial<React.ComponentProps<typeof StoryDisclosu
 }
 
 describe("StoryDisclosureBook", () => {
+  it("keeps the story disclosure order and supports dedicated route and trait sections", () => {
+    const { host, root } = renderBook({ labels: { ...labels, routes: "Routes", properties: "Trait dictionary" }, routes: <p>Route planner</p>, properties: <p>Trait list</p> });
+    expect([...host.querySelectorAll("summary")].map((summary) => summary.textContent)).toEqual(["Atlas", "World book", "Zones", "Lenses", "Routes", "Trait dictionary"]);
+    expect(host.textContent).toContain("Route planner");
+    expect(host.textContent).toContain("Trait list");
+    act(() => root.unmount());
+    host.remove();
+  });
+
   it("renders four independently labelled disclosures without replacing their content", async () => {
     const { host, root } = renderBook();
     const details = [...host.querySelectorAll("details")];
 
     expect(details).toHaveLength(4);
-    expect(details.map((detail) => detail.open)).toEqual([true, true, false, false]);
-    expect([...host.querySelectorAll("summary")].map((summary) => summary.getAttribute("aria-expanded"))).toEqual(["true", "true", "false", "false"]);
+    expect(details.map((detail) => detail.open)).toEqual([true, false, true, false]);
+    expect([...host.querySelectorAll("summary")].map((summary) => summary.getAttribute("aria-expanded"))).toEqual(["true", "false", "true", "false"]);
     expect(host.textContent).toContain("Tree content");
     expect(host.textContent).toContain("World book content");
     expect(host.textContent).toContain("Lens content");
 
     await act(async () => {
-      (details[2].querySelector("summary") as HTMLElement).click();
+      (details[1].querySelector("summary") as HTMLElement).click();
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     expect(details[0].open).toBe(true);
-    expect(details[2].open).toBe(true);
+    expect(details[1].open).toBe(true);
 
     act(() => root.unmount());
     host.remove();
@@ -45,7 +54,7 @@ describe("StoryDisclosureBook", () => {
     }
 
     const { host, root } = renderBook({ defaultOpen: { tree: false, zones: false, worldbook: true, lenses: false }, worldbook: <StatefulReview /> });
-    const detail = host.querySelectorAll("details")[2];
+    const detail = host.querySelectorAll("details")[1];
     const review = detail.querySelector("button") as HTMLButtonElement;
 
     act(() => review.click());
@@ -73,7 +82,7 @@ describe("StoryDisclosureBook", () => {
       details[1].open = false;
       details[1].dispatchEvent(new Event("toggle"));
     });
-    expect(onOpenSectionsChange).toHaveBeenCalledWith({ tree: false, zones: false, worldbook: false, lenses: false });
+    expect(onOpenSectionsChange).toHaveBeenCalledWith({ tree: false, worldbook: false, zones: false, lenses: false, routes: false, properties: false });
 
     act(() => root.unmount());
     host.remove();

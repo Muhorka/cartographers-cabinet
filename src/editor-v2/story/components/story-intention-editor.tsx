@@ -33,7 +33,7 @@ function ThroughPicker({ selected, options, copy, onChange }: { selected: string
 export function StoryIntentionEditor({ entry, story, resolvedObjects, copy, onChange }: Props) {
   const text = intentionCopy(copy);
   const kind = kinds.includes(entry.kind as IntentionKind) ? entry.kind as IntentionKind : "custom";
-  const objects = storyObjectOptions(story, resolvedObjects);
+  const objects = storyObjectOptions(story, resolvedObjects, "narrative");
   const actorOptions = story.world.filter(({ kind: actorKind }) => actorKind === "character" || actorKind === "faction" || actorKind === "access-group").map(({ id, name }) => ({ id, name }));
   const update = (key: string, next: unknown) => onChange({ ...entry, [key]: next });
   const authorStatus = value(entry, "status") || "draft";

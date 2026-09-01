@@ -1,7 +1,30 @@
 /* Native checkbox semantics and keyboard behavior, cartographer skin.
    Apply once to the workshop so tools, books and parchment cards agree. */
 .checks input[type="range"] { accent-color: #943c34; }
-.checks input[type="radio"] { accent-color: #8f6b3b; }
+.checks input[type="radio"]:is(:enabled, :disabled) {
+  appearance: none;
+  box-sizing: border-box;
+  width: .85rem;
+  height: .85rem;
+  min-width: .85rem;
+  flex: 0 0 auto;
+  margin: .1em 0;
+  padding: 0;
+  border: 1px solid #9a7840;
+  border-radius: 50%;
+  background: #dfcfaa;
+  vertical-align: middle;
+  cursor: pointer;
+  box-shadow: inset 0 1px 2px #4b392522;
+}
+
+.checks input[type="radio"]:checked {
+  background: radial-gradient(circle, #354d3d 0 36%, #dfcfaa 39% 100%);
+}
+
+.checks input[type="radio"]:not(:disabled):hover { border-color: #c19a56; }
+.checks input[type="radio"]:focus-visible { outline: 2px solid #c19a56; outline-offset: 2px; }
+.checks input[type="radio"]:disabled { opacity: .5; cursor: default; }
 .checks input[type="checkbox"]:is(:enabled, :disabled) {
   appearance: none;
   box-sizing: border-box;
@@ -32,6 +55,8 @@
 .checks input[type="checkbox"]:disabled { opacity: .5; cursor: default; }
 
 @media (forced-colors: active) {
+  .checks input[type="radio"]:is(:enabled, :disabled),
   .checks input[type="checkbox"]:is(:enabled, :disabled) { appearance: auto; background: Canvas; border-color: ButtonText; box-shadow: none; }
+  .checks input[type="radio"]:focus-visible,
   .checks input[type="checkbox"]:focus-visible { outline-color: Highlight; }
 }

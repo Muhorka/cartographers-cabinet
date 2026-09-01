@@ -1,4 +1,4 @@
-.notice { composes: buttons from "../components/book-controls.module.css"; composes: headings from "../components/book-typography.module.css"; display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:8px 12px; border:1px solid #a57c3d55; background:#1d2b23; color:#e5d2a2; font-family:Georgia,serif; font-size:.72rem; }
+.notice { composes: buttons from "../components/book-controls.module.css"; composes: headings from "../components/book-typography.module.css"; display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:7px 0; padding:8px 12px; border:1px solid #a57c3d55; background:#1d2b23; color:#e5d2a2; font-family:Georgia,serif; font-size:.72rem; }
 .notice>span { flex:1; min-width:120px; }
 .notice details { max-width:100%; }
 .notice ul { padding-left:18px; }

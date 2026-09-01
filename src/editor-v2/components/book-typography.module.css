@@ -22,6 +22,16 @@
   overflow-wrap: anywhere;
 }
 
+/* Longer explanations that introduce a whole book section. */
+.sectionDescription {
+  color: #b5a77f;
+  font: italic .66rem/1.35 Georgia, "Times New Roman", serif;
+  hyphens: auto;
+  overflow-wrap: anywhere;
+  text-align: justify;
+  text-justify: inter-word;
+}
+
 .label {
   color: #b89b67;
   font: normal .68rem/1.35 Georgia, "Times New Roman", serif;

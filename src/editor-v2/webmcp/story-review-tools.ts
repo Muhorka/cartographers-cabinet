@@ -22,7 +22,7 @@ export function createStoryReviewTools(bridge: EditorAgentBridge & EditorContext
   const service = createSceneCheckService(suppliedRoutes ?? createStoryRouteCalculationService());
   return [{
     name: "check_story_scene", title: "Check the scene's author intentions",
-    description: "Read bounded author-intention checks. Default inspected selection; expectedContextVersion binds implicit selection, or provide canonical refs; scope=all checks up to limit. Use an actor and explicit query/saved route; saved queries recalculate in the current scene. Return facts, conditions, sources, truncation, failures. must-pass/avoid-zone cover only the calculated route. No status, geometry, or story mutation.",
+    description: "Read bounded intention checks; no status/geometry/story changes. Default selection requires expectedContextVersion; alternatively use canonical refs. scope=all obeys limit. Supply actor and query/saved route, recalculated in current scene. Returns facts, conditions, sources, truncation, failures. must-pass/avoid-zone cover only the calculated route.",
     inputSchema: z.toJSONSchema(schema, { io: "input" }), annotations: { readOnlyHint: true },
     execute: async (raw) => {
       const input = schema.parse(raw);

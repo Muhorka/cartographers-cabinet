@@ -17,8 +17,9 @@
 .list form,
 .list label { display: grid; min-width: 0; gap: .3rem; }
 .list label { color: #bbaa83; font-size: .66rem; }
-.list p { margin: .2rem 0; color: #b5a77f; font-size: .66rem; font-style: italic; line-height: 1.35; overflow-wrap: anywhere; }
-.description { max-width: 42ch; }
+.list p { margin: .2rem 0; overflow-wrap: anywhere; }
+.list form p { color: #b5a77f; font-size: .66rem; font-style: italic; line-height: 1.35; }
+.description { composes: sectionDescription from "../../components/book-typography.module.css"; max-width: 42ch; }
 .actions { display: flex; flex-wrap: wrap; gap: .35rem; }
 .primary { composes: primary from "../../components/book-controls.module.css"; }
 @media (max-width: 680px) { .list { padding-inline: 9px; } }

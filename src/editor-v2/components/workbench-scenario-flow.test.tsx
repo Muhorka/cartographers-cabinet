@@ -64,7 +64,7 @@ describe("scenario workspace through the real editor session", () => {
     click("Cofnij");
     expect(state().story.scenarios[0].steps).toHaveLength(1);
     expect(editor()).not.toBeNull(); expect(editor().textContent).toContain("Nocny pokój");
-    click("Wszystko neutralne");
+    click("Przywróć widok podstawowy");
     expect(state().story.scenarios[0].patches[0].description).toBe("Nocny pokój");
   });
 

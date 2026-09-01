@@ -60,8 +60,8 @@ describe("route evidence and point requests in the real workbench", () => {
 
   it("withdraws review evidence for actor and scenario changes without restoring a selected saved route", async () => {
     await openReview();
-    select("Postać lub grupa", "anna", review()); expect(routePath()).toBeNull();
-    select("Postać lub grupa", "", review()); expect(routePath()).toBeNull();
+    select("Postać, frakcja lub grupa osób", "anna", review()); expect(routePath()).toBeNull();
+    select("Postać, frakcja lub grupa osób", "", review()); expect(routePath()).toBeNull();
     await showReviewRoute();
     select("Scenariusz", "night"); expect(routePath()).toBeNull();
     select("Scenariusz", ""); expect(routePath()).toBeNull();

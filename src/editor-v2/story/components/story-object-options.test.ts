@@ -73,4 +73,12 @@ it("filters technical wall segments only for membership selectors and preserves 
   expect(storyObjectOptions(story, live, "zone-membership").map(({ ref }) => ref)).toEqual([door]);
   expect(storyObjectOptions(story, live, "group-membership").map(({ ref }) => ref)).toEqual([door]);
   expect(storyObjectOptions(story, live, "route").map(({ ref }) => ref)).toEqual([wall, door]);
+  expect(storyObjectOptions(story, live, "narrative").map(({ ref }) => ref)).toEqual([door]);
+});
+
+it("keeps narrative objects while excluding only construction wall segments", () => {
+  const refs = (["place", "room", "opening", "surface", "element", "transition", "wall"] as const).map((kind) => ({ kind, id: kind }));
+  const story = { ...emptyStoryData(), objects: refs.map((ref) => ({ ref, metadata: {} })) };
+  const options = storyObjectOptions(story, refs.map((ref) => ({ ref, name: ref.kind })), "narrative");
+  expect(options.map(({ ref }) => ref.kind)).toEqual(["place", "room", "opening", "surface", "element", "transition"]);
 });

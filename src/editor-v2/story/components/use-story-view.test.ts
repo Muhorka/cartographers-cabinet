@@ -91,6 +91,13 @@ describe("story view typed collection adapter", () => {
     expect(next.relations[0]).toMatchObject({ from, to, kind: "visits", source: "map note", label: "Night watch" });
   });
 
+  it("round-trips a relation description", () => {
+    const story = { ...emptyStoryData(), relations: [{ id: "r", from: { entryId: "keeper" }, to: { entryId: "gate" }, kind: "visits" as const, label: "Visit", description: "Only at dusk." }] };
+    const item = collectionItems(story, "relations")[0]!;
+    const next = replaceStoryCollection(story, "relations", [{ ...item, description: "Only after the bell." }]);
+    expect(next.relations[0]?.description).toBe("Only after the bell.");
+  });
+
   it("round-trips every intention field using canonical object references", () => {
     const subject = { kind: "place" as const, id: "courtyard" };
     const target = { kind: "room" as const, id: "hall", scopeId: "east" };

@@ -4,7 +4,7 @@ import type { DrawingElement } from "../model/project-model";
 import { MAX_PROJECT_FILE_BYTES, PROJECT_FILE_FORMAT, PROJECT_FILE_VERSION, cloneImportedProject, parseProjectFile, projectExportFileName, renameProject, serializeProjectFile } from "./project-file";
 
 describe("editor v2 project files", () => {
-  const project = createStarterProject("project-original", "Dolina Rzeki", "pl");
+  const project = createStarterProject("project-original", "Dolina Rueve", "pl");
 
   it("exports a versioned application-specific envelope", () => {
     const exportedAt = "2026-08-29T20:00:00.000Z";
@@ -48,7 +48,7 @@ describe("editor v2 project files", () => {
 
   it("imports only under a fresh id without mutating the source", () => {
     const copy = cloneImportedProject(project, "project-imported", "2026-08-29T21:00:00.000Z");
-    expect(copy).toMatchObject({ id: "project-imported", name: "Dolina Rzeki", updatedAt: "2026-08-29T21:00:00.000Z" });
+    expect(copy).toMatchObject({ id: "project-imported", name: "Dolina Rueve", updatedAt: "2026-08-29T21:00:00.000Z" });
     expect(project.id).toBe("project-original");
     expect(() => cloneImportedProject(project, project.id)).toThrow(/fresh identifier/);
   });
@@ -56,7 +56,7 @@ describe("editor v2 project files", () => {
   it("renames a clone and refuses an empty name", () => {
     const renamed = renameProject(project, "  Nowa nazwa  ", "2026-08-29T22:00:00.000Z");
     expect(renamed).toMatchObject({ id: project.id, name: "Nowa nazwa", updatedAt: "2026-08-29T22:00:00.000Z" });
-    expect(project.name).toBe("Dolina Rzeki");
+    expect(project.name).toBe("Dolina Rueve");
     expect(() => renameProject(project, "   ")).toThrow(/cannot be empty/);
   });
 

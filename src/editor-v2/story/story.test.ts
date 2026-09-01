@@ -115,6 +115,11 @@ describe("story domain", () => {
     expect(projectStoryAccess(project, { kind: "place", id: "child" }, "bob", { scenarioId: "s" }).allowed).toBe(false);
   });
 
+  it("inherits an explicit nobody permission through native parent places", () => {
+    const project = { ...emptyProject("p", "P"), places: [{ id: "world", name: "World", kind: "world" as const, access: [], transform: { x: 0, y: 0, rotation: 0 }, tags: [], properties: {} }, { id: "child", name: "Child", parentId: "world", kind: "custom" as const, access: [], transform: { x: 0, y: 0, rotation: 0 }, tags: [], properties: {} }], story: { ...emptyStoryData(), world: [{ id: "alice", kind: "character" as const, name: "Alice", tags: [], properties: {} }], objects: [{ ref: { kind: "place" as const, id: "world" }, metadata: { access: { allow: [], deny: [], permission: "nobody" as const, physicalState: "open" as const, lock: "none" as const, keyIds: [], guardIds: [], secretKnowledge: [] } } }] } as StoryData };
+    expect(projectStoryAccess(project, { kind: "place", id: "child" }, "alice")).toMatchObject({ allowed: false, reason: "nobody" });
+  });
+
   it("applies parent scenario metadata to descendants and lets the nearest parent win scalars", () => {
     const project = { ...emptyProject("p", "P"), places: [
       { id: "world", name: "World", kind: "world" as const, transform: { x: 0, y: 0, rotation: 0 }, tags: [], access: [], properties: {} },

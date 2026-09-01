@@ -4,7 +4,7 @@ import { createProjectCheckpoint, restoreCheckpointSnapshot } from "./project-ch
 
 describe("project checkpoints", () => {
   it("keeps an immutable project snapshot that can be restored later", () => {
-    const project = createStarterProject("project", "Dolina Rzeki", "pl");
+    const project = createStarterProject("project", "Dolina Rueve", "pl");
     const checkpoint = createProjectCheckpoint(project, { id: "checkpoint", name: "Przed przebudową", createdAt: "2026-08-29T20:00:00.000Z" });
     project.places[0]!.name = "Changed outside snapshot";
     const restored = restoreCheckpointSnapshot(checkpoint, "2026-08-29T22:00:00.000Z");
@@ -13,7 +13,7 @@ describe("project checkpoints", () => {
   });
 
   it("rejects empty names and a snapshot attached to another project", () => {
-    const project = createStarterProject("project", "Dolina Rzeki", "pl");
+    const project = createStarterProject("project", "Dolina Rueve", "pl");
     expect(() => createProjectCheckpoint(project, { id: "checkpoint", name: "  " })).toThrow(/name/i);
     const checkpoint = createProjectCheckpoint(project, { id: "checkpoint", name: "Version" });
     expect(() => restoreCheckpointSnapshot({ ...checkpoint, projectId: "another-project" })).toThrow(/does not belong/i);

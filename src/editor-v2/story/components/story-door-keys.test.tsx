@@ -28,17 +28,19 @@ function render(project: EditorProject, props: Partial<React.ComponentProps<type
 }
 
 describe("StoryDoorKeys", () => {
-  it("does not create a key until a named holder is selected", () => {
+  it("can create a key without a holder, then assign one later", () => {
     const project = fixture(); const onAssign = vi.fn(); const { host, root } = render(project, { onAssign });
     expect(host.textContent).toContain("Kto ma klucz do tych drzwi?");
     expect(host.textContent).toContain("Anna");
     const save = [...host.querySelectorAll("button")].find((button) => button.textContent === "Utwórz klucz i zapisz") as HTMLButtonElement;
-    expect(save.disabled).toBe(true);
+    expect(save.disabled).toBe(false);
+    act(() => { save.click(); });
+    expect(onAssign).toHaveBeenCalledWith({ holderIds: [], keyName: "Klucz: Drzwi 1" });
     const anna = [...host.querySelectorAll("label")].find((label) => label.textContent?.includes("Anna"))?.querySelector("input") as HTMLInputElement;
     act(() => { anna.click(); });
     expect(save.disabled).toBe(false);
     act(() => { save.click(); });
-    expect(onAssign).toHaveBeenCalledWith({ holderIds: ["anna"], keyName: "Klucz: Drzwi 1" });
+    expect(onAssign).toHaveBeenLastCalledWith({ holderIds: ["anna"], keyName: "Klucz: Drzwi 1" });
     act(() => root.unmount()); host.remove();
   });
 

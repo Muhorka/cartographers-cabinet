@@ -66,6 +66,13 @@ describe("editor v2 inspector", () => {
     expect(html).toContain(workbenchCopy.pl.hierarchy.addLevelBelow ?? "Dodaj piętro poniżej");
   });
 
+  it("keeps working checkpoints above the catalogue and informational marginalia at the very bottom", () => {
+    const project = createStarterProject("project", "Project", "pl");
+    const html = renderToStaticMarkup(<InspectorPanel project={project} activePlaceId={project.places[0].id} copy={workbenchCopy.pl} footer={<div>CHECKPOINTS</div>} bottom={<div>MARGINALIA</div>} {...actions}/>);
+    const checkpoints = html.indexOf("CHECKPOINTS"); const catalogue = html.indexOf(workbenchCopy.pl.objectList.title); const marginalia = html.indexOf("MARGINALIA");
+    expect(checkpoints).toBeGreaterThan(-1); expect(catalogue).toBeGreaterThan(checkpoints); expect(marginalia).toBeGreaterThan(catalogue);
+  });
+
   it("autosaves note text while typing without remounting the textarea", () => {
     const base = createStarterProject("project", "Project", "pl"); const level = base.places.find(({ kind }) => kind === "level")!;
     const project = { ...base, elements: [{ id: "note", belongsToId: level.id, name: "Notatka", layerId: "sketch" as const, subjectId: "sketch.note", geometry: { kind: "note" as const, at: { x: 1, y: 2 }, text: "Stary tekst", width: 20, height: 8 }, visible: true, locked: false, tags: [], access: [], properties: {} }] };

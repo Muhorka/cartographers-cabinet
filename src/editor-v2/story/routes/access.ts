@@ -18,10 +18,11 @@ export function storyAccessDecision(project: EditorProject, entity: { kind: keyo
   const keys = new Set<string>(); const knowledge = new Set<string>(); const identities = context.actorId ? storyActorGroups(project.story, context.actorId) : new Set<string>();
   for (const membership of project.story.memberships) if (identities.has(membership.subjectId)) { if (membership.kind === "holds-key") keys.add(membership.groupId); if (membership.kind === "knows") knowledge.add(membership.groupId); }
   const hasKey = access.keyIds.some((id) => keys.has(id));
+  if (access.lock === "sealed") return { allowed: false, unknown: true, reason: `${entity.id} is sealed.` };
   if (access.lock !== "none" && !hasKey) return { allowed: false, unknown: true, reason: `A key is required for ${entity.id}.` };
   if (!result.physicalOpen || access.physicalState === "closed") {
-    if (access.lock !== "none" && hasKey) conditions.push(`Unlock and open ${entity.id}.`);
-    else return { allowed: false, unknown: true, reason: `${entity.id} is physically closed.` };
+    if (access.lock === "locked" && hasKey) conditions.push(`Unlock and open ${entity.id}.`);
+    else conditions.push(`Open ${entity.id}.`);
   }
   if (access.guardIds.length) conditions.push(`A guard rule for ${entity.id} must be satisfied.`);
   if (access.secretKnowledge.length && !access.secretKnowledge.some((id) => knowledge.has(id))) return { allowed: false, unknown: true, reason: `Secret knowledge for ${entity.id} is missing.` };
