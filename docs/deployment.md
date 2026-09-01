@@ -10,7 +10,7 @@ Use the Git integration with this clean public repository as the build root. The
 | --- | --- |
 | Framework preset | Next.js (Static HTML Export) |
 | Production branch | `main` |
-| Build command | `npm exec --yes --package=pnpm@11.7.0 -- pnpm install --frozen-lockfile && npm exec --yes --package=pnpm@11.7.0 -- pnpm build` |
+| Build command | `pnpm build` |
 | Build output directory | `out` |
 | Environment variable | `NEXT_TELEMETRY_DISABLED=1` |
 
