@@ -21,7 +21,7 @@ function setNative(element: HTMLInputElement, value: string) { act(() => { const
 beforeEach(async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const project = createStarterProject("p", "Inspector focus", "pl");
-  fixture.project = { ...project, places: project.places.map((place) => place.kind === "building" ? { ...place, name: "Dwór Rueve" } : place.kind === "level" ? { ...place, name: "Parter" } : place) };
+  fixture.project = { ...project, places: project.places.map((place) => place.kind === "building" ? { ...place, name: "Dom testowy" } : place.kind === "level" ? { ...place, name: "Parter" } : place) };
   fixture.sheet = undefined; host = document.createElement("div"); document.body.append(host); root = createRoot(host);
   await act(async () => root.render(<EditorWorkbench/>));
 });
