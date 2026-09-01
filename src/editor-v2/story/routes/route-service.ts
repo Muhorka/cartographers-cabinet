@@ -11,7 +11,13 @@ export type RouteCalculationOutcome = {
 };
 
 type WorkerMessage = { type: "result"; attemptId: number; result: StoryRouteResult } | { type: "error"; attemptId: number; error: string };
-type RouteWorker = { postMessage(message: unknown): void; terminate(): void; onmessage: ((event: { data: WorkerMessage }) => void) | null; onerror: ((event: unknown) => void) | null };
+type RouteWorker = {
+  postMessage(message: unknown): void;
+  terminate(): void;
+  onmessage: ((event: { data: WorkerMessage }) => void) | null;
+  onerror: ((event: unknown) => void) | null;
+  onmessageerror?: ((event: unknown) => void) | null;
+};
 type RouteWorkerFactory = () => RouteWorker;
 
 export type StoryRouteCalculationService = {
@@ -23,6 +29,14 @@ export type StoryRouteCalculationService = {
 export type RouteServiceOptions = { timeoutMs?: number; workerFactory?: RouteWorkerFactory };
 
 function message(error: unknown) { return error instanceof Error ? error.message : String(error); }
+
+function workerFailureMessage(event: unknown) {
+  if (!event || typeof event !== "object") return "Route worker failed.";
+  const eventMessage = "message" in event && typeof event.message === "string" ? event.message.trim() : "";
+  const nestedError = "error" in event && event.error instanceof Error ? event.error.message.trim() : "";
+  const detail = eventMessage || nestedError;
+  return detail && detail !== "Script error." ? `Route worker failed: ${detail}` : "Route worker failed.";
+}
 
 function browserWorker(): RouteWorker {
   if (typeof Worker === "undefined") throw new Error("Route worker is unavailable in this browser.");
@@ -37,7 +51,9 @@ export function createStoryRouteCalculationService(options: RouteServiceOptions 
   let attemptId = 0; let disposed = false;
   const finish = (status: RouteCalculationStatus, current: typeof active, result?: StoryRouteResult, error?: string) => {
     if (!current || active !== current) return;
-    clearTimeout(current.timer); active = undefined; current.worker.onmessage = null; current.worker.onerror = null; current.worker.terminate();
+    clearTimeout(current.timer); active = undefined; current.worker.onmessage = null; current.worker.onerror = null;
+    if ("onmessageerror" in current.worker) current.worker.onmessageerror = null;
+    current.worker.terminate();
     current.resolve({ status, ...(result ? { result } : {}), ...(error ? { error } : {}), attemptId: current.attemptId });
   };
   return {
@@ -59,7 +75,8 @@ export function createStoryRouteCalculationService(options: RouteServiceOptions 
           else if (data.type === "error" && typeof data.error === "string") finish("error", current, undefined, data.error);
           else finish("error", current, undefined, "Route worker returned an invalid response.");
         };
-        worker.onerror = () => finish("error", current, undefined, "Route worker failed.");
+        worker.onerror = (event) => finish("error", current, undefined, workerFailureMessage(event));
+        worker.onmessageerror = () => finish("error", current, undefined, "Route worker could not read the calculation data.");
         try { worker.postMessage({ type: "calculate", attemptId: currentAttempt, project, query }); }
         catch (error) { finish("error", current, undefined, message(error)); }
       });

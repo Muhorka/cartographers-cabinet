@@ -7,9 +7,23 @@ const project = { id: "p" } as EditorProject;
 const query = { from: { placeId: "a", point: { x: 0, y: 0 } }, to: { placeId: "a", point: { x: 1, y: 1 } } };
 const result = { status: "unreachable", revision: 0, sourceRevision: "r", routes: [], missingFacts: [], reasons: [] } as StoryRouteResult;
 
+function fakeWorker() {
+  return {
+    postMessage: vi.fn<(message: unknown) => void>(),
+    terminate: vi.fn<() => void>(),
+    onmessage: null as ((event: { data: unknown }) => void) | null,
+    onerror: null as ((event: unknown) => void) | null,
+    onmessageerror: null as ((event: unknown) => void) | null,
+  };
+}
+
+type FakeRouteWorker = ReturnType<typeof fakeWorker>;
+
 function fakeWorkers() {
-  const workers: Array<{ postMessage: ReturnType<typeof vi.fn>; terminate: ReturnType<typeof vi.fn>; onmessage: ((event: { data: unknown }) => void) | null; onerror: ((event: unknown) => void) | null }> = [];
-  const options: RouteServiceOptions = { timeoutMs: 20, workerFactory: () => { const worker = { postMessage: vi.fn(), terminate: vi.fn(), onmessage: null, onerror: null }; workers.push(worker); return worker; } };
+  const workers: FakeRouteWorker[] = [];
+  const options: RouteServiceOptions = { timeoutMs: 20, workerFactory: () => {
+    const worker = fakeWorker(); workers.push(worker); return worker;
+  } };
   return { workers, options };
 }
 
@@ -39,17 +53,25 @@ describe("story route calculation service", () => {
 
   it("reports Worker execution and message delivery failures without leaving it active", async () => {
     const failedWorker = fakeWorkers(); const failedService = createStoryRouteCalculationService(failedWorker.options);
-    const failed = failedService.calculate(project, query); failedWorker.workers[0]!.onerror?.(new Error("boom"));
-    expect(await failed).toMatchObject({ status: "error", error: "Route worker failed." });
+    const failed = failedService.calculate(project, query); failedWorker.workers[0]!.onerror?.({ message: "chunk failed" });
+    expect(await failed).toMatchObject({ status: "error", error: "Route worker failed: chunk failed" });
     expect(failedWorker.workers[0]!.terminate).toHaveBeenCalledOnce();
 
     const rejectedMessage = fakeWorkers();
     const rejectedService = createStoryRouteCalculationService({ ...rejectedMessage.options, workerFactory: () => {
-      const worker = { postMessage: vi.fn(() => { throw new Error("clone failed"); }), terminate: vi.fn(), onmessage: null, onerror: null };
+      const worker = { postMessage: vi.fn(() => { throw new Error("clone failed"); }), terminate: vi.fn(), onmessage: null, onerror: null, onmessageerror: null };
       rejectedMessage.workers.push(worker); return worker;
     } });
     expect(await rejectedService.calculate(project, query)).toMatchObject({ status: "error", error: "clone failed" });
     expect(rejectedMessage.workers[0]!.terminate).toHaveBeenCalledOnce();
+  });
+
+  it("reports a message decoding failure separately", async () => {
+    const fake = fakeWorkers(); const service = createStoryRouteCalculationService(fake.options);
+    const pending = service.calculate(project, query);
+    fake.workers[0]!.onmessageerror?.({});
+    expect(await pending).toMatchObject({ status: "error", error: "Route worker could not read the calculation data." });
+    expect(fake.workers[0]!.terminate).toHaveBeenCalledOnce();
   });
 
   it("does not create another Worker after disposal", async () => {
