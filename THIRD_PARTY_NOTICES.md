@@ -86,7 +86,7 @@ Inventory date: 2026-09-01. This notice is based on the locked production depend
 
 `undici-types@8.3.0` — [Undici](https://github.com/nodejs/undici)
 
-`zod@4.4.3` — [Zod](https://github.com/colinhacks/zod)
+`zod@4.5.4` — [Zod](https://github.com/colinhacks/zod)
 
 ## Apache-2.0
 
