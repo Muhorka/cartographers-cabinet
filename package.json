@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
+    "postbuild": "node scripts/check-route-worker-build.mjs",
     "start": "npm exec --yes --package=serve@14.2.6 -- serve out --listen tcp://127.0.0.1:3000",
     "lint": "eslint .",
     "check:files": "node scripts/check-file-size.mjs",
