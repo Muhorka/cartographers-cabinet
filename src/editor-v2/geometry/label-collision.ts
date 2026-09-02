@@ -1,37 +1,74 @@
 import type { AffineMatrix } from "./affine-transform";
+import { applyAffinePoint } from "./affine-transform";
 import { labelObstacleForLayout, type LabelObstacle, type RoomLabelLayout } from "./room-label-layout";
+import type { RegionLabelLayout } from "./region-label-layout";
 
 const identity: AffineMatrix = [1, 0, 0, 1, 0, 0];
 
-/**
- * Render-only label obstacles. Entries are kept in sheet coordinates so labels
- * belonging to different place owners can still avoid one another.
- */
-export type LabelCollisionRegistry = {
-  obstaclesFor(matrix?: AffineMatrix, local?: readonly LabelObstacle[]): LabelObstacle[];
-  register(layout: RoomLabelLayout | undefined, matrix?: AffineMatrix): void;
+export type PlannedLabelLayout = RoomLabelLayout | RegionLabelLayout;
+
+export type LabelCollisionEntry = {
+  key: string;
+  matrix?: AffineMatrix;
+  bounds?: LabelObstacle;
+  localObstacles?: readonly LabelObstacle[];
+  layout(obstacles: readonly LabelObstacle[]): PlannedLabelLayout | undefined;
 };
 
-export function createLabelCollisionRegistry(): LabelCollisionRegistry {
-  const sheetObstacles: LabelObstacle[] = [];
-  const frameCache = new Map<string, LabelObstacle[]>();
-  return {
-    obstaclesFor(matrix = identity, local = []) {
-      const key = matrix.join(",");
-      const transformed = frameCache.get(key) ?? [];
-      for (let index = transformed.length; index < sheetObstacles.length; index += 1) transformed.push(transformObstacle(invert(matrix), sheetObstacles[index]!));
-      frameCache.set(key, transformed);
-      return local.length ? [...local, ...transformed] : transformed;
-    },
-    register(layout, matrix = identity) {
-      if (!layout) return;
-      sheetObstacles.push(transformObstacle(matrix, labelObstacleForLayout(layout)));
-    },
-  };
+export type LabelLayoutPlan = {
+  get(key: string): PlannedLabelLayout | undefined;
+};
+
+/** Pure two-phase layout: all labels are planned before any child renders. */
+export function createLabelLayoutPlan(entries: readonly LabelCollisionEntry[]): LabelLayoutPlan {
+  const layouts = new Map<string, PlannedLabelLayout>();
+  const sheetObstacles: Array<{ obstacle: LabelObstacle; bounds: Bounds }> = [];
+  const buckets = new Map<string, number[]>();
+  for (const entry of entries) {
+    const matrix = entry.matrix ?? identity;
+    const inverse = invert(matrix);
+    const targetBounds = entry.bounds ? boundsFor(transformObstacle(matrix, entry.bounds)) : undefined;
+    const candidateIndexes = targetBounds ? bucketIndexes(buckets, targetBounds) : sheetObstacles.map((_, index) => index);
+    const dynamic = candidateIndexes
+      .filter((index) => !targetBounds || intersects(sheetObstacles[index]!.bounds, targetBounds))
+      .map((index) => transformObstacle(inverse, sheetObstacles[index]!.obstacle));
+    const layout = entry.layout([...(entry.localObstacles ?? []), ...dynamic]);
+    if (!layout) continue;
+    layouts.set(entry.key, layout);
+    if (isInsideLayout(layout)) {
+      const obstacle = transformObstacle(matrix, labelObstacleForLayout(layout));
+      const index = sheetObstacles.push({ obstacle, bounds: boundsFor(obstacle) }) - 1;
+      for (const bucket of bucketsFor(sheetObstacles[index]!.bounds)) buckets.set(bucket, [...(buckets.get(bucket) ?? []), index]);
+    }
+  }
+  return { get: (key) => layouts.get(key) };
+}
+
+function isInsideLayout(layout: PlannedLabelLayout): layout is RoomLabelLayout | (RegionLabelLayout & { kind: "inside" }) {
+  return !("kind" in layout) || layout.kind === "inside";
 }
 
 function transformObstacle(matrix: AffineMatrix, obstacle: LabelObstacle): LabelObstacle {
-  return { outer: obstacle.outer.map((point) => ({ x: matrix[0] * point.x + matrix[2] * point.y + matrix[4], y: matrix[1] * point.x + matrix[3] * point.y + matrix[5] })), holes: obstacle.holes?.map((ring) => ring.map((point) => ({ x: matrix[0] * point.x + matrix[2] * point.y + matrix[4], y: matrix[1] * point.x + matrix[3] * point.y + matrix[5] }))) };
+  return { outer: obstacle.outer.map((point) => applyAffinePoint(matrix, point)), holes: obstacle.holes?.map((ring) => ring.map((point) => applyAffinePoint(matrix, point))) };
+}
+
+type Bounds = { left: number; right: number; top: number; bottom: number };
+function boundsFor(obstacle: LabelObstacle): Bounds {
+  const points = obstacle.outer;
+  return { left: Math.min(...points.map(({ x }) => x)), right: Math.max(...points.map(({ x }) => x)), top: Math.min(...points.map(({ y }) => y)), bottom: Math.max(...points.map(({ y }) => y)) };
+}
+function intersects(first: Bounds, second: Bounds) { return first.left <= second.right && first.right >= second.left && first.top <= second.bottom && first.bottom >= second.top; }
+
+const bucketSize = 128;
+function bucketsFor(bounds: Bounds) {
+  const keys: string[] = [];
+  for (let x = Math.floor(bounds.left / bucketSize); x <= Math.floor(bounds.right / bucketSize); x += 1) for (let y = Math.floor(bounds.top / bucketSize); y <= Math.floor(bounds.bottom / bucketSize); y += 1) keys.push(`${x}:${y}`);
+  return keys;
+}
+function bucketIndexes(buckets: ReadonlyMap<string, readonly number[]>, bounds: Bounds) {
+  const indexes = new Set<number>();
+  for (const bucket of bucketsFor(bounds)) for (const index of buckets.get(bucket) ?? []) indexes.add(index);
+  return [...indexes].toSorted((first, second) => first - second);
 }
 
 function invert([a, b, c, d, e, f]: AffineMatrix): AffineMatrix {
