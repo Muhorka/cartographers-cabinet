@@ -7,6 +7,8 @@ import { parseProjectFile } from "../persistence/project-file";
 import { storyDataSchema } from "../story/schema";
 import { EditorSession } from "../state/editor-session";
 import { useWorkbenchStory } from "./use-workbench-story";
+import { sheetObjectGroups } from "./sheet-object-catalogue";
+import { workbenchCopy } from "../i18n/workbench-copy";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -61,4 +63,28 @@ describe("large example Story read regression", () => {
       host.remove();
     }
   }, 15_000);
+
+  it("keeps authored structural names in the Ground Floor catalogue", () => {
+    const project = parseProjectFile(source).project;
+    const groundFloor = project.places.find(({ name }) => name === "Ground Floor — State Rooms");
+    expect(groundFloor).toBeDefined();
+    const construction = project.constructions.find(({ id }) => id === groundFloor?.constructionId);
+    expect(construction).toBeDefined();
+    const authoredLabels = new Map(project.story.objects
+      .filter(({ ref }) => ref.scopeId === construction?.id && (ref.kind === "opening" || ref.kind === "transition"))
+      .map(({ ref, metadata }) => [ref.id, metadata.narrativeLabel]));
+    const doors = construction?.openings.filter(({ kind }) => kind === "door") ?? [];
+    const transitions = construction?.transitions ?? [];
+    expect(doors).toHaveLength(29);
+    expect(transitions).toHaveLength(2);
+    expect(doors.every(({ id }) => authoredLabels.get(id))).toBe(true);
+    expect(transitions.every(({ id }) => authoredLabels.get(id))).toBe(true);
+
+    const features = sheetObjectGroups(project, groundFloor!.id, workbenchCopy.en.objectList).find(({ id }) => id === "features")?.items ?? [];
+    const labelsById = new Map(features.map(({ selection, label }) => [selection.kind === "opening" || selection.kind === "transition" ? selection.id : "", label]));
+    for (const feature of [...doors, ...transitions]) {
+      expect(labelsById.get(feature.id)).toBe(authoredLabels.get(feature.id));
+      expect(labelsById.get(feature.id)).not.toMatch(/^(Door|Stairs) \d+$/);
+    }
+  });
 });

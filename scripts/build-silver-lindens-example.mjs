@@ -258,6 +258,19 @@ const archive = placeRef("Archive and Map Room");
 const ladyBedroom = placeRef("Lady's Bedroom");
 const gentlemanBedroom = placeRef("Gentleman's Bedroom");
 
+// Structural features do not carry a native name in the geometry model. Keep
+// the demo's authored Story labels next to the fixture's known door order so
+// the drawing catalogue can show the same names as the Story workbench.
+const groundFloorDoorNarrativeLabels = [
+  "Music Salon threshold", "Library threshold", "Ballroom and Garden Salon threshold", "State Dining Room threshold", "Tea Salon threshold",
+  "Estate Steward's Office threshold", "Footmen's Room threshold", "Grand Staircase threshold", "Columned Vestibule threshold", "Butler's Pantry threshold",
+  "Service Staircase threshold", "Pantry threshold", "Steward's Office to Guest Cloakroom threshold", "Footmen's Room to Guest Washrooms threshold", "Stair Hall to Grand Staircase threshold",
+  "Kitchen to Butler's Pantry threshold", "Scullery to Service Staircase threshold", "Pantry to Deliveries threshold", "Vestibule to Grand Staircase threshold", "Service Staircase to Butler's Pantry threshold",
+  "Library to Music Salon threshold", "Library to Ballroom threshold", "Ballroom to State Dining Room threshold", "Tea Salon to State Dining Room threshold", "Columned Vestibule entrance",
+  "Ballroom garden entrance", "Connecting Gallery west entrance", "Connecting Gallery east entrance", "Deliveries service entrance",
+];
+const groundFloorTransitionNarrativeLabels = ["Service Staircase", "Grand Staircase"];
+
 const objectMap = new Map();
 const annotate = (ref, metadata) => objectMap.set(`${ref.kind}:${ref.scopeId ?? ""}:${ref.id}`, { ref, metadata });
 annotate(estate, { owners: [ids.helena], tags: ["estate", "example"], properties: { "demo:property:role": "estate plan" } });
@@ -280,6 +293,21 @@ annotate(gentlemanBedroom, { owners: [ids.helena], access: access({ allow: [ids.
 annotate(kitchen, { access: access({ allow: [ids.domestic, ids.household], keyIds: [ids.serviceKey] }), tags: ["service", "food"] });
 annotate(stewardOffice, { owners: [ids.edmund], access: access({ allow: [ids.edmund, ids.household], keyIds: [ids.serviceKey] }), tags: ["administration"] });
 
+const groundFloorConstructionId = project.places.find(({ id }) => id === groundFloor.id)?.constructionId;
+const groundFloorConstruction = project.constructions.find(({ id }) => id === groundFloorConstructionId);
+if (!groundFloorConstruction) throw new Error("Ground Floor has no construction document.");
+const groundFloorDoors = groundFloorConstruction.openings.filter(({ kind }) => kind === "door");
+if (groundFloorDoors.length !== groundFloorDoorNarrativeLabels.length) {
+  throw new Error(`Expected ${groundFloorDoorNarrativeLabels.length} Ground Floor doors, found ${groundFloorDoors.length}.`);
+}
+groundFloorDoors.forEach((opening, index) => {
+  annotate({ kind: "opening", id: opening.id, scopeId: groundFloorConstruction.id }, { narrativeLabel: groundFloorDoorNarrativeLabels[index] });
+});
+groundFloorConstruction.transitions.forEach((transition, index) => {
+  const narrativeLabel = groundFloorTransitionNarrativeLabels[index];
+  if (narrativeLabel) annotate({ kind: "transition", id: transition.id, scopeId: groundFloorConstruction.id }, { narrativeLabel });
+});
+
 const publicRooms = ["Ballroom and Garden Salon", "Music Salon", "Tea Salon", "State Dining Room", "Library", "Columned Vestibule", "Guest Cloakroom", "Guest Washrooms"].map((name) => placeRef(name));
 const familyRooms = ["Lady's Bedroom", "Gentleman's Bedroom", "Private Salon", "Private Library", "Private Study", "Children's Sitting Room", "Children's Bedroom", "Governess's Room"].map((name) => placeRef(name));
 const serviceRooms = ["Palace Kitchen", "Scullery", "Pantry", "Butler's Pantry and Table Service", "Deliveries", "Estate Steward's Office", "Footmen's Room", "Linen Room", "Butler's Room", "Maids' Room", "Small Laundry", "General Store"].map((name) => placeRef(name));
@@ -288,7 +316,7 @@ const serviceStairs = roomRefs("Service Staircase");
 // Calculated by the current route planner against the translated, annotated fixture.
 const gatehouseLevelId = "9110c42a-a042-41f3-98a8-72e7e2cb421b";
 const gatehouseOpeningId = "6bc5bd8e-a3dd-47e8-b3b7-dfba8a34f1f5";
-const gatehouseRevision = "fb6f613f-f3cd-4c4c-9ee9-ac6928007762:6e2aef1187a2642f:298141";
+const gatehouseRevision = "fb6f613f-f3cd-4c4c-9ee9-ac6928007762:2ed35b6a107fd53a:303817";
 const gatehouseQuery = { from: { placeId: gatehouseLevelId, levelId: gatehouseLevelId, point: { x: -3.5, y: 0 } }, to: { placeId: gatehouseLevelId, levelId: gatehouseLevelId, point: { x: 3.5, y: 0 } }, profile: "foot", actorId: ids.edmund };
 const gatehouseSegments = [
   { placeId: gatehouseLevelId, levelId: gatehouseLevelId, kind: "indoor", points: [{ x: -3.5, y: 0 }, { x: -0.39999999999999997, y: 0 }], faceId: "room-face:1klp1fw" },

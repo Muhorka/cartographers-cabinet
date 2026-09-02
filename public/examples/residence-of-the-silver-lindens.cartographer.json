@@ -25943,6 +25943,316 @@
               "administration"
             ]
           }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "05dbb879-19f4-4957-a7f6-52aec0db53a7",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Music Salon threshold"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "b824136b-d99a-4006-af7b-158320648f36",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Library threshold"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "6bc03d07-fd32-4dcd-8ae4-ff72c83ee8ea",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Ballroom and Garden Salon threshold"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "85d18616-20b8-4da5-88d7-fe75117108ac",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "State Dining Room threshold"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "05f56010-1850-4e14-a486-5218b2fa1f30",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Tea Salon threshold"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "511f8ae1-7dfa-43c6-b318-1be59ef667e8",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Estate Steward's Office threshold"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "8d0bfdb9-f3ad-4198-ac07-07cd1136a7d2",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Footmen's Room threshold"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "66b7ff0f-dad4-49b7-8288-be8da01d8293",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Grand Staircase threshold"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "f38f0f24-eebf-4302-b535-54f05e1f41cb",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Columned Vestibule threshold"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "f30d48ab-0691-4863-a15d-21033174f9b9",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Butler's Pantry threshold"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "4ca6f886-041b-4040-9e90-6e6e891dff8b",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Service Staircase threshold"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "a54d62b3-786d-43a6-8117-79efcfd8d4ec",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Pantry threshold"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "115a6fd0-68f4-4930-ac70-5d7536ce8820",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Steward's Office to Guest Cloakroom threshold"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "0b39fec8-aaa8-45fa-8bda-de42ca4bee0e",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Footmen's Room to Guest Washrooms threshold"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "dec5d6b8-af53-4af8-9e18-ed29e1a2f203",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Stair Hall to Grand Staircase threshold"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "35273ab0-18ca-4079-a99d-344b0b63b32b",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Kitchen to Butler's Pantry threshold"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "6bd187f6-68f4-4221-b473-a1f2a7e557f3",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Scullery to Service Staircase threshold"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "285c4620-40ff-40f0-8079-2f6ef549a772",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Pantry to Deliveries threshold"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "0baa0c74-3a15-4121-8ea4-3377a4d5e1ef",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Vestibule to Grand Staircase threshold"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "b4a27f58-5ca1-4193-a9b0-c0cdade45010",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Service Staircase to Butler's Pantry threshold"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "245ac98c-25b1-46a2-8507-f1ff710cc38d",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Library to Music Salon threshold"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "ae04e798-00eb-4c85-bbf8-eda23c4a435e",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Library to Ballroom threshold"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "05010987-ff4c-4427-b3f0-921309a72a2f",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Ballroom to State Dining Room threshold"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "beced03d-ef47-410c-ae3e-82eea20fd251",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Tea Salon to State Dining Room threshold"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "6410df4c-7fb1-46b3-a1bb-1f77f31080ca",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Columned Vestibule entrance"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "5f687772-c3a5-4eb6-9d60-39b4b4fc4c0a",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Ballroom garden entrance"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "91d625f3-be1d-44cf-ac34-5a35c9483615",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Connecting Gallery west entrance"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "5b915609-86af-4979-bc67-d405aa2e2154",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Connecting Gallery east entrance"
+          }
+        },
+        {
+          "ref": {
+            "kind": "opening",
+            "id": "d70fed71-3185-401e-8947-4dd938e155b8",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Deliveries service entrance"
+          }
+        },
+        {
+          "ref": {
+            "kind": "transition",
+            "id": "6976b2fa-af48-49e0-9997-307e906bae56",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Service Staircase"
+          }
+        },
+        {
+          "ref": {
+            "kind": "transition",
+            "id": "ae4fa01b-1428-46da-83b8-9b13731230cb",
+            "scopeId": "76a8316d-1a61-4861-aa6a-0bc0c1f8e7d8"
+          },
+          "metadata": {
+            "narrativeLabel": "Grand Staircase"
+          }
         }
       ],
       "groups": [],
@@ -26950,7 +27260,7 @@
           "result": {
             "status": "ready",
             "revision": 144,
-            "sourceRevision": "fb6f613f-f3cd-4c4c-9ee9-ac6928007762:6e2aef1187a2642f:298141",
+            "sourceRevision": "fb6f613f-f3cd-4c4c-9ee9-ac6928007762:2ed35b6a107fd53a:303817",
             "routes": [
               {
                 "id": "route-6bc5bd8e-a3dd-47e8-b3b7-dfba8a34f1f5-level",
@@ -27042,7 +27352,7 @@
                   "6bc5bd8e-a3dd-47e8-b3b7-dfba8a34f1f5"
                 ],
                 "usedTransitionIds": [],
-                "sourceRevision": "fb6f613f-f3cd-4c4c-9ee9-ac6928007762:6e2aef1187a2642f:298141"
+                "sourceRevision": "fb6f613f-f3cd-4c4c-9ee9-ac6928007762:2ed35b6a107fd53a:303817"
               }
             ],
             "route": {
@@ -27135,12 +27445,12 @@
                 "6bc5bd8e-a3dd-47e8-b3b7-dfba8a34f1f5"
               ],
               "usedTransitionIds": [],
-              "sourceRevision": "fb6f613f-f3cd-4c4c-9ee9-ac6928007762:6e2aef1187a2642f:298141"
+              "sourceRevision": "fb6f613f-f3cd-4c4c-9ee9-ac6928007762:2ed35b6a107fd53a:303817"
             },
             "missingFacts": [],
             "reasons": []
           },
-          "sourceRevision": "fb6f613f-f3cd-4c4c-9ee9-ac6928007762:6e2aef1187a2642f:298141"
+          "sourceRevision": "fb6f613f-f3cd-4c4c-9ee9-ac6928007762:2ed35b6a107fd53a:303817"
         }
       ]
     }
