@@ -13,6 +13,7 @@ import { applyAffinePoint, relativePlaceMatrix } from "../../geometry/affine-tra
 import type { StoryAccessContext, StoryRouteAlternative, StoryRouteOptions, StoryRouteRequest, StoryRouteResult, StoryRouteSegment } from "./types";
 import { routeWidth } from "./width";
 import { faceAnchor } from "./portal-geometry";
+import { alternativeFromGraph, collectRouteAlternatives } from "./route-alternatives";
 
 type Face = ReturnType<typeof constructionNetwork>["faces"][number];
 type LevelSpace = { place: PlaceNode; document: ConstructionDocument; faces: Face[] };
@@ -181,42 +182,43 @@ function routeGraph(project: EditorProject, spaces: LevelSpace[], request: Story
   return { edges, nodes: [...graphs.flatMap(({ nodes }) => nodes), start, goal], distance: distances.get(goal.id)! };
 }
 
-function alternativeFromGraph(graph: NonNullable<ReturnType<typeof routeGraph>>, request: StoryRouteRequest) {
-  const segments: StoryRouteSegment[] = []; const points: { x: number; y: number }[] = [request.from.point]; const usedOpeningIds: string[] = []; const usedTransitionIds: string[] = []; const conditions = new Set<string>();
-  for (const edge of graph.edges) {
-    if (edge.conditions) edge.conditions.forEach((condition) => conditions.add(condition));
-    if (edge.openingId) {
-      usedOpeningIds.push(edge.openingId);
-      const from = graph.nodes.find(({ id }) => id === edge.from) as Node | undefined;
-      const openingPoints = edge.path ?? []; if (from && openingPoints.length >= 2) { segments.push({ placeId: from.levelId, levelId: from.levelId, kind: "indoor", points: openingPoints, faceId: from.faceId, sourceId: edge.openingId, conditions: edge.conditions?.length ? edge.conditions : undefined }); points.push(...openingPoints.slice(1)); }
-      continue;
-    }
-    if (edge.transitionId) {
-      usedTransitionIds.push(edge.transitionId); const from = graph.nodes.find(({ id }) => id === edge.from) as Node | undefined; const to = graph.nodes.find(({ id }) => id === edge.to) as Node | undefined;
-      if (from) { segments.push({ placeId: from.levelId, levelId: from.levelId, kind: "transition", points: [from.point], sourceId: edge.transitionId, conditions: edge.conditions?.length ? edge.conditions : undefined }); points.push(from.point); }
-      if (to) { segments.push({ placeId: to.levelId, levelId: to.levelId, kind: "transition", points: [to.point], sourceId: edge.transitionId, conditions: edge.conditions?.length ? edge.conditions : undefined }); points.push(to.point); }
-      continue;
-    }
-    const path = edge.path ?? []; if (path.length < 2) continue; const fromNode = graph.nodes.find(({ id }) => id === edge.from); if (!fromNode) continue; const segment = { placeId: fromNode.levelId, levelId: fromNode.levelId, kind: "indoor" as const, points: path, faceId: fromNode.faceId }; segments.push(segment); points.push(...path.slice(1));
-  }
-  points.push(request.to.point);
-  return { id: `route-${usedOpeningIds.join("-") || "direct"}-${usedTransitionIds.join("-") || "level"}`, segments, points, distance: graph.distance, conditions: [...conditions], reasons: [], usedOpeningIds: [...new Set(usedOpeningIds)], usedTransitionIds: [...new Set(usedTransitionIds)] } satisfies StoryRouteAlternative;
+function mergeDiagnostics(targetMissing: Set<string>, targetReasons: Set<string>, sourceMissing: Set<string>, sourceReasons: Set<string>) {
+  sourceMissing.forEach((fact) => targetMissing.add(fact));
+  sourceReasons.forEach((reason) => targetReasons.add(reason));
+}
+
+function graphAlternatives(project: EditorProject, spaces: LevelSpace[], request: StoryRouteRequest, options: StoryRouteOptions, missing: Set<string>, reasons: Set<string>, findPath: RoutePathFinder) {
+  return collectRouteAlternatives((blocked, captureDiagnostics) => {
+    const attemptMissing = new Set<string>(); const attemptReasons = new Set<string>();
+    const graph = routeGraph(project, spaces, request, options, blocked, attemptMissing, attemptReasons, findPath);
+    if (captureDiagnostics) mergeDiagnostics(missing, reasons, attemptMissing, attemptReasons);
+    return graph ? alternativeFromGraph(graph, request) : undefined;
+  });
 }
 
 function buildingEntryRoute(project: EditorProject, spaces: LevelSpace[], request: StoryRouteRequest, options: StoryRouteOptions, missing: Set<string>, reasons: Set<string>, findPath: RoutePathFinder) {
   const endpoint = [request.from, request.to].find(({ placeId }) => spaces.some(({ place }) => place.id === placeId)); const outside = endpoint === request.from ? request.to : endpoint === request.to ? request.from : undefined;
   if (!endpoint || !outside) return undefined;
   const space = spaces.find(({ place }) => place.id === endpoint.placeId); const parentId = space?.place.parentId; const parent = parentId ? project.places.find(({ id }) => id === parentId) : undefined; const outsideOwner = project.places.find(({ id }) => id === outside.placeId); if (!space || !parent || !outsideOwner || !["world", "location"].includes(outsideOwner.kind)) return undefined;
-    const levelPoint = endpoint.point; const face = faceForPoint(space, levelPoint); if (!face) return undefined; const roomAccess = faceAccess(project, space, face, request, options, missing, reasons); if (!roomAccess.allowed) return undefined; const width = routeWidth(request); const matrix = relativePlaceMatrix(project, parent.id, space.place.id);
-    for (const opening of space.document.openings) {
-      if (opening.kind === "window" && !request.preferences?.allowWindows || opening.width < width) continue; const centre = openingCentre(space.document, opening); if (!centre || openingFaces(space, opening, centre).length !== 1) continue;
-      const access = accessResult(decision(project, options, { kind: "opening", id: opening.id, scopeId: space.document.id, locked: false }, request), missing, reasons, `Opening ${opening.id} is not available.`); if (!access.allowed) continue;
-      const wall = space.document.walls.find(({ id }) => id === opening.wallId); const indoorPoint = wall && faceAnchor(face, centre, wall, width / 2); if (!indoorPoint) { reasons.add(`Opening ${opening.id} has no ${width} m clear portal in face ${face.id}.`); continue; } const indoor = findPath(roomFaceShape(face), levelPoint, indoorPoint, width / 2); if (!indoor) continue;
-      const parentCentre = applyAffinePoint(matrix, centre); const parentPoints = parent.boundary ? shapePolygons(parent.boundary).flatMap(({ outer }) => outer) : []; const parentAverage = parentPoints.reduce((sum, point) => ({ x: sum.x + point.x, y: sum.y + point.y }), { x: 0, y: 0 }); const direction = { x: parentCentre.x - (parentAverage.x / (parentPoints.length || 1)), y: parentCentre.y - (parentAverage.y / (parentPoints.length || 1)) }; const length = Math.hypot(direction.x, direction.y) || 1; const exitParent = parentPoints.length ? { x: parentCentre.x + direction.x / length * Math.max(width, .2), y: parentCentre.y + direction.y / length * Math.max(width, .2) } : parentCentre; const outsideMatrix = relativePlaceMatrix(project, outsideOwner.id, parent.id); const outsidePoint = applyAffinePoint(outsideMatrix, exitParent); const outsideCentre = applyAffinePoint(outsideMatrix, parentCentre); const outdoor = findOutdoorRoute(project, { ...request, from: { placeId: outsideOwner.id, point: outside.point }, to: { placeId: outsideOwner.id, point: outsidePoint } }, options); if (!outdoor) continue;
-      const indoorPoints = endpoint === request.to ? [...indoor.points].reverse() : indoor.points; const portalPoints = endpoint === request.to ? [centre, ...indoorPoints] : [...indoorPoints, centre]; const indoorSegment: StoryRouteSegment = { placeId: space.place.id, levelId: space.place.id, kind: "indoor", points: portalPoints, faceId: face.id, sourceId: opening.id, conditions: access.conditions.length ? access.conditions : undefined }; const approachPoints = endpoint === request.to ? [outsidePoint, outsideCentre] : [outsideCentre, outsidePoint]; const outdoorApproach: StoryRouteSegment = { placeId: outsideOwner.id, kind: "outdoor", points: approachPoints, sourceId: opening.id }; const outdoorSegments = endpoint === request.to ? outdoor.segments : [...outdoor.segments].reverse().map((segment) => ({ ...segment, points: [...segment.points].reverse() })); const segments = endpoint === request.to ? [...outdoor.segments, outdoorApproach, indoorSegment] : [indoorSegment, outdoorApproach, ...outdoorSegments]; const points = endpoint === request.to ? [...outdoor.points, outsideCentre, ...portalPoints] : [...portalPoints, outsideCentre, ...[...outdoor.points].reverse()];
-    return { id: `entry-${opening.id}`, segments, points, distance: outdoor.distance + indoor.distance + distance(outsidePoint, outsideCentre) + distance(indoorPoint, centre), conditions: access.conditions, reasons: [], usedOpeningIds: [opening.id], usedTransitionIds: [] } satisfies StoryRouteAlternative;
+  const levelPoint = endpoint.point; const face = faceForPoint(space, levelPoint); if (!face) return undefined;
+  const roomAccess = faceAccess(project, space, face, request, options, missing, reasons); if (!roomAccess.allowed) return undefined;
+  const width = routeWidth(request); const matrix = relativePlaceMatrix(project, parent.id, space.place.id); const candidates: StoryRouteAlternative[] = []; const candidateMissing = new Set<string>(); const candidateReasons = new Set<string>();
+  for (const opening of space.document.openings) {
+    if (opening.kind === "window" && !request.preferences?.allowWindows || opening.width < width) continue;
+    const centre = openingCentre(space.document, opening); if (!centre || openingFaces(space, opening, centre).length !== 1) continue;
+    const openingMissing = new Set<string>(); const openingReasons = new Set<string>();
+    const access = accessResult(decision(project, options, { kind: "opening", id: opening.id, scopeId: space.document.id, locked: false }, request), openingMissing, openingReasons, `Opening ${opening.id} is not available.`);
+    if (!access.allowed) { mergeDiagnostics(candidateMissing, candidateReasons, openingMissing, openingReasons); continue; }
+    const wall = space.document.walls.find(({ id }) => id === opening.wallId); const indoorPoint = wall && faceAnchor(face, centre, wall, width / 2);
+    if (!indoorPoint) { candidateReasons.add(`Opening ${opening.id} has no ${width} m clear portal in face ${face.id}.`); continue; }
+    const indoor = findPath(roomFaceShape(face), levelPoint, indoorPoint, width / 2); if (!indoor) continue;
+    const parentCentre = applyAffinePoint(matrix, centre); const parentPoints = parent.boundary ? shapePolygons(parent.boundary).flatMap(({ outer }) => outer) : []; const parentAverage = parentPoints.reduce((sum, point) => ({ x: sum.x + point.x, y: sum.y + point.y }), { x: 0, y: 0 }); const direction = { x: parentCentre.x - (parentAverage.x / (parentPoints.length || 1)), y: parentCentre.y - (parentAverage.y / (parentPoints.length || 1)) }; const length = Math.hypot(direction.x, direction.y) || 1; const exitParent = parentPoints.length ? { x: parentCentre.x + direction.x / length * Math.max(width, .2), y: parentCentre.y + direction.y / length * Math.max(width, .2) } : parentCentre; const outsideMatrix = relativePlaceMatrix(project, outsideOwner.id, parent.id); const outsidePoint = applyAffinePoint(outsideMatrix, exitParent); const outsideCentre = applyAffinePoint(outsideMatrix, parentCentre);
+    const outdoor = findOutdoorRoute(project, { ...request, from: { placeId: outsideOwner.id, point: outside.point }, to: { placeId: outsideOwner.id, point: outsidePoint } }, options); if (!outdoor) continue;
+    const indoorPoints = endpoint === request.to ? [...indoor.points].reverse() : indoor.points; const portalPoints = endpoint === request.to ? [centre, ...indoorPoints] : [...indoorPoints, centre]; const indoorSegment: StoryRouteSegment = { placeId: space.place.id, levelId: space.place.id, kind: "indoor", points: portalPoints, faceId: face.id, sourceId: opening.id, conditions: access.conditions.length ? access.conditions : undefined }; const approachPoints = endpoint === request.to ? [outsidePoint, outsideCentre] : [outsideCentre, outsidePoint]; const outdoorApproach: StoryRouteSegment = { placeId: outsideOwner.id, kind: "outdoor", points: approachPoints, sourceId: opening.id }; const outdoorSegments = endpoint === request.to ? outdoor.segments : [...outdoor.segments].reverse().map((segment) => ({ ...segment, points: [...segment.points].reverse() })); const segments = endpoint === request.to ? [...outdoor.segments, outdoorApproach, indoorSegment] : [indoorSegment, outdoorApproach, ...outdoorSegments]; const points = endpoint === request.to ? [...outdoor.points, outsideCentre, ...portalPoints] : [...portalPoints, outsideCentre, ...[...outdoor.points].reverse()];
+    candidates.push({ id: `entry-${opening.id}`, segments, points, distance: outdoor.distance + indoor.distance + distance(outsidePoint, outsideCentre) + distance(indoorPoint, centre), conditions: access.conditions, reasons: [], usedOpeningIds: [opening.id], usedTransitionIds: [] });
   }
-  return undefined;
+  if (candidates.length) return candidates.toSorted((left, right) => left.distance - right.distance || left.id.localeCompare(right.id))[0];
+  mergeDiagnostics(missing, reasons, candidateMissing, candidateReasons); return undefined;
 }
 
 function checkEndpointAccess(project: EditorProject, endpoint: StoryRouteRequest["from"], request: StoryRouteRequest, options: StoryRouteOptions, missing: Set<string>, reasons: Set<string>) {
@@ -234,14 +236,14 @@ function checkEndpointAccess(project: EditorProject, endpoint: StoryRouteRequest
 
 export function findStoryRoutes(project: EditorProject, request: StoryRouteRequest, options: StoryRouteOptions = {}): StoryRouteResult {
   const findPath = createRoutePathFinder();
-  const revision = Math.max(0, ...project.constructions.map(({ revision }) => revision)); const missing = new Set<string>(); const reasons = new Set<string>(); const routes: StoryRouteAlternative[] = []; const blocked = new Set<string>();
+  const revision = Math.max(0, ...project.constructions.map(({ revision }) => revision)); const missing = new Set<string>(); const reasons = new Set<string>(); let routes: StoryRouteAlternative[] = [];
   if (!checkEndpointAccess(project, request.from, request, options, missing, reasons) || !checkEndpointAccess(project, request.to, request, options, missing, reasons)) return { status: missing.size ? "unknown" : "unreachable", revision, sourceRevision: storyRouteRevision(project), routes, missingFacts: [...missing].toSorted(), reasons: [...reasons].toSorted() };
   const sourceRevision = storyRouteRevision(project); const fromPlace = project.places.find(({ id }) => id === request.from.placeId);
   if (fromPlace && request.from.placeId === request.to.placeId && ["world", "location"].includes(fromPlace.kind)) { const outdoor = findOutdoorRoute(project, request, options); if (outdoor) { const route = { ...outdoor, sourceRevision }; return { status: "ready", revision, sourceRevision, routes: [route], route, missingFacts: [...missing].toSorted(), reasons: [...reasons].toSorted() }; } }
   const spaces: LevelSpace[] = project.places.filter(({ kind }) => kind === "level").flatMap((place) => { const document = place.constructionId && project.constructions.find(({ id }) => id === place.constructionId); if (!document) return []; const network = constructionNetwork(document.walls, document.enclosure); return [{ place, document, faces: network.faces }]; });
-  for (let index = 0; index < 3; index += 1) { const graph = routeGraph(project, spaces, request, options, blocked, missing, reasons, findPath); if (!graph) break; const alternative = { ...alternativeFromGraph(graph, request), sourceRevision }; if (routes.some(({ id }) => id === alternative.id)) break; routes.push(alternative); const next = alternative.usedOpeningIds.find((id) => !blocked.has(id)) ?? alternative.usedTransitionIds.find((id) => !blocked.has(id)); if (!next) break; blocked.add(next); }
+  routes = graphAlternatives(project, spaces, request, options, missing, reasons, findPath).map((alternative) => ({ ...alternative, sourceRevision }));
   if (!routes.length && project.places.find(({ id }) => id === request.from.placeId)?.kind && ["world", "location"].includes(project.places.find(({ id }) => id === request.from.placeId)!.kind) && request.from.placeId === request.to.placeId) { const outdoor = findOutdoorRoute(project, request, options); if (outdoor) routes.push({ ...outdoor, sourceRevision }); }
   if (!routes.length) { const entry = buildingEntryRoute(project, spaces, request, options, missing, reasons, findPath); if (entry) routes.push({ ...entry, sourceRevision }); }
   const status = routes.length ? "ready" : missing.size ? "unknown" : "unreachable";
-  return { status, revision, sourceRevision, routes, route: routes[0], missingFacts: [...missing].toSorted(), reasons: [...reasons].toSorted() };
+  return { status, revision, sourceRevision, routes, route: routes[0], missingFacts: status === "ready" ? [] : [...missing].toSorted(), reasons: status === "ready" ? [] : [...reasons].toSorted() };
 }
