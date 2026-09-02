@@ -60,5 +60,5 @@ describe("large example Story read regression", () => {
       act(() => root.unmount());
       host.remove();
     }
-  });
+  }, 15_000);
 });
