@@ -29,7 +29,7 @@ import styles from "./workbench-story.module.css";
 import { useStoryWorkspacePanels } from "./use-story-workspace-panels";
 import { replaceProjectScenarios } from "../story/scenario-commands";
 import { useStoryRouteInteraction } from "./use-story-route-interaction";
-import { createWorkbenchStoryResolution } from "./workbench-story-resolution";
+import { createWorkbenchStoryResolution, storyInspectorNeedsObjectCatalog } from "./workbench-story-resolution";
 
 const empty = emptyStoryData();
 export function useWorkbenchStory({ session, snapshot, selections, inspectedPlaceId, locale, mode, refresh, zoom, onSelect, onFocus, onOpenPlace, onOpenWorldbook }: {
@@ -86,7 +86,8 @@ export function useWorkbenchStory({ session, snapshot, selections, inspectedPlac
     return result ? [result] : [];
   });
   const resolvedObjects = mode === "story" ? storyResolution?.resolveObjects() ?? [] : [];
-  const resolvedInspectorObjects = mode === "story" || detailsOpen ? storyResolution?.resolveInspectorObjects() ?? [] : selected;
+  const inspectorNeedsObjectCatalog = detailsOpen && storyInspectorNeedsObjectCatalog(project?.story.propertyDefinitions ?? [], selected.map(({ ref }) => ref));
+  const resolvedInspectorObjects = mode === "story" || inspectorNeedsObjectCatalog ? storyResolution?.resolveInspectorObjects() ?? [] : selected;
   const selection = selected.map((item) => ({ ...item.ref, name: item.name, metadata: item.metadata as Record<string, unknown> }));
   function setView(patch: EditorStoryView) {
     const next: Parameters<typeof updateView>[0] = {};

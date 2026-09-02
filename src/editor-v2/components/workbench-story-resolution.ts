@@ -3,11 +3,18 @@ import { workbenchCopy } from "../i18n/workbench-copy";
 import { allStoryObjectRefs } from "../story/project-adapter";
 import { createProjectStoryObjectResolver } from "../story/project-effective";
 import { storyObjectDisplayName } from "../story/object-display-name";
-import type { StoryObjectRef, StoryViewContext } from "../story/types";
+import type { StoryObjectRef, StoryPropertyDefinition, StoryViewContext } from "../story/types";
 
 type Locale = keyof typeof workbenchCopy;
 type ProjectStoryResolver = ReturnType<typeof createProjectStoryObjectResolver>;
 type ResolvedProjectStoryObject = NonNullable<ReturnType<ProjectStoryResolver>> & { name: string };
+
+/** Inspector details need map-wide choices only for applicable entity properties. */
+export function storyInspectorNeedsObjectCatalog(definitions: readonly StoryPropertyDefinition[], refs: readonly StoryObjectRef[]) {
+  return refs.length > 0 && definitions.some((definition) => definition.type === "entity" && (
+    !definition.targetKinds?.length || refs.every((ref) => definition.targetKinds!.includes(ref.kind))
+  ));
+}
 
 function sameContext(first: StoryViewContext, second: StoryViewContext) {
   return first.scenarioId === second.scenarioId && first.stepId === second.stepId && first.lensId === second.lensId;
