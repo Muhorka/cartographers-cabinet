@@ -1,7 +1,7 @@
 import { cloneImportedProject, parseProjectFile } from "./project-file";
 import { storyRouteRevision } from "../story/routes/revision";
 
-export const EXAMPLE_PROJECT_URL = "/examples/residence-of-the-silver-lindens.cartographer.json";
+const EXAMPLE_PROJECT_URL = "/examples/residence-of-the-silver-lindens.cartographer.json";
 
 export async function loadExampleProject(projectId: string, fetchProject: typeof fetch = fetch) {
   const response = await fetchProject(EXAMPLE_PROJECT_URL);
