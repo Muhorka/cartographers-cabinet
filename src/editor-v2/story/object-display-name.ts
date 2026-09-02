@@ -1,8 +1,14 @@
 import type { SheetObjectListCopy } from "../components/sheet-object-list";
 import type { EditorProject } from "../model/project-model";
 import type { ResolvedStoryObject } from "./project-adapter";
+import { sameStoryRef, type StoryData, type StoryObjectRef } from "./types";
 
 type DisplayObject = Pick<ResolvedStoryObject, "ref" | "name"> & { metadata?: ResolvedStoryObject["metadata"]; ownerPlaceId?: string };
+
+/** Prefers an explicitly authored base Story label without changing its technical source. */
+export function authoredStoryObjectLabel(story: StoryData, ref: StoryObjectRef, fallback: string): string {
+  return story.objects.find(({ ref: candidate }) => sameStoryRef(candidate, ref))?.metadata.narrativeLabel?.trim() || fallback;
+}
 
 function generatedName(project: EditorProject, object: DisplayObject, copy: SheetObjectListCopy) {
   const construction = object.ref.scopeId && project.constructions.find(({ id }) => id === object.ref.scopeId);

@@ -1,5 +1,8 @@
 import { constructionNetwork } from "../construction/construction-network";
 import type { EditorProject } from "../model/project-model";
+import { authoredStoryObjectLabel } from "../story/object-display-name";
+import { projectStoryData } from "../story/project-effective";
+import type { StoryObjectRef } from "../story/types";
 
 import { constructionPlaceForView, elementContextDepth, roomEditingScope, surfaceContextDepth } from "./map-sheet-geometry";
 import type { MapSelection } from "./map-sheet";
@@ -27,6 +30,11 @@ export function sheetObjectGroups(project: EditorProject, activePlaceId: string,
   const rooms = active?.kind === "level" ? construction?.rooms ?? [] : [];
   const openings = (construction?.openings ?? []).filter(({ wallId }) => !scope.wallIds || scope.wallIds.has(wallId));
   const transitions = (construction?.transitions ?? []).filter(({ id }) => !scope.transitionIds || scope.transitionIds.has(id));
+  const walls = (construction?.walls ?? []).filter(({ id }) => !scope.wallIds || scope.wallIds.has(id));
+  const story = openings.length || transitions.length || walls.length ? projectStoryData(project) : undefined;
+  const structuralLabel = (kind: Extract<StoryObjectRef["kind"], "wall" | "opening" | "transition">, id: string, fallback: string) => story && construction
+    ? authoredStoryObjectLabel(story, { kind, id, scopeId: construction.id }, fallback)
+    : fallback;
   const elementItems = (layerId: "terrain" | "roads" | "equipment" | "sketch") => elements.filter((element) => element.layerId === layerId).map((element) => ({
     selection: { kind: "element" as const, id: element.id }, label: element.name, description: element.description, tags: element.tags,
     visible: element.visible, locked: element.locked,
@@ -40,10 +48,10 @@ export function sheetObjectGroups(project: EditorProject, activePlaceId: string,
     { id: "sketch", label: copy.sketch, open: false, items: elementItems("sketch") },
     { id: "rooms", label: copy.rooms, open: true, items: rooms.map((room) => ({ selection: { kind: "room" as const, id: room.id }, label: room.name, description: room.description, tags: room.tags, visible: room.visible ?? true, locked: room.locked ?? false })) },
     { id: "features", label: copy.features, open: true, items: [
-      ...openings.map((opening, index) => ({ selection: { kind: "opening" as const, id: opening.id }, label: copy.openingName(opening.kind, index + 1), visible: opening.visible ?? true, locked: opening.locked ?? false })),
-      ...transitions.map((transition, index) => ({ selection: { kind: "transition" as const, id: transition.id }, label: transition.kind === "elevator" ? copy.elevatorName?.(index + 1) ?? copy.stairsName(index + 1) : copy.stairsName(index + 1), visible: transition.visible ?? true, locked: transition.locked ?? false })),
+      ...openings.map((opening, index) => ({ selection: { kind: "opening" as const, id: opening.id }, label: structuralLabel("opening", opening.id, copy.openingName(opening.kind, index + 1)), visible: opening.visible ?? true, locked: opening.locked ?? false })),
+      ...transitions.map((transition, index) => { const fallback = transition.kind === "elevator" ? copy.elevatorName?.(index + 1) ?? copy.stairsName(index + 1) : copy.stairsName(index + 1); return { selection: { kind: "transition" as const, id: transition.id }, label: structuralLabel("transition", transition.id, fallback), visible: transition.visible ?? true, locked: transition.locked ?? false }; }),
     ] },
-    { id: "walls", label: copy.walls, open: false, items: (construction?.walls ?? []).filter(({ id }) => !scope.wallIds || scope.wallIds.has(id)).map((wall, index) => ({ selection: { kind: "wall" as const, id: wall.id }, label: copy.wallName(index + 1), visible: wall.visible ?? true, locked: wall.locked ?? false })) },
+    { id: "walls", label: copy.walls, open: false, items: walls.map((wall, index) => ({ selection: { kind: "wall" as const, id: wall.id }, label: structuralLabel("wall", wall.id, copy.wallName(index + 1)), visible: wall.visible ?? true, locked: wall.locked ?? false })) },
   ].filter(({ items }) => items.length);
 }
 
