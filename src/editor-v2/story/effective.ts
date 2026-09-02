@@ -64,8 +64,8 @@ function mergeMetadata(contributors: readonly StoryMetadataContributor[], local?
   return { metadata: { ...inherited, ...local, owners: local.owners ?? inherited.owners, access: local.access ? mergeAccess(inherited.access, { ...defaultStoryAccessPolicy(), ...local.access }) : inherited.access, tags: local.tags ? [...new Set([...inherited.tags, ...local.tags])] : inherited.tags, properties: inherited.properties }, conflicts: [...conflicts] };
 }
 
-/** Fast path for StoryData already canonicalized by a trusted domain boundary. */
-export function effectiveStoryMetadataFromCanonical(story: StoryData, ref: StoryObjectRef, options: EffectiveStoryOptions = {}): { metadata: StoryObjectMetadata; conflicts: string[] } {
+export function effectiveStoryMetadata(input: StoryData, ref: StoryObjectRef, options: EffectiveStoryOptions = {}): { metadata: StoryObjectMetadata; conflicts: string[] } {
+  const story = migrateStoryData(input);
   const applicableZones = options.applicableZones ?? story.zones.filter(({ members }) => members.some((member) => sameStoryRef(member.ref, ref)));
   const zones: StoryMetadataContributor[] = applicableZones.flatMap(({ id, metadata }) => metadata ? [{ kind: "zone" as const, id, metadata }] : []);
   const contributors = [...(options.contributors ?? []), ...zones];
@@ -73,14 +73,10 @@ export function effectiveStoryMetadataFromCanonical(story: StoryData, ref: Story
   return mergeMetadata(contributors, local);
 }
 
-export function effectiveStoryMetadata(input: StoryData, ref: StoryObjectRef, options: EffectiveStoryOptions = {}): { metadata: StoryObjectMetadata; conflicts: string[] } {
-  return effectiveStoryMetadataFromCanonical(migrateStoryData(input), ref, options);
-}
-
-/** Fast path for StoryData already canonicalized by a trusted domain boundary. */
-export function effectiveStoryObjectFromCanonical(story: StoryData, ref: StoryObjectRef, context: StoryViewContext = {}, options: EffectiveStoryOptions = {}): EffectiveStoryObject | undefined {
+export function effectiveStoryObject(input: StoryData, ref: StoryObjectRef, context: StoryViewContext = {}, options: EffectiveStoryOptions = {}): EffectiveStoryObject | undefined {
+  const story = migrateStoryData(input);
   const original = story.objects.find(({ ref: candidate }) => sameStoryRef(candidate, ref)); if (!original) return undefined;
-  const inherited = effectiveStoryMetadataFromCanonical(story, ref, options); const view = storyView(story, context); const scenarioPatches = view.scenario ? patchFor(view.scenario.patches ?? [], ref) : [];
+  const inherited = effectiveStoryMetadata(story, ref, options); const view = storyView(story, context); const scenarioPatches = view.scenario ? patchFor(view.scenario.patches ?? [], ref) : [];
   const step = view.stepId ? view.scenario?.steps.find(({ id }) => id === view.stepId) : undefined; const stepPatches = step ? patchFor(step.patches, ref) : [];
   const conflicts = new Set(inherited.conflicts);
   const entries = new Map<string, EffectiveProperty>(); for (const [propertyId, value] of Object.entries(inherited.metadata.properties ?? {})) entries.set(propertyId, { propertyId, value, source: "base", patchIds: [], conflict: false });
@@ -89,10 +85,6 @@ export function effectiveStoryObjectFromCanonical(story: StoryData, ref: StoryOb
   let currentMetadata = inherited.metadata; for (const patch of [...scenarioPatches, ...stepPatches]) if (patch.metadata) currentMetadata = { ...currentMetadata, ...patch.metadata, access: patch.metadata.access ?? currentMetadata.access };
   const textPatches = [...scenarioPatches, ...stepPatches]; const label = [...textPatches].reverse().find(({ title }) => title !== undefined)?.title ?? currentMetadata.narrativeLabel; const description = [...textPatches].reverse().find(({ description: value }) => value !== undefined)?.description ?? currentMetadata.narrativeDescription;
   return { ...original, metadata: { ...currentMetadata, properties: Object.fromEntries([...entries].map(([key, value]) => [key, value.value])) }, label, description, effectiveProperties: [...entries.values()], view, conflicts: [...conflicts] };
-}
-
-export function effectiveStoryObject(input: StoryData, ref: StoryObjectRef, context: StoryViewContext = {}, options: EffectiveStoryOptions = {}): EffectiveStoryObject | undefined {
-  return effectiveStoryObjectFromCanonical(migrateStoryData(input), ref, context, options);
 }
 
 /** Identity closure used by access policy, ownership, and possession checks. */

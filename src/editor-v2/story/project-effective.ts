@@ -1,15 +1,12 @@
 import type { EditorProject } from "../model/project-model";
-import { effectiveStoryMetadataFromCanonical, effectiveStoryObjectFromCanonical, storyAccessForMetadata, type StoryAccessResult } from "./effective";
+import { effectiveStoryMetadata, effectiveStoryObject, storyAccessForMetadata, type StoryAccessResult } from "./effective";
 import { migrateStoryData } from "./migration";
 import { canonicalProjectStoryRef, resolveStoryObject, zoneMatchesProject } from "./project-adapter";
 import { resolveStoryOwnership } from "./ownership";
 import { defaultStoryAccessPolicy, sameStoryRef, storyRefKey, type StoryAccessPolicy, type StoryData, type StoryLensExpression, type StoryObjectMetadata, type StoryObjectRef, type StoryPropertyValue, type StoryRelation, type StoryViewContext, type StoryZone } from "./types";
-import { immutableSnapshot, isImmutableSnapshot } from "../state/immutable-snapshot";
-
-const immutableProjectStories = new WeakMap<EditorProject, StoryData>();
 
 /** Returns migrated narrative data and normalizes resolvable legacy room scopes. */
-function projectStoryDataUncached(project: EditorProject): StoryData {
+export function projectStoryData(project: EditorProject): StoryData {
   const migrated = migrateStoryData(project.story); const seen = new Set<string>();
   const canonical = (ref: StoryObjectRef) => canonicalProjectStoryRef(project, ref);
   const objects = migrated.objects.map((object) => { const resolved = resolveStoryObject(project, migrated, object.ref); const candidate = resolved?.ref ?? canonical(object.ref); if (seen.has(storyRefKey(candidate))) return { ...object, ref: candidate }; seen.add(storyRefKey(candidate)); return { ...object, ref: candidate }; });
@@ -25,16 +22,6 @@ function projectStoryDataUncached(project: EditorProject): StoryData {
   const intentions = migrated.intentions.map((intention) => ({ ...intention, subject: canonical(intention.subject), target: intention.target ? canonical(intention.target) : undefined, through: intention.through?.map(canonical) }));
   const evidence = migrated.evidence.map((item) => ({ ...item, refs: item.refs.map(canonical) }));
   return { ...migrated, objects, zones, scenarios, lenses, relations, intentions, evidence };
-}
-
-/** Returns migrated narrative data and normalizes resolvable legacy room scopes. */
-export function projectStoryData(project: EditorProject): StoryData {
-  if (!isImmutableSnapshot(project)) return projectStoryDataUncached(project);
-  const cached = immutableProjectStories.get(project);
-  if (cached) return cached;
-  const story = immutableSnapshot(projectStoryDataUncached(project));
-  immutableProjectStories.set(project, story);
-  return story;
 }
 
 export function canonicalLensExpression(project: EditorProject, expression: StoryLensExpression): StoryLensExpression {
@@ -87,7 +74,7 @@ function parentStoryMetadata(project: EditorProject, story: StoryData, resolved:
     const parentRef: StoryObjectRef = { kind: "place", id: parent.id };
     const hasRecord = story.objects.some(({ ref }) => sameStoryRef(ref, parentRef));
     const parentStory = hasRecord ? story : { ...story, objects: [...story.objects, { ref: parentRef, metadata: {} }] };
-    const inherited = effectiveStoryObjectFromCanonical(parentStory, parentRef, context, { applicableZones: projectZonesForRef(project, story, parentRef) })?.metadata ?? effectiveStoryMetadataFromCanonical(parentStory, parentRef, { applicableZones: projectZonesForRef(project, story, parentRef) }).metadata;
+    const inherited = effectiveStoryObject(parentStory, parentRef, context, { applicableZones: projectZonesForRef(project, story, parentRef) })?.metadata ?? effectiveStoryMetadata(parentStory, parentRef, { applicableZones: projectZonesForRef(project, story, parentRef) }).metadata;
     metadata = { ...metadata, tags: [...new Set([...(metadata.tags ?? []), ...(inherited.tags ?? [])])], properties: { ...(metadata.properties ?? {}), ...(inherited.properties ?? {}) }, access: joinAccess(metadata.access ?? defaultStoryAccessPolicy(), inherited.access ?? defaultStoryAccessPolicy()) };
   }
   return metadata;
@@ -99,7 +86,7 @@ function parentPropertyEvidence(project: EditorProject, story: StoryData, resolv
   for (const parent of [...parentPlaces(project, resolved)].reverse()) {
     const ref: StoryObjectRef = { kind: "place", id: parent.id }; const hasRecord = story.objects.some(({ ref: candidate }) => sameStoryRef(candidate, ref));
     const parentStory = hasRecord ? story : { ...story, objects: [...story.objects, { ref, metadata: {} }] };
-    const effective = effectiveStoryObjectFromCanonical(parentStory, ref, context, { applicableZones: projectZonesForRef(project, story, ref) });
+    const effective = effectiveStoryObject(parentStory, ref, context, { applicableZones: projectZonesForRef(project, story, ref) });
     const zoneSources = zonePropertySources(project, story, ref);
     for (const item of effective?.effectiveProperties ?? []) {
       const previous = entries.get(item.propertyId); const conflict = Boolean(previous && JSON.stringify(previous.value) !== JSON.stringify(item.value));
@@ -111,7 +98,7 @@ function parentPropertyEvidence(project: EditorProject, story: StoryData, resolv
   }
   return { entries, conflicts };
 }
-function childPropertyEvidence(project: EditorProject, story: StoryData, ref: StoryObjectRef, effective: ReturnType<typeof effectiveStoryObjectFromCanonical>, nativeProperties: Record<string, StoryPropertyValue>) {
+function childPropertyEvidence(project: EditorProject, story: StoryData, ref: StoryObjectRef, effective: ReturnType<typeof effectiveStoryObject>, nativeProperties: Record<string, StoryPropertyValue>) {
   const entries = new Map<string, PropertyEvidence>(); if (!effective) return entries;
   const local = story.objects.find(({ ref: candidate }) => sameStoryRef(candidate, ref))?.metadata.properties ?? {};
   const zoneSources = zonePropertySources(project, story, ref);
@@ -142,7 +129,7 @@ export function effectiveProjectStoryObject(project: EditorProject, ref: StoryOb
   const transient: StoryData = { ...story, objects: [...story.objects.filter((object) => !sameStoryRef(object.ref, resolved.ref)), { ref: resolved.ref, metadata: ownMetadata }] };
   const zones = projectZonesForRef(project, story, resolved.ref);
   const native = nativeMetadata(project, resolved); const parents = parentStoryMetadata(project, story, resolved, context);
-  const effective = effectiveStoryObjectFromCanonical(transient, resolved.ref, context, { applicableZones: zones, contributors: [{ kind: "native", id: `native:${resolved.ref.kind}:${resolved.ref.id}`, metadata: native }, { kind: "parent", id: `parent:${resolved.ownerPlaceId ?? "root"}`, metadata: parents }] });
+  const effective = effectiveStoryObject(transient, resolved.ref, context, { applicableZones: zones, contributors: [{ kind: "native", id: `native:${resolved.ref.kind}:${resolved.ref.id}`, metadata: native }, { kind: "parent", id: `parent:${resolved.ownerPlaceId ?? "root"}`, metadata: parents }] });
   const ownership = resolveStoryOwnership(project, story, resolved.ref, context);
   const metadata: StoryObjectMetadata = { ...(effective?.metadata ?? {}), owners: ownership.effectiveOwners };
   const hasScenarioText = Boolean(effective?.view.scenario && effective?.view.patches.some(({ target, title, description: text }) => sameStoryRef(target, resolved.ref) && (title !== undefined || text !== undefined)));

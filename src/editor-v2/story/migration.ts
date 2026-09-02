@@ -1,9 +1,6 @@
 import { storyDataSchema, storyMetadataSchema, storyObjectRefSchema } from "./schema";
 import { routeRecordSchema } from "./routes/schema";
 import { defaultStoryAccessPolicy, emptyStoryData, storyRefKey, type StoryData, type StoryLensExpression, type StoryObjectMetadata, type StoryObjectRef, type StoryPropertyDefinition, type StoryWorldEntry, type StoryGroup, type StoryZone } from "./types";
-import { immutableSnapshot, isImmutableSnapshot } from "../state/immutable-snapshot";
-
-const migratedStorySnapshots = new WeakMap<object, StoryData>();
 
 type LegacyRecord = { id: string; name: string; description?: string; [key: string]: unknown };
 function records(value: unknown): LegacyRecord[] { return Array.isArray(value) ? value.filter((entry): entry is LegacyRecord => Boolean(entry && typeof entry === "object" && typeof (entry as { id?: unknown }).id === "string" && typeof (entry as { name?: unknown }).name === "string")) : []; }
@@ -93,7 +90,8 @@ export function replaceLegacyStoryGroups(story: StoryData, groups: readonly Stor
   return { ...current, groups: [], zones: [...independent, ...next], lenses: current.lenses };
 }
 
-function migrateStoryDataUncached(input: unknown): StoryData {
+/** Accept canonical StoryData, no story, or the early collection-oriented UI shape. */
+export function migrateStoryData(input: unknown): StoryData {
   if (input === undefined || input === null) return emptyStoryData();
   const canonicalInput = input && typeof input === "object" && (input as { version?: unknown }).version === 1 ? { routes: [], ...(input as Record<string, unknown>) } : input;
   const canonical = storyDataSchema.safeParse(canonicalInput); if (canonical.success) return normalizeStoryZones(canonical.data);
@@ -101,14 +99,4 @@ function migrateStoryDataUncached(input: unknown): StoryData {
   const source = input as Record<string, unknown>;
   const routes = Array.isArray(source.routes) ? source.routes.flatMap((entry) => { const parsed = routeRecordSchema.safeParse(entry); return parsed.success ? [parsed.data] : []; }) : [];
   return normalizeStoryZones(storyDataSchema.parse({ ...emptyStoryData(), world: legacyWorld(source), propertyDefinitions: legacyPropertyDefinitions(source), groups: legacyGroupRecords(source), zones: legacyZoneRecords(source), lenses: records(source.lenses).map((entry) => ({ id: entry.id, name: entry.name, color: typeof entry.color === "string" ? entry.color : "#6e6254", expression: { kind: "all", items: [] } })), scenarios: records(source.scenarios).map((entry) => ({ id: entry.id, name: entry.name, description: entry.description, patches: [], steps: [] })), relations: records(source.relations).map((entry) => ({ id: entry.id, from: { entryId: entry.fromId && typeof entry.fromId === "string" ? entry.fromId : "unknown" }, to: { entryId: entry.toId && typeof entry.toId === "string" ? entry.toId : "unknown" }, kind: "custom", label: typeof entry.label === "string" ? entry.label : undefined })), intentions: records(source.intentions).map((entry) => ({ id: entry.id, subject: { kind: "place", id: "unresolved" }, kind: "custom", text: entry.description ?? entry.name, status: "draft" })), routes }));
-}
-
-/** Accept canonical StoryData, no story, or the early collection-oriented UI shape. */
-export function migrateStoryData(input: unknown): StoryData {
-  if (!isImmutableSnapshot(input)) return migrateStoryDataUncached(input);
-  const cached = migratedStorySnapshots.get(input);
-  if (cached) return cached;
-  const migrated = immutableSnapshot(migrateStoryDataUncached(input));
-  migratedStorySnapshots.set(input, migrated);
-  return migrated;
 }
