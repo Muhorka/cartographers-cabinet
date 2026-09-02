@@ -16,9 +16,9 @@ import type { StoryObjectRef } from "../story/types";
 import styles from "../story/components/story-zone-list.module.css";
 
 /** Zones share one session/history in both work modes; selection is only UI state. */
-export function useWorkbenchZones({ project, activePlaceId, selectionRefs, inspectedRefs, resolvedObjects, locale, commit, onError }: {
+export function useWorkbenchZones({ project, activePlaceId, selectionRefs, inspectedRefs, resolveObjects, locale, commit, onError }: {
   project?: EditorProject; activePlaceId?: string; selectionRefs: StoryObjectRef[]; inspectedRefs: StoryObjectRef[];
-  resolvedObjects: StoryResolvedObject[]; locale: "pl" | "en";
+  resolveObjects(): StoryResolvedObject[]; locale: "pl" | "en";
   commit(transaction: ProjectTransaction): boolean; onError(message: string): void;
 }) {
   const c = zoneCopy[locale]; const copy = storyCopy[locale];
@@ -41,10 +41,11 @@ export function useWorkbenchZones({ project, activePlaceId, selectionRefs, inspe
   function edit(entry: StoryRecord) {
     return apply((current) => {
       const entries = collectionItems(current.story, "zones").map((existing) => existing.id === entry.id ? entry : existing);
-      return { ...current, story: storyDataSchema.parse(replaceStoryCollection(current.story, "zones", entries, resolvedObjects)) };
+      return { ...current, story: storyDataSchema.parse(replaceStoryCollection(current.story, "zones", entries, resolveObjects())) };
     });
   }
   const selectedEntry = project && selected ? collectionItems(project.story, "zones").find(({ id }) => id === selected.id) : undefined;
+  const resolvedObjects = project && selected && selectedEntry ? resolveObjects() : [];
   return {
     selectedId: selected?.id, clear: () => setFocus(undefined),
     list: project ? <StoryZoneList zones={project.story.zones} selectedId={selected?.id} selectionCount={eligible.length} omittedCount={selectionRefs.length - eligible.length} locale={locale} onSelect={select} onCreate={create}/> : undefined,

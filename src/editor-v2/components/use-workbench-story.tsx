@@ -9,7 +9,6 @@ import type { MapSelection } from "./map-sheet-types";
 import { StoryInspector, StoryLenses, StoryTopBar, StoryWorldbook, useStoryView } from "../story/components";
 import { storyCopy } from "../story/i18n/story-copy";
 import { workbenchCopy } from "../i18n/workbench-copy";
-import { storyObjectDisplayName } from "../story/object-display-name";
 import { activeStoryLensIds } from "../story/lens-view";
 import { emptyStoryData, storyRefKey, type StoryObjectMetadata, type StoryObjectRef } from "../story/types";
 import { storyDataSchema } from "../story/schema";
@@ -17,8 +16,6 @@ import { createAndAssignStoryEntry } from "../story/project-quick-assignment";
 import { assignProjectKeyHolders } from "../story/project-key-holders";
 import { StoryDoorKeys } from "../story/components/story-door-keys";
 import { applyProjectStoryMetadata } from "../story/project-commands";
-import { allStoryObjectRefs } from "../story/project-adapter";
-import { createProjectStoryObjectResolver } from "../story/project-effective";
 import { assertProjectStoryObjectEditable } from "../story/story-locks";
 import { resolveStoryOwnership } from "../story/ownership";
 import { displayProject } from "../story/project-view";
@@ -32,6 +29,7 @@ import styles from "./workbench-story.module.css";
 import { useStoryWorkspacePanels } from "./use-story-workspace-panels";
 import { replaceProjectScenarios } from "../story/scenario-commands";
 import { useStoryRouteInteraction } from "./use-story-route-interaction";
+import { createWorkbenchStoryResolution } from "./workbench-story-resolution";
 
 const empty = emptyStoryData();
 export function useWorkbenchStory({ session, snapshot, selections, inspectedPlaceId, locale, mode, refresh, zoom, onSelect, onFocus, onOpenPlace, onOpenWorldbook }: {
@@ -80,24 +78,15 @@ export function useWorkbenchStory({ session, snapshot, selections, inspectedPlac
   const inspectingOpenPlace = !selections.length;
   const inspectedRefs = inspectingOpenPlace && project && inspectedPlaceId ? scopedSelectionRefs(project, [{ kind: "place", id: inspectedPlaceId }], snapshot?.activePlaceId) : rawRefs;
   const storyResolution = useMemo(() => {
-    if (!project) return { resolvedObjects: [], resolvedInspectorObjects: [], inspectorResolver: undefined };
-    const refs = allStoryObjectRefs(project);
-    const decorate = (value: NonNullable<ReturnType<ReturnType<typeof createProjectStoryObjectResolver>>>) => ({ ...value, name: storyObjectDisplayName(project, value, workbenchCopy[locale].objectList) });
-    const primaryResolver = createProjectStoryObjectResolver(project, { scenarioId, stepId });
-    const inspectorResolver = scenarioId === inspectorScenarioId && stepId === inspectorStepId
-      ? primaryResolver
-      : createProjectStoryObjectResolver(project, { scenarioId: inspectorScenarioId, stepId: inspectorStepId });
-    return {
-      resolvedObjects: refs.flatMap((ref) => { const value = primaryResolver(ref); return value ? [decorate(value)] : []; }),
-      resolvedInspectorObjects: refs.flatMap((ref) => { const value = inspectorResolver(ref); return value ? [decorate(value)] : []; }),
-      inspectorResolver,
-    };
+    if (!project) return undefined;
+    return createWorkbenchStoryResolution(project, { scenarioId, stepId }, { scenarioId: inspectorScenarioId, stepId: inspectorStepId }, locale);
   }, [project, scenarioId, stepId, inspectorScenarioId, inspectorStepId, locale]);
   const selected = inspectedRefs.flatMap(({ type, id, scopeId }) => {
-    const result = storyResolution.inspectorResolver?.({ kind: type, id, scopeId });
-    return result && project ? [{ ...result, name: storyObjectDisplayName(project, result, workbenchCopy[locale].objectList) }] : [];
+    const result = storyResolution?.resolve({ kind: type, id, scopeId });
+    return result ? [result] : [];
   });
-  const { resolvedObjects, resolvedInspectorObjects } = storyResolution;
+  const resolvedObjects = mode === "story" ? storyResolution?.resolveObjects() ?? [] : [];
+  const resolvedInspectorObjects = mode === "story" || detailsOpen ? storyResolution?.resolveInspectorObjects() ?? [] : selected;
   const selection = selected.map((item) => ({ ...item.ref, name: item.name, metadata: item.metadata as Record<string, unknown> }));
   function setView(patch: EditorStoryView) {
     const next: Parameters<typeof updateView>[0] = {};
@@ -152,7 +141,7 @@ export function useWorkbenchStory({ session, snapshot, selections, inspectedPlac
   const scenario = project?.story.scenarios.find(({ id }) => id === scenarioId);
   const savedRoute = project?.story.routes.find(({ id }) => id === view.activeRouteId);
   const staleRoute = project && savedRoute && savedRoute.sourceRevision !== storyRouteRevision(project);
-  const zones = useWorkbenchZones({ project, activePlaceId: snapshot?.activePlaceId, selectionRefs: rawRefs.map(({ type, ...ref }) => ({ ...ref, kind: type })), inspectedRefs: selected.map(({ ref }) => ref), resolvedObjects, locale, commit, onError: setError });
+  const zones = useWorkbenchZones({ project, activePlaceId: snapshot?.activePlaceId, selectionRefs: rawRefs.map(({ type, ...ref }) => ({ ...ref, kind: type })), inspectedRefs: selected.map(({ ref }) => ref), resolveObjects: () => storyResolution?.resolveObjects() ?? [], locale, commit, onError: setError });
   const worldRoot = project?.places.find(({ kind, parentId }) => kind === "world" && !parentId) ?? project?.places.find(({ parentId }) => !parentId);
   const worldDescription = project && worldRoot ? <StoryWorldDescription locale={locale} value={worldRoot.description ?? ""} onChange={(description) => commit({ id: `world-description:${worldRoot.id}`, apply: (current) => ({ ...current, places: current.places.map((place) => place.id === worldRoot.id ? { ...place, description } : place) }) })}/> : undefined;
   // Effective selection is a read-only view model; commands always start from the untouched project.
