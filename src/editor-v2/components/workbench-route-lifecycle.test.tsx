@@ -44,7 +44,10 @@ beforeEach(async () => {
   project.story.intentions = [{ id: "reach", kind: "reachability", text: "Dojście przez atlas", subject: { kind: "place", id: "p:world" }, target: { kind: "place", id: "p:world" }, status: "accepted" }];
   const query = { from: { placeId: "p:world", point: { x: 3, y: 3 } }, to: { placeId: "p:world", point: { x: 8, y: 3 } } };
   const result = findStoryRoutes(project, query);
-  project.story.routes = ["saved", "other"].map((id) => ({ id, name: id, query, result, sourceRevision: result.sourceRevision }));
+  project.story.routes = [
+    { id: "saved", name: "saved", query, result, sourceRevision: result.sourceRevision },
+    { id: "stale", name: "stale", query, result: { ...result, sourceRevision: "stale" }, sourceRevision: "stale" },
+  ];
   fixture.project = project;
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
   await act(async () => root.render(<EditorWorkbench/>)); click("Opowieść");
@@ -90,5 +93,22 @@ describe("route evidence and point requests in the real workbench", () => {
     await openReview(); click("Otwórz trasę", review());
     expect(review()).toBeNull(); expect(host.querySelector('section[aria-label="Planowanie tras"]')).not.toBeNull();
     expect(routePath()).not.toBeNull();
+  });
+
+  it("opens a stale saved route in the selected route editor with an explicit recalculation CTA", () => {
+    select("Trasa", "stale");
+    expect(host.textContent).toContain("Plan lub reguły się zmieniły — zapisana trasa wymaga przeliczenia.");
+    click("Sprawdź założenia sceny");
+    expect(review()).not.toBeNull();
+    click("Otwórz i przelicz");
+
+    const routePanel = host.querySelector('section[aria-label="Planowanie tras"]');
+    expect(review()).toBeNull();
+    expect(routePanel).not.toBeNull();
+    expect(routePanel?.textContent).toContain("Plan się zmienił — przelicz trasę.");
+    expect(button("Wyznacz trasę", routePanel!).disabled).toBe(false);
+    expect(routePath()).toBeNull();
+    const routeSelect = [...host.querySelectorAll("label")].find((node) => node.firstChild?.textContent === "Trasa")!.querySelector("select")!;
+    expect(routeSelect.value).toBe("stale");
   });
 });

@@ -35,6 +35,22 @@ function placeWorldMatrix(project: EditorProject, id: string): AffineMatrix {
   return lineage.reduce((matrix, place) => multiplyAffine(matrix, localMatrix(place)), IDENTITY);
 }
 
+/** Computes every place-to-world transform once for geometry-wide batch work. */
+export function projectPlaceWorldMatrices(project: EditorProject): ReadonlyMap<string, AffineMatrix> {
+  const byId = new Map(project.places.map((place) => [place.id, place]));
+  const matrices = new Map<string, AffineMatrix>(); const resolving = new Set<string>();
+  const resolve = (place: PlaceNode): AffineMatrix => {
+    const cached = matrices.get(place.id); if (cached) return cached;
+    if (resolving.has(place.id)) return IDENTITY;
+    resolving.add(place.id);
+    const parent = place.parentId ? byId.get(place.parentId) : undefined;
+    const matrix = parent ? multiplyAffine(resolve(parent), localMatrix(place)) : localMatrix(place);
+    resolving.delete(place.id); matrices.set(place.id, matrix); return matrix;
+  };
+  for (const place of project.places) resolve(place);
+  return matrices;
+}
+
 export function relativePlaceMatrix(project: EditorProject, targetPlaceId: string, sourcePlaceId: string) {
   return multiplyAffine(invertAffine(placeWorldMatrix(project, targetPlaceId)), placeWorldMatrix(project, sourcePlaceId));
 }

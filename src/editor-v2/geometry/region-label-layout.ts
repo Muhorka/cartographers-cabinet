@@ -26,8 +26,19 @@ export function regionLabelLayout(name: MapLabelText, shape: RegionShape, zoom: 
 
 function regionLabelLayoutUncached(name: MapLabelText, shape: RegionShape, zoom: number, boundaryFallback = false, options: InteriorLabelOptions = {}): RegionLabelLayout | undefined {
   const face = labelFace(shape);
-  const fullInside = roomLabelLayout(name, face, zoom, { ...options, allowCompact: false, minimumScreenSize: 3.2, preferredScreenSize: 7 });
-  if (fullInside && (!boundaryFallback || fullInside.fontSize * zoom >= 6.5)) return { kind: "inside", ...fullInside };
+  const interiorOptions = { ...options, allowCompact: false, minimumScreenSize: 3.2, preferredScreenSize: 7, requireObstacleFree: boundaryFallback };
+  const fullInside = roomLabelLayout(name, face, zoom, interiorOptions);
+  // A boundary label is only a last resort.  The 3.2px minimum is the actual
+  // readability floor; a larger threshold made spacious regions jump to their
+  // edge even though the complete label still fit inside without collisions.
+  if (fullInside && fullInside.fontSize * zoom >= 3.2) return { kind: "inside", ...fullInside };
+  // At distant zoom levels the area line is optional. Keep the authored name
+  // inside the region when it remains readable instead of moving both name and
+  // area onto the boundary.
+  if (typeof name !== "string") {
+    const nameOnlyInside = roomLabelLayout(name.name, face, zoom, interiorOptions);
+    if (nameOnlyInside && nameOnlyInside.fontSize * zoom >= 3.2) return { kind: "inside", ...nameOnlyInside };
+  }
   if (boundaryFallback) {
     const boundary = boundaryLayout(typeof name === "string" ? name : `${name.name} · ${name.area}`, shape, zoom);
     if (boundary) return boundary;

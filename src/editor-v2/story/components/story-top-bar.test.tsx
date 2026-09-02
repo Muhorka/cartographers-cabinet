@@ -5,8 +5,11 @@ import { expect, it, vi } from "vitest";
 import { StoryTopBar } from "./story-top-bar";
 import { storyCopy } from "../i18n/story-copy";
 import type { StoryViewState } from "./story-types";
+import type { StoryRouteRecord } from "../routes/types";
 
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const view: StoryViewState = { tab: "atlas", activeCollection: "characters", scenarioContext: "base" };
+const previewRoute = { id: "preview-route", name: "Draft route", query: { from: { placeId: "world", point: { x: 1, y: 1 } }, to: { placeId: "world", point: { x: 2, y: 2 } } }, result: { status: "ready" as const, revision: 0, sourceRevision: "revision", routes: [], missingFacts: [], reasons: [] }, sourceRevision: "revision" } satisfies StoryRouteRecord;
 it.each(["pl", "en"] as const)("names inactive overlays explicitly in %s", (locale) => {
   const html = renderToStaticMarkup(<StoryTopBar copy={storyCopy[locale]} view={view} lenses={[]} scenarios={[]} routes={[]} onChange={vi.fn()} onScenario={vi.fn()}/>);
   expect(html).toContain(locale === "pl" ? "Brak aktywnych soczewek" : "No active lenses");
@@ -23,5 +26,16 @@ it("toggles lenses independently and clears all temporary overlays without any d
   await act(async () => [...host.querySelectorAll("button")].find((button) => button.textContent === "Restore base view")!.click());
   expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ activeLensIds: [], previewLens: undefined, activeScenarioId: undefined, activeRouteId: undefined, scenarioContext: "base" }));
   expect(onRouteSelected).toHaveBeenLastCalledWith(undefined);
+  await act(async () => root.unmount());
+});
+
+it.each(["pl", "en"] as const)("shows and clears the unsaved route preview in %s", async (locale) => {
+  const host = document.createElement("div"); const root = createRoot(host);
+  await act(async () => root.render(<StoryTopBar copy={storyCopy[locale]} view={view} lenses={[]} scenarios={[]} routes={[]} previewRoute={previewRoute} onChange={vi.fn()} onScenario={vi.fn()}/>));
+  expect(host.textContent).toContain(locale === "pl" ? "Aktywna niezapisana trasa" : "Active unsaved route");
+  expect(host.textContent).not.toContain(locale === "pl" ? "Brak aktywnej trasy" : "No active route");
+  await act(async () => root.render(<StoryTopBar copy={storyCopy[locale]} view={view} lenses={[]} scenarios={[]} routes={[]} onChange={vi.fn()} onScenario={vi.fn()}/>));
+  expect(host.textContent).toContain(locale === "pl" ? "Brak aktywnej trasy" : "No active route");
+  expect(host.textContent).not.toContain(locale === "pl" ? "Aktywna niezapisana trasa" : "Active unsaved route");
   await act(async () => root.unmount());
 });

@@ -17,6 +17,7 @@ import { mapLabelWithArea, mapRegionArea, mapRoomArea } from "../geometry/map-ar
 import { ribbonShape, isRibbonElement } from "../geometry/ribbon-geometry";
 import { mapLabelObstacles } from "./map-sheet-elements";
 import { applyAffinePoint, type AffineMatrix } from "../geometry/affine-transform";
+import { createContainedRegionObstacleIndex, type RegionLabelObstacleSource } from "../geometry/contained-region-label-obstacles";
 
 type MovePreview = { selection: MapSelection; delta: { x: number; y: number } };
 
@@ -118,13 +119,16 @@ export function createSceneLabelPlan(project: EditorProject, activePlaceId: stri
     }).toSorted((first, second) => {
       return first.depth - second.depth || first.index - second.index;
     });
+    const regionSources: RegionLabelObstacleSource[] = visible.flatMap(({ element }) => element.geometry.kind === "region" ? [{ id: element.id, ownerId: element.belongsToId, shape: element.geometry.shape, translation: movingIds.has(element.id) ? moveDelta : undefined }] : []);
+    const regionObstacleIndex = createContainedRegionObstacleIndex(regionSources);
     for (const { element } of visible) {
       const baseMatrix = relativePlaceMatrix(project, activePlaceId, element.belongsToId);
       const matrix = translatedMatrix(baseMatrix, movingIds.has(element.id) ? moveDelta : undefined);
       const ownerObstacles = element.belongsToId === activePlaceId ? staticObstacles : transformObstacles(relativePlaceMatrix(project, element.belongsToId, activePlaceId), staticObstacles);
       const shape = element.geometry.kind === "region" ? element.geometry.shape : isRibbonElement(element) ? ribbonShape(element) : undefined;
       if (!shape) continue;
-      addRegion(`element:${element.belongsToId}:${element.id}`, element.name, shape, matrix, terrain, ownerObstacles);
+      const containedObstacles = element.geometry.kind === "region" ? regionObstacleIndex.forTarget({ id: element.id, ownerId: element.belongsToId, shape, translation: movingIds.has(element.id) ? moveDelta : undefined }) : [];
+      addRegion(`element:${element.belongsToId}:${element.id}`, element.name, shape, matrix, terrain, [...ownerObstacles, ...containedObstacles]);
     }
   }
 

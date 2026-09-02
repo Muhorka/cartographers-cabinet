@@ -1,15 +1,16 @@
 "use client";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { EditorProject } from "../../model/project-model";
-import { storyRouteRevision } from "../routes/planner";
+import { isStoryRouteCurrent, storyRouteRevision } from "../routes/revision";
 import { insidePoint } from "../routes/geometry";
 import { routeWidth } from "../routes/width";
 import type { StoryRouteRecord, StoryRouteRequest } from "../routes/types";
 import type { StoryRouteCalculationService } from "../routes/route-service";
-import { projectRevision } from "../../state/project-revision";
+import { createRouteDiagnosticFormatter } from "../routes/route-diagnostic-display";
 import type { StoryViewContext } from "../types";
 import { endpointForOption, endpointOptionId, storyRouteEndpointOptions, type StoryRouteEndpoint } from "../routes/endpoints";
 import styles from "./story-route-panel.module.css";
+import { storyRouteEndpointVisibleOnPlace, storyRouteSegmentVisibleOnPlace } from "../routes/visibility";
 
 type RoutePreference = "preferRoads" | "allowOffroad" | "allowWindows";
 type StoryRoutePanelProps = {
@@ -21,15 +22,28 @@ type StoryRoutePanelProps = {
 };
 type CalculationKey = {
   projectId: string; revision: string; query: string;
-  scenarioId?: string; stepId?: string; lensId?: string;
+  scenarioId?: string; stepId?: string;
   routeService?: StoryRouteCalculationService;
 };
 function routeQuerySignature(query: StoryRouteRequest) {
   return JSON.stringify({ from: query.from, to: query.to, profile: query.profile ?? "foot", actorId: query.actorId || undefined, widthOverride: query.width, preferences: query.preferences ?? {}, scenarioId: query.scenarioId, stepId: query.stepId });
 }
 
+function routePlaceName(project: EditorProject, id: string) {
+  return project.places.find(({ id: placeId }) => placeId === id)?.name ?? id;
+}
+
+function routeSheetLabel(pl: boolean, count: number) {
+  if (!pl) return `${count} ${count === 1 ? "sheet" : "sheets"}`;
+  if (count === 1) return "1 arkusz";
+  if (count >= 2 && count <= 4) return `${count} arkusze`;
+  return `${count} arkuszy`;
+}
+
 export function StoryRoutePanel({ project, activePlaceId, locale, context, initialRoute, onDelete, onPreview, onSave, onOpenPlace, onRequestPoint, routeService }: StoryRoutePanelProps) {
   const pl = locale === "pl";
+  const { scenarioId, stepId, lensId } = context;
+  const diagnosticFormatter = useMemo(() => createRouteDiagnosticFormatter(project, locale, { scenarioId, stepId, lensId }), [project, locale, scenarioId, stepId, lensId]);
   const endpointOptions = storyRouteEndpointOptions(project);
   const firstOption = endpointOptions.find(({ kind, placeId }) => kind === "place" && placeId === activePlaceId) ?? endpointOptions[0];
   const initialEndpoint = firstOption ? endpointForOption(firstOption) : { placeId: "", point: insidePoint(undefined) };
@@ -51,9 +65,10 @@ export function StoryRoutePanel({ project, activePlaceId, locale, context, initi
   const [calculationKey, setCalculationKey] = useState<CalculationKey | undefined>(undefined);
   const querySignature = JSON.stringify({ from, to, profile, actorId: actorId || undefined, widthOverride, preferences: preferences ?? {}, scenarioId: context.scenarioId, stepId: context.stepId });
   const priorQuerySignature = useRef(querySignature);
-  const baseRevision = projectRevision(project);
-  const currentCalculationKey: CalculationKey = { projectId: project.id, revision: baseRevision, query: querySignature, scenarioId: context.scenarioId, stepId: context.stepId, lensId: context.lensId, routeService };
-  const keyChanged = (left: CalculationKey, right: CalculationKey) => left.projectId !== right.projectId || left.revision !== right.revision || left.query !== right.query || left.scenarioId !== right.scenarioId || left.stepId !== right.stepId || left.lensId !== right.lensId || left.routeService !== right.routeService;
+  const routeRevision = storyRouteRevision(project);
+  const resultIsCurrent = result ? isStoryRouteCurrent(project, result, routeRevision) : false;
+  const currentCalculationKey: CalculationKey = { projectId: project.id, revision: routeRevision, query: querySignature, scenarioId: context.scenarioId, stepId: context.stepId, routeService };
+  const keyChanged = (left: CalculationKey, right: CalculationKey) => left.projectId !== right.projectId || left.revision !== right.revision || left.query !== right.query || left.scenarioId !== right.scenarioId || left.stepId !== right.stepId || left.routeService !== right.routeService;
   useLayoutEffect(() => {
     projectRef.current = project; contextRef.current = context;
   }, [project, context, context.scenarioId, context.stepId, context.lensId]);
@@ -64,13 +79,13 @@ export function StoryRoutePanel({ project, activePlaceId, locale, context, initi
   }, [querySignature]);
   useLayoutEffect(() => {
     return () => { latest.current += 1; routeService?.cancel(); setCalculationStatus((previous) => previous === "running" ? "stale" : previous); };
-  }, [routeService, baseRevision, querySignature, context.scenarioId, context.stepId, context.lensId]);
+  }, [routeService, routeRevision, querySignature, context.scenarioId, context.stepId]);
   useLayoutEffect(() => {
-    if (result && (result.sourceRevision !== storyRouteRevision(project) || resultSignature !== querySignature)) previewRef.current(undefined);
-  }, [project, baseRevision, querySignature, result, resultSignature]);
+    if (result && (!resultIsCurrent || resultSignature !== querySignature)) previewRef.current(undefined);
+  }, [querySignature, result, resultIsCurrent, resultSignature]);
   const invalidatedCalculation = calculationStatus === "running" && calculationKey !== undefined && keyChanged(calculationKey, currentCalculationKey);
   const visibleCalculationStatus = invalidatedCalculation ? "stale" : calculationStatus;
-  function isStale(capturedRevision: string, capturedSignature: string) { return projectRef.current.id !== project.id || projectRevision(projectRef.current) !== capturedRevision || JSON.stringify({ ...contextRef.current, scenarioId: contextRef.current.scenarioId, stepId: contextRef.current.stepId }) !== JSON.stringify({ ...context, scenarioId: context.scenarioId, stepId: context.stepId }) || capturedSignature !== querySignature; }
+  function isStale(capturedRevision: string, capturedSignature: string) { return projectRef.current.id !== project.id || storyRouteRevision(projectRef.current) !== capturedRevision || contextRef.current.scenarioId !== context.scenarioId || contextRef.current.stepId !== context.stepId || capturedSignature !== querySignature; }
   function invalidateCurrentCalculation() {
     if (calculationStatus !== "running") return;
     routeService?.cancel(); setCalculationStatus("stale"); onPreview(undefined);
@@ -86,7 +101,7 @@ export function StoryRoutePanel({ project, activePlaceId, locale, context, initi
       return;
     }
     if (!routeService) { setCalculationStatus("error"); setError(pl ? "Brak usługi obliczania tras." : "Route calculation service is unavailable."); return; }
-    const capturedRevision = baseRevision; const capturedSignature = querySignature; const attempt = ++latest.current;
+    const capturedRevision = routeRevision; const capturedSignature = querySignature; const attempt = ++latest.current;
     setCalculationKey(currentCalculationKey);
     try {
       const activePreferences = Object.fromEntries(Object.entries(preferences ?? {}).filter(([, value]) => value !== undefined)) as NonNullable<StoryRouteRequest["preferences"]>;
@@ -121,11 +136,21 @@ export function StoryRoutePanel({ project, activePlaceId, locale, context, initi
     });
   }
   const defaultWidth = routeWidth({ profile });
-  const stale = result && (result.sourceRevision !== storyRouteRevision(project) || resultSignature !== querySignature);
+  const stale = result && (!resultIsCurrent || resultSignature !== querySignature);
   const fromOption = endpointOptions.find(({ id }) => id === fromOptionId);
   const toOption = endpointOptions.find(({ id }) => id === toOptionId);
   const pendingFromPoint = Boolean(fromOption?.requiresPoint && !fromPointConfirmed);
   const pendingToPoint = Boolean(toOption?.requiresPoint && !toPointConfirmed);
+  const readyPreview = result?.result.status === "ready" && !stale ? result : undefined;
+  const routeVisibleOnActivePlace = readyPreview && activePlaceId
+    ? readyPreview.result.routes.some((alternative) => alternative.segments.some((segment) => storyRouteSegmentVisibleOnPlace(project, activePlaceId, segment)))
+    : true;
+  const startVisibleOnActivePlace = readyPreview && activePlaceId
+    ? readyPreview.result.routes.some((alternative) => storyRouteEndpointVisibleOnPlace(project, activePlaceId, alternative, readyPreview.query.from))
+    : true;
+  const endVisibleOnActivePlace = readyPreview && activePlaceId
+    ? readyPreview.result.routes.some((alternative) => storyRouteEndpointVisibleOnPlace(project, activePlaceId, alternative, readyPreview.query.to))
+    : true;
   return <section className={styles.panel} aria-label={pl ? "Planowanie tras" : "Route planning"}>
     <h2>{pl ? "Trasy" : "Routes"}</h2>
     <p>{pl ? "Sprawdź, którędy wybrana postać lub grupa może dostać się z jednego miejsca do drugiego. Gabinet uwzględni geometrię, przejścia, dostęp, klucze i wybrany sposób podróży." : "Check how a selected character or group can travel from one place to another. The Cabinet accounts for geometry, passages, access, keys, and the chosen mode of travel."}</p>
@@ -147,8 +172,9 @@ export function StoryRoutePanel({ project, activePlaceId, locale, context, initi
     {visibleCalculationStatus === "stale" && <p role="status">{pl ? "Plan lub zapytanie zmieniły się podczas obliczania. Uruchom obliczanie ponownie." : "The plan or query changed during calculation. Run it again."}</p>}
     {error && <p role="alert">{error}</p>}
     {result && <div role="status" className={styles.result}><strong>{stale ? pl ? "Plan się zmienił — przelicz trasę." : "The plan changed — recalculate." : result.result.status === "ready" ? pl ? "Najlepsza znaleziona trasa" : "Best route found" : result.result.status === "unknown" ? pl ? "Brakuje danych do potwierdzenia trasy" : "Missing facts prevent verification" : pl ? "Nie znaleziono dostępnej trasy" : "No accessible route found"}</strong>
-      {result.result.routes.map((route, index) => <details key={route.id}><summary>{index + 1}. {route.distance.toFixed(1)} m</summary>{route.conditions.map((condition) => <p key={condition}>{condition}</p>)}{[...new Set(route.segments.map(({ placeId }) => placeId))].map((id) => <button key={id} type="button" onClick={() => onOpenPlace?.(id)}>{project.places.find((place) => place.id === id)?.name ?? id}</button>)}</details>)}
-      {[...result.result.missingFacts, ...result.result.reasons].map((reason) => <p key={reason}>{reason}</p>)}
+      {readyPreview && activePlaceId && (!routeVisibleOnActivePlace || !startVisibleOnActivePlace || !endVisibleOnActivePlace) && <div className={styles.routeNavigation}>{!routeVisibleOnActivePlace && <p>{pl ? "Żaden odcinek tej trasy nie jest widoczny na bieżącym arkuszu." : "No segment of this route is visible on the current sheet."}</p>}<div>{!startVisibleOnActivePlace && <button type="button" onClick={() => onOpenPlace?.(readyPreview.query.from.placeId)}>{pl ? "Pokaż początek trasy" : "Show route start"}</button>}{!endVisibleOnActivePlace && <button type="button" onClick={() => onOpenPlace?.(readyPreview.query.to.placeId)}>{pl ? "Pokaż koniec trasy" : "Show route end"}</button>}</div></div>}
+      {result.result.routes.map((route, index) => <details key={route.id}><summary>{index + 1}. {route.distance.toFixed(1)} m</summary>{result.result.status === "ready" && <p className={styles.routeSummary} data-route-summary="true">{routePlaceName(project, result.query.from.placeId)} → {routePlaceName(project, result.query.to.placeId)} · {route.distance.toFixed(1)} m · {routeSheetLabel(pl, new Set(route.segments.map(({ placeId }) => placeId)).size)}</p>}{route.conditions.map((condition) => <p key={condition}>{diagnosticFormatter.format(condition)}</p>)}{[...new Set(route.segments.map(({ placeId }) => placeId))].map((id) => <button key={id} type="button" onClick={() => onOpenPlace?.(id)}>{project.places.find((place) => place.id === id)?.name ?? id}</button>)}</details>)}
+      {[...result.result.missingFacts, ...result.result.reasons].map((reason) => <p key={reason}>{diagnosticFormatter.format(reason)}</p>)}
       {result.result.status === "ready" && !stale && !alternativesExhausted && result.result.routes.length < 3 && <button type="button" disabled={visibleCalculationStatus === "running"} onClick={() => void calculate(result.result.routes.length + 1)}>{pl ? "Wyznacz inną trasę" : "Find another route"}</button>}
       <button type="button" disabled={Boolean(stale)} onClick={() => onSave({ ...result, name: name.trim() || result.name })}>{pl ? "Zachowaj trasę" : "Save route"}</button>
       <button type="button" onClick={() => { setResult(undefined); setResultSignature(undefined); onPreview(undefined); }}>{pl ? "Ukryj podgląd" : "Hide preview"}</button>

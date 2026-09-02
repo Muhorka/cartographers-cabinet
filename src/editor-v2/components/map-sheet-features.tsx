@@ -10,18 +10,20 @@ import { regionCorner, type ResizeCorner } from "../geometry/region-resize";
 import type { AffineMatrix } from "../geometry/affine-transform";
 import { matrixAttribute } from "./map-sheet-geometry";
 import { stairGlyphPrimitives } from "../geometry/stair-glyph";
+import type { StoryObjectRef } from "../story/types";
 
 type FeatureSelection = { kind: "opening" | "transition"; id: string };
 type FeatureCopy = {
-  openingLabel?(kind: WallOpening["kind"], id: string): string;
-  transitionLabel?(id: string, kind?: "stairs" | "elevator"): string;
+  openingLabel?(kind: WallOpening["kind"], id: string, index: number): string;
+  transitionLabel?(id: string, kind: "stairs" | "elevator" | undefined, index: number): string;
 };
 
-export function MapSheetFeatures({ document, prefix, selectedIds, copy, viewportZoom, selectionEnabled = false, selectionOnly = false, selectableOpeningWallIds, selectableTransitionIds, movingIds = new Set(), movingWallIds = new Set(), moveDelta, openingWidthPreview, onSelect, transitionOverrides }: {
+export function MapSheetFeatures({ document, prefix, selectedIds, copy, storyLabel, viewportZoom, selectionEnabled = false, selectionOnly = false, selectableOpeningWallIds, selectableTransitionIds, movingIds = new Set(), movingWallIds = new Set(), moveDelta, openingWidthPreview, onSelect, transitionOverrides }: {
   document: ConstructionDocument;
   prefix: string;
   selectedIds: Set<string>;
   copy: FeatureCopy;
+  storyLabel?(ref: StoryObjectRef, fallback: string): string;
   viewportZoom: number;
   selectionEnabled?: boolean;
   selectionOnly?: boolean;
@@ -32,27 +34,27 @@ export function MapSheetFeatures({ document, prefix, selectedIds, copy, viewport
   moveDelta?: KernelPoint;
   openingWidthPreview?: { id: string; width: number };
   onSelect?(selection: FeatureSelection, additive?: boolean): void;
-  transitionOverrides?: readonly { transition: VerticalTransition; transform?: AffineMatrix }[];
+  transitionOverrides?: readonly { transition: VerticalTransition; scopeId: string; index: number; transform?: AffineMatrix }[];
 }) {
   const walls = new Map(document.walls.map((wall) => [wall.id, wall]));
-  const transitionEntries: readonly { transition: VerticalTransition; transform?: AffineMatrix }[] = transitionOverrides ?? document.transitions.map((transition) => ({ transition }));
+  const transitionEntries: readonly { transition: VerticalTransition; scopeId: string; index: number; transform?: AffineMatrix }[] = transitionOverrides ?? document.transitions.map((transition, index) => ({ transition, scopeId: document.id, index }));
   return <g className={styles.features}>
-    {document.openings.map((storedOpening) => {
+    {document.openings.map((storedOpening, openingIndex) => {
       const opening = openingWidthPreview?.id === storedOpening.id ? { ...storedOpening, width: openingWidthPreview.width } : storedOpening; if (opening.visible === false) return null;
       const wall = walls.get(opening.wallId); if (!wall || wall.visible === false) return null;
       const dx = wall.end.x - wall.start.x; const dy = wall.end.y - wall.start.y; const length = Math.hypot(dx, dy); if (!length) return null;
       const x = wall.start.x + dx * opening.position; const y = wall.start.y + dy * opening.position; const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-      const label = copy.openingLabel?.(opening.kind, opening.id) ?? opening.id; const inScope = !selectableOpeningWallIds || selectableOpeningWallIds.has(opening.wallId); const selectable = selectionEnabled && inScope && (selectionOnly || !opening.locked);
+      const fallback = copy.openingLabel?.(opening.kind, opening.id, openingIndex + 1) ?? opening.id; const label = storyLabel?.({ kind: "opening", id: opening.id, scopeId: document.id }, fallback) ?? fallback; const inScope = !selectableOpeningWallIds || selectableOpeningWallIds.has(opening.wallId); const selectable = selectionEnabled && inScope && (selectionOnly || !opening.locked);
       const moving = moveDelta && (movingIds.has(opening.id) || movingWallIds.has(opening.wallId));
       return <g key={opening.id} transform={moving ? `translate(${moveDelta.x} ${moveDelta.y})` : undefined}><g className={`${styles.opening}${selectedIds.has(opening.id) ? ` ${styles.selected}` : ""}${selectable ? "" : ` ${styles.context}`}`} transform={`translate(${x} ${y}) rotate(${angle})`} data-selectable={selectable ? "true" : undefined} data-selection-layer={selectable ? "construction" : undefined} data-selection-kind={selectable ? "opening" : undefined} data-selection-id={selectable ? opening.id : undefined} data-feature-id={opening.id} data-opening-kind={opening.kind} role={selectable ? "button" : undefined} tabIndex={selectable ? 0 : undefined} aria-label={selectable ? label : undefined} onClick={selectable ? (event) => { event.stopPropagation(); select(onSelect, { kind: "opening", id: opening.id }, event.ctrlKey || event.metaKey || event.shiftKey); } : undefined} onKeyDown={selectable ? (event) => activate(event, () => onSelect?.({ kind: "opening", id: opening.id })) : undefined}>
         <OpeningMark opening={opening} wallThickness={wall.thickness}/><line className={styles.hit} x1={-opening.width / 2} y1="0" x2={opening.width / 2} y2="0"/>{selectable && selectedIds.has(opening.id) && <><circle className={styles.resizeHandle} cx={-opening.width / 2} cy="0" r={5 / viewportZoom} data-opening-resize={opening.id}/><circle className={styles.resizeHandle} cx={opening.width / 2} cy="0" r={5 / viewportZoom} data-opening-resize={opening.id}/></>}<title>{label}</title>
       </g></g>;
     })}
-    {transitionEntries.map(({ transition, transform }) => {
+    {transitionEntries.map(({ transition, scopeId, index, transform }) => {
       if (transition.visible === false) return null;
-      const patternId = `${prefix}-${transition.kind}-${safeId(transition.id)}`; const clipId = `${patternId}-clip`; const label = copy.transitionLabel?.(transition.id, transition.kind) ?? transition.id; const inScope = !selectableTransitionIds || selectableTransitionIds.has(transition.id); const selectable = selectionEnabled && inScope && !transform && (selectionOnly || !transition.locked); const bounds = regionBounds(transition.footprint);
+      const patternId = `${prefix}-${safeId(scopeId)}-${transition.kind}-${safeId(transition.id)}`; const clipId = `${patternId}-clip`; const fallback = copy.transitionLabel?.(transition.id, transition.kind, index + 1) ?? transition.id; const label = storyLabel?.({ kind: "transition", id: transition.id, scopeId }, fallback) ?? fallback; const inScope = !selectableTransitionIds || selectableTransitionIds.has(transition.id); const selectable = selectionEnabled && inScope && !transform && (selectionOnly || !transition.locked); const bounds = regionBounds(transition.footprint);
       const transforms = [transform && matrixAttribute(transform), moveDelta && movingIds.has(transition.id) ? `translate(${moveDelta.x} ${moveDelta.y})` : undefined].filter(Boolean).join(" ") || undefined;
-      return <g key={`${transition.id}:${transform ? "context" : "local"}`} transform={transforms} className={`${styles.transition}${selectedIds.has(transition.id) ? ` ${styles.selected}` : ""}${selectable ? "" : ` ${styles.context}`}`} data-selectable={selectable ? "true" : undefined} data-selection-layer={selectable ? "construction" : undefined} data-selection-kind={selectable ? "transition" : undefined} data-selection-id={selectable ? transition.id : undefined} data-feature-id={transition.id} role={selectable ? "button" : undefined} tabIndex={selectable ? 0 : undefined} aria-label={selectable ? label : undefined} onClick={selectable ? (event) => { event.stopPropagation(); select(onSelect, { kind: "transition", id: transition.id }, event.ctrlKey || event.metaKey || event.shiftKey); } : undefined} onKeyDown={selectable ? (event) => activate(event, () => onSelect?.({ kind: "transition", id: transition.id })) : undefined}>
+      return <g key={`${scopeId}:${transition.id}:${transform ? "context" : "local"}`} transform={transforms} className={`${styles.transition}${selectedIds.has(transition.id) ? ` ${styles.selected}` : ""}${selectable ? "" : ` ${styles.context}`}`} data-selectable={selectable ? "true" : undefined} data-selection-layer={selectable ? "construction" : undefined} data-selection-kind={selectable ? "transition" : undefined} data-selection-id={selectable ? transition.id : undefined} data-feature-id={transition.id} role={selectable ? "button" : undefined} tabIndex={selectable ? 0 : undefined} aria-label={selectable ? label : undefined} onClick={selectable ? (event) => { event.stopPropagation(); select(onSelect, { kind: "transition", id: transition.id }, event.ctrlKey || event.metaKey || event.shiftKey); } : undefined} onKeyDown={selectable ? (event) => activate(event, () => onSelect?.({ kind: "transition", id: transition.id })) : undefined}>
         <defs><pattern id={patternId} width="6" height="6" patternUnits="userSpaceOnUse"><path className={styles.tread} d="M0 0 6 6M6 0 0 6"/></pattern><clipPath id={clipId}><path d={regionPath(transition.footprint)}/></clipPath></defs>
         <path className={`${styles.stairs} ${transition.kind === "elevator" ? styles.elevator : ""}`} d={regionPath(transition.footprint)} fill={transition.kind === "elevator" ? `url(#${patternId})` : undefined}/>{transition.kind === "stairs" && <g clipPath={`url(#${clipId})`} transform={transition.direction ? `rotate(${transition.direction} ${(bounds.minX + bounds.maxX) / 2} ${(bounds.minY + bounds.maxY) / 2})` : undefined}><StairDiagram style={transition.style ?? "straight"} bounds={bounds}/></g>}{selectable && selectedIds.has(transition.id) && (["north-west", "north-east", "south-east", "south-west"] as ResizeCorner[]).map((corner) => { const point = regionCorner(transition.footprint, corner); return <circle key={corner} className={styles.resizeHandle} cx={point.x} cy={point.y} r={5 / viewportZoom} data-resize-corner={corner} data-transition-id={transition.id}/>; })}<title>{label}</title>
       </g>;

@@ -15,7 +15,7 @@ import { SelectionRotationHandle } from "./selection-rotation-handle";
 import { captureMapPoint, capturePointPointer } from "./map-point-picker";
 import { fallbackMeasurementCopy, ViewMeasureControls } from "./view-measure-controls";
 import { MapSheetScene } from "./map-sheet-scene";
-import { quantizedLabelLayoutZoom } from "../geometry/label-layout-zoom";
+import { conservativeQuantizedLabelLayoutZoom } from "../geometry/label-layout-zoom";
 export type { MapSelection, MapSheetCopy } from "./map-sheet-types";
 const emptySelectedIds: string[] = []; const emptyDraftStrokes: KernelPoint[][] = [];
 export function MapSheet({ pointPicker, storyOverlay, rotationControl, project, activePlaceId, viewport, copy, selectedIds = emptySelectedIds, draftStrokes = emptyDraftStrokes, gestureDraft, sheetSize = { width: 1000, height: 700 }, interaction, selectionEditing = false, selectionOnly = false, outlineEditing = false, selectionMode = "direct", selectionLayerId, sketchVisible = true, sketchOpacity = .75, eraserSize = 10, gapClosingEnabled = false, gapClosingTolerance = 14, tracingProject, tracingOpacity = .4, onSelect, onSelectMany, onOpenPlace, onClearSelection, onDeleteSelected, onCancelDrawing, onViewportChange, onGesture, onGestureDraftChange, onMeasureSettingsChange, onNoteTextChange, onMoveSelection, onMoveWallEndpoint, onResizeOpening, onResizeTransition, onResizeElement, onResizeSurface, onResizePlace, onMoveElementVertex, onMoveSurfaceVertex, onMovePlaceVertex, nodeInsertion }: MapSheetProps) {
@@ -36,7 +36,9 @@ export function MapSheet({ pointPicker, storyOverlay, rotationControl, project, 
   const broaderPlaceId = placeToOpenAbove(project, activePlaceId);
   const mapTransform = `translate(${sheetSize.width / 2} ${sheetSize.height / 2}) rotate(${viewport.rotation}) scale(${viewport.zoom}) translate(${-viewport.center.x} ${-viewport.center.y})`;
   const layoutZoom = useDeferredValue(viewport.zoom);
-  const labelLayoutZoom = useDeferredValue(quantizedLabelLayoutZoom(viewport.zoom));
+  // The upper edge of the stable bucket keeps a fresh viewport transform from
+  // enlarging a label beyond the geometry checked by the deferred planner.
+  const labelLayoutZoom = conservativeQuantizedLabelLayoutZoom(viewport.zoom);
   const stableOnSelect = useStableEvent(onSelect); const stableOnOpenPlace = useStableEvent(onOpenPlace); const stableOnNoteTextChange = useStableEvent(onNoteTextChange); const stableOnViewportChange = useStableEvent(onViewportChange);
   const viewportNavigationEnabled = Boolean(onViewportChange);
   const viewportRef = useRef(viewport);

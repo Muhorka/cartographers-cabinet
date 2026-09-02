@@ -24,16 +24,17 @@ export function relevantLevelIds(project: EditorProject, request: StoryRouteRequ
   if (!seeds.length) return levelIds;
 
   const adjacency = new Map(levels.map(({ id }) => [id, new Set<string>()]));
-  const transitionOwners = new Map<string, Set<string>>();
   for (const level of levels) {
     const document = level.constructionId ? project.constructions.find(({ id }) => id === level.constructionId) : undefined;
     for (const transition of document?.transitions ?? []) {
-      const connected = transitionOwners.get(transition.id) ?? new Set<string>();
-      connected.add(level.id); transitionOwners.set(transition.id, connected);
+      // A transition id is only unique inside its construction document. Do not
+      // use it as a cross-document join key: two buildings may both contain
+      // `stairs-1` without sharing a vertical connection.
+      const connected = new Set<string>([level.id]);
       for (const id of [transition.sourceLevelId, transition.targetLevelId, ...(transition.connectedLevelIds ?? [])]) if (id && levelIds.has(id)) connected.add(id);
+      for (const from of connected) for (const to of connected) if (from !== to) adjacency.get(from)?.add(to);
     }
   }
-  for (const connected of transitionOwners.values()) for (const from of connected) for (const to of connected) if (from !== to) adjacency.get(from)?.add(to);
   const relevant = new Set(seeds); const queue = [...seeds];
   for (let index = 0; index < queue.length; index += 1) for (const next of adjacency.get(queue[index]!) ?? []) if (!relevant.has(next)) { relevant.add(next); queue.push(next); }
   return relevant;

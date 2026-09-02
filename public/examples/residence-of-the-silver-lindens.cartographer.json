@@ -27260,7 +27260,7 @@
           "result": {
             "status": "ready",
             "revision": 144,
-            "sourceRevision": "fb6f613f-f3cd-4c4c-9ee9-ac6928007762:2ed35b6a107fd53a:303817",
+            "sourceRevision": "story-route:v1:cff6cb58f53353ae:137313",
             "routes": [
               {
                 "id": "route-6bc5bd8e-a3dd-47e8-b3b7-dfba8a34f1f5-level",
@@ -27352,7 +27352,7 @@
                   "6bc5bd8e-a3dd-47e8-b3b7-dfba8a34f1f5"
                 ],
                 "usedTransitionIds": [],
-                "sourceRevision": "fb6f613f-f3cd-4c4c-9ee9-ac6928007762:2ed35b6a107fd53a:303817"
+                "sourceRevision": "story-route:v1:cff6cb58f53353ae:137313"
               }
             ],
             "route": {
@@ -27445,12 +27445,12 @@
                 "6bc5bd8e-a3dd-47e8-b3b7-dfba8a34f1f5"
               ],
               "usedTransitionIds": [],
-              "sourceRevision": "fb6f613f-f3cd-4c4c-9ee9-ac6928007762:2ed35b6a107fd53a:303817"
+              "sourceRevision": "story-route:v1:cff6cb58f53353ae:137313"
             },
             "missingFacts": [],
             "reasons": []
           },
-          "sourceRevision": "fb6f613f-f3cd-4c4c-9ee9-ac6928007762:2ed35b6a107fd53a:303817"
+          "sourceRevision": "story-route:v1:cff6cb58f53353ae:137313"
         }
       ]
     }

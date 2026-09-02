@@ -44,6 +44,7 @@ describe("map sheet viewport context", () => {
     const context = connectedTransitionsForView(project, "upper", "upper-plan");
     expect(context).toHaveLength(1);
     expect(context[0].transition.id).toBe("lift");
+    expect(context[0].scopeId).toBe("lower-plan");
     expect(context[0].transform?.[4]).toBe(-10);
     expect(context[0].transform?.[5]).toBe(0);
   });

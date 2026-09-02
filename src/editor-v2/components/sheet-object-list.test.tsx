@@ -1,4 +1,6 @@
+import { act } from "react";
 import { createElement } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { createStarterProject } from "../model/starter-project";
@@ -6,7 +8,7 @@ import { SheetObjectList } from "./sheet-object-list";
 import { applyMapGesture } from "../drawing/map-gesture-command";
 
 const copy = {
-  title: "Objects on this sheet", places: "Places", terrain: "Terrain", equipment: "Equipment", sketch: "Sketch", rooms: "Rooms", walls: "Walls", features: "Doors, windows and stairs", empty: "Nothing here", noResults: "No results", search: "Search objects", show: "Show", hide: "Hide", lock: "Lock", unlock: "Unlock",
+  title: "Objects on this sheet", places: "Places", terrain: "Terrain", equipment: "Objects", surfaces: "Platforms and balconies", sketch: "Sketch", rooms: "Rooms", walls: "Walls", features: "Doors, windows and stairs", empty: "Nothing here", noResults: "No results", search: "Search objects", show: "Show", hide: "Hide", lock: "Lock", unlock: "Unlock",
   wallName: (index: number) => `Wall ${index}`, openingName: (kind: "door" | "window" | "gate" | "passage", index: number) => `${kind} ${index}`, stairsName: (index: number) => `Stairs ${index}`,
 };
 
@@ -42,4 +44,29 @@ describe("editor v2 sheet object list", () => {
     const html = renderToStaticMarkup(createElement(SheetObjectList, { project, activePlaceId: "project:level", copy, onSelect: vi.fn(), onDelete: vi.fn() }));
     expect((html.match(/aria-label="Delete:/g) ?? []).length).toBeGreaterThan(3);
   });
+
+  it("starts collapsed and preserves manual group state across data updates", () => {
+    const base = createStarterProject("project", "Project", "en");
+    const project = { ...base, elements: [{ id: "tree", belongsToId: "project:level", name: "Tree", layerId: "terrain" as const, subjectId: "terrain.forest", geometry: { kind: "point" as const, at: { x: 2, y: 0 } }, visible: true, locked: false, tags: [], access: [], properties: {} }] };
+    const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+    act(() => root.render(createElement(SheetObjectList, { project, activePlaceId: "project:level", copy, onSelect: vi.fn() })));
+    const terrain = [...host.querySelectorAll("details")].find((item) => item.querySelector("summary")?.textContent?.startsWith("Terrain")) as HTMLDetailsElement;
+    expect([...host.querySelectorAll("details")].every((item) => !(item as HTMLDetailsElement).open)).toBe(true);
+    act(() => { terrain.open = true; terrain.dispatchEvent(new Event("toggle", { bubbles: true })); });
+    act(() => root.render(createElement(SheetObjectList, { project: { ...project, updatedAt: new Date().toISOString() }, activePlaceId: "project:level", copy, onSelect: vi.fn() })));
+    expect(terrain.open).toBe(true);
+    act(() => { terrain.open = false; terrain.dispatchEvent(new Event("toggle", { bubbles: true })); });
+    act(() => root.render(createElement(SheetObjectList, { project: { ...project, updatedAt: new Date().toISOString() }, activePlaceId: "project:level", copy, onSelect: vi.fn() })));
+    expect(terrain.open).toBe(false);
+    const search = host.querySelector('input[type="search"]') as HTMLInputElement;
+    act(() => { setNativeValue(search, "tree"); search.dispatchEvent(new Event("input", { bubbles: true })); });
+    expect(terrain.open).toBe(true);
+    act(() => { setNativeValue(search, ""); search.dispatchEvent(new Event("input", { bubbles: true })); });
+    expect(terrain.open).toBe(false);
+    act(() => root.unmount()); host.remove();
+  });
 });
+
+function setNativeValue(element: HTMLInputElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set; setter?.call(element, value);
+}

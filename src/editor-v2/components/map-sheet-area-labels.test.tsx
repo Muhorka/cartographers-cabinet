@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ElementShape, PlaceShape } from "./map-sheet-shapes";
+import { MapSheet } from "./map-sheet";
 import { MapSheetSurfaces } from "./map-sheet-surfaces";
 import { emptyProject } from "../model/project-model";
 import { clearRegionLabelLayoutCache } from "../geometry/region-label-layout";
@@ -11,6 +12,18 @@ const square = { kind: "compound" as const, polygons: [{ outer: [{ x: 0, y: 0 },
 const baseElement = { id: "pond", belongsToId: "world", name: "Pond", layerId: "terrain" as const, subjectId: "terrain.water", visible: true, locked: false, tags: [], access: [], properties: {} };
 
 describe("map area label rendering", () => {
+  it("keeps a location label inside when free geometry remains at a zoom bucket edge", () => {
+    const project = emptyProject("p", "Project");
+    project.places.push(
+      { id: "world", name: "World", kind: "world", transform: { x: 0, y: 0, rotation: 0 }, boundary: { kind: "rectangle", x: 0, y: 0, width: 140, height: 80 }, tags: [], access: [], properties: {} },
+      { id: "lawn", parentId: "world", name: "Teren", kind: "location", transform: { x: 0, y: 0, rotation: 0 }, boundary: { kind: "rectangle", x: 0, y: 0, width: 100, height: 12 }, tags: [], access: [], properties: {} },
+    );
+    const copy = { ariaLabel: "Story map", empty: "Nothing here", compass: "Rotate map", zoomIn: "Zoom in", zoomOut: "Zoom out", resetView: "Reset view", back: "Back", northMark: "N", openingLabel: (kind: string) => `Opening ${kind}`, transitionLabel: () => "Stairs" };
+    const markup = renderToStaticMarkup(createElement(MapSheet, { project, activePlaceId: "world", viewport: { center: { x: 50, y: 6 }, zoom: 1.04, rotation: 0 }, copy }));
+    expect(markup).toContain(">Teren</text>");
+    expect(markup).not.toContain("boundaryLabel");
+  });
+
   it.each(["building", "location", "level"] as const)("keeps the %s clip fixed while retaining its complete narrow label", (kind) => {
     const place = { id: kind, parentId: "world", name: "Budynek 1", kind, transform: { x: 0, y: 0, rotation: 0 }, boundary: { kind: "rectangle" as const, x: 0, y: 0, width: 3, height: 12 }, tags: [], access: [], properties: {} };
     const markup = renderToStaticMarkup(createElement(PlaceShape, { place, mode: "child", prefix: "t", viewportZoom: 8 }));

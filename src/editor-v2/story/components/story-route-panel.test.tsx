@@ -3,9 +3,10 @@ import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
 import { emptyProject } from "../../model/project-model";
 import { StoryRoutePanel } from "./story-route-panel";
-import { findStoryRoutes } from "../routes/planner";
+import { findStoryRoutes, storyRouteRevision } from "../routes/planner";
 import type { RouteCalculationOutcome, StoryRouteCalculationService } from "../routes/route-service";
 import { createInlineStoryRouteCalculationService } from "../routes/route-service";
+import type { StoryRouteAlternative, StoryRouteRecord } from "../routes/types";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const routeService = createInlineStoryRouteCalculationService();
@@ -26,13 +27,15 @@ describe("story route panel", () => {
       return { status: "ready", result: { ...first, routes }, attemptId: ++attemptId };
     });
     const service: StoryRouteCalculationService = { calculate, cancel: vi.fn(), dispose: vi.fn() };
-    const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
-    await act(async () => root.render(<StoryRoutePanel project={value} activePlaceId="grounds" locale="en" context={{}} routeService={service} onPreview={vi.fn()} onSave={vi.fn()}/>));
+    const onPreview = vi.fn(); const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+    await act(async () => root.render(<StoryRoutePanel project={value} activePlaceId="grounds" locale="en" context={{}} routeService={service} onPreview={onPreview} onSave={vi.fn()}/>));
     const click = async (text: string) => act(async () => { [...host.querySelectorAll("button")].find((button) => button.textContent === text)!.click(); await Promise.resolve(); });
     await click("Find route");
     expect(vi.mocked(calculate).mock.calls[0]?.[1].alternativeLimit).toBe(1); expect(host.querySelectorAll('[role="status"] details')).toHaveLength(1);
     await click("Find another route");
     expect(vi.mocked(calculate).mock.calls[1]?.[1].alternativeLimit).toBe(2); expect(host.querySelectorAll('[role="status"] details')).toHaveLength(2);
+    expect(onPreview.mock.lastCall?.[0]).toMatchObject({ result: { status: "ready" } });
+    await click("Hide preview"); expect(onPreview.mock.lastCall?.[0]).toBeUndefined();
     act(() => root.unmount()); host.remove();
   });
 
@@ -124,6 +127,86 @@ describe("story route panel", () => {
     const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
     await act(async () => root.render(<StoryRoutePanel project={value} initialRoute={initialRoute} locale="en" context={{}} routeService={routeService} onPreview={vi.fn()} onSave={vi.fn()} />));
     expect([...host.querySelectorAll("button")].find((button) => button.textContent === "Save route")).toHaveProperty("disabled", false);
+    await act(async () => root.unmount()); host.remove();
+  });
+
+  it.each(["en", "pl"] as const)("resolves route diagnostic IDs to user-facing names in %s", async (locale) => {
+    const value = project();
+    value.places.push(
+      { id: "gate-level", parentId: "grounds", name: "Gate level", kind: "level", constructionId: "gate-plan", transform: { x: 0, y: 0, rotation: 0 }, tags: [], access: [], properties: {} },
+      { id: "room-uuid", parentId: "gate-level", name: "Gatekeeper's Room", kind: "room", transform: { x: 0, y: 0, rotation: 0 }, tags: [], access: [], properties: {} },
+    );
+    value.constructions.push({ id: "gate-plan", revision: 0, walls: [{ id: "gate-wall", start: { x: 0, y: 0 }, end: { x: 10, y: 0 }, role: "boundary", thickness: .2 }], rooms: [{ id: "room-uuid", faceId: "gate-face", name: "Gatekeeper's Room", tags: [], access: [], properties: {} }], openings: [{ id: "passage-uuid", kind: "door", wallId: "gate-wall", position: .5, width: 1 }], transitions: [] });
+    value.story.objects.push({ ref: { kind: "opening", id: "passage-uuid", scopeId: "gate-plan" }, metadata: { narrativeLabel: "North passage" } });
+    const sourceRevision = storyRouteRevision(value);
+    const query = { from: { placeId: "grounds", point: { x: 11, y: 21 } }, to: { placeId: "room-uuid", point: { x: 11, y: 21 } }, profile: "foot" as const };
+    const alternative = { id: "named-diagnostic", sourceRevision, segments: [{ placeId: "grounds", kind: "outdoor" as const, points: [query.from.point, query.to.point] }], points: [query.from.point, query.to.point], distance: 7, conditions: ["Confirm who is allowed to use room-uuid.", "Confirm who is allowed to use passage-uuid."], reasons: [], usedOpeningIds: [], usedTransitionIds: [] } satisfies StoryRouteAlternative;
+    const initialRoute = { id: "named-diagnostic", name: "Gate route", query, result: { status: "ready" as const, revision: 0, sourceRevision, routes: [alternative], route: alternative, missingFacts: [], reasons: [] }, sourceRevision } satisfies StoryRouteRecord;
+    const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+    await act(async () => root.render(<StoryRoutePanel project={value} initialRoute={initialRoute} locale={locale} context={{}} routeService={routeService} onPreview={vi.fn()} onSave={vi.fn()} />));
+    expect(host.textContent).toContain(locale === "pl" ? "Ustal, kto może skorzystać z obiektu „Gatekeeper's Room”." : "Confirm who is allowed to use Gatekeeper's Room.");
+    expect(host.textContent).toContain(locale === "pl" ? "Ustal, kto może skorzystać z obiektu „North passage”." : "Confirm who is allowed to use North passage.");
+    expect(host.textContent).not.toContain("room-uuid");
+    expect(host.textContent).not.toContain("passage-uuid");
+    await act(async () => root.unmount()); host.remove();
+  });
+
+  it.each(["en", "pl"] as const)("summarizes a ready route and offers explicit endpoint navigation in %s", async (locale) => {
+    const value = project();
+    value.places.push({ id: "far-level", name: locale === "pl" ? "Dalekie piętro" : "Far level", kind: "level", transform: { x: 0, y: 0, rotation: 0 }, boundary: { kind: "rectangle", x: 0, y: 0, width: 10, height: 10 }, tags: [], access: [], properties: {} });
+    const sourceRevision = storyRouteRevision(value);
+    const query = { from: { placeId: "far-level", point: { x: 1, y: 1 } }, to: { placeId: "far-level", point: { x: 8, y: 8 } }, profile: "foot" as const };
+    const alternative = { id: "far-route", sourceRevision, segments: [{ placeId: "far-level", levelId: "far-level", kind: "indoor" as const, points: [query.from.point, query.to.point] }], points: [query.from.point, query.to.point], distance: 12.3, conditions: [], reasons: [], usedOpeningIds: [], usedTransitionIds: [] } satisfies StoryRouteAlternative;
+    const initialRoute = { id: "far-route", name: "Far route", query, result: { status: "ready" as const, revision: 0, sourceRevision, routes: [alternative], route: alternative, missingFacts: [], reasons: [] }, sourceRevision } satisfies StoryRouteRecord;
+    const onOpenPlace = vi.fn(); const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+    await act(async () => root.render(<StoryRoutePanel project={value} activePlaceId="grounds" locale={locale} context={{}} initialRoute={initialRoute} onPreview={vi.fn()} onSave={vi.fn()} onOpenPlace={onOpenPlace}/>));
+    expect(host.textContent).toContain(locale === "pl" ? "Dalekie piętro → Dalekie piętro · 12.3 m · 1 arkusz" : "Far level → Far level · 12.3 m · 1 sheet");
+    expect(host.textContent).toContain(locale === "pl" ? "Żaden odcinek tej trasy nie jest widoczny na bieżącym arkuszu." : "No segment of this route is visible on the current sheet.");
+    const labels = locale === "pl" ? ["Pokaż początek trasy", "Pokaż koniec trasy"] : ["Show route start", "Show route end"];
+    for (const label of labels) await act(async () => { [...host.querySelectorAll("button")].find((button) => button.textContent === label)!.click(); });
+    expect(onOpenPlace).toHaveBeenNthCalledWith(1, "far-level"); expect(onOpenPlace).toHaveBeenNthCalledWith(2, "far-level");
+    await act(async () => root.unmount()); host.remove();
+  });
+
+  it("hides the endpoint button when that endpoint is already visible", async () => {
+    const value = project();
+    value.places.push({ id: "far-level", name: "Far level", kind: "level", transform: { x: 0, y: 0, rotation: 0 }, boundary: { kind: "rectangle", x: 0, y: 0, width: 10, height: 10 }, tags: [], access: [], properties: {} });
+    const sourceRevision = storyRouteRevision(value);
+    const query = { from: { placeId: "far-level", point: { x: 1, y: 1 } }, to: { placeId: "grounds", point: { x: 2, y: 2 } }, profile: "foot" as const };
+    const alternative = { id: "mixed-route", sourceRevision, segments: [{ placeId: "far-level", levelId: "far-level", kind: "indoor" as const, points: [query.from.point, { x: 2, y: 2 }] }, { placeId: "grounds", kind: "outdoor" as const, points: [{ x: 2, y: 2 }, query.to.point] }], points: [query.from.point, query.to.point], distance: 20, conditions: [], reasons: [], usedOpeningIds: [], usedTransitionIds: [] } satisfies StoryRouteAlternative;
+    const initialRoute = { id: "mixed-route", name: "Mixed route", query, result: { status: "ready" as const, revision: 0, sourceRevision, routes: [alternative], route: alternative, missingFacts: [], reasons: [] }, sourceRevision } satisfies StoryRouteRecord;
+    const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+    await act(async () => root.render(<StoryRoutePanel project={value} activePlaceId="grounds" locale="en" context={{}} initialRoute={initialRoute} onPreview={vi.fn()} onSave={vi.fn()} onOpenPlace={vi.fn()} />));
+    expect(host.textContent).not.toContain("No segment of this route is visible on the current sheet.");
+    expect(host.textContent).toContain("Show route start"); expect(host.textContent).not.toContain("Show route end");
+    await act(async () => root.unmount()); host.remove();
+  });
+
+  it("keeps an in-flight calculation across cosmetic project and lens changes", async () => {
+    let resolve!: (outcome: RouteCalculationOutcome) => void;
+    let request: Parameters<StoryRouteCalculationService["calculate"]>[1] | undefined;
+    const pendingService: StoryRouteCalculationService = {
+      calculate: vi.fn((_project, nextRequest) => {
+        request = nextRequest;
+        return new Promise<RouteCalculationOutcome>((done) => { resolve = done; });
+      }),
+      cancel: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const value = project(); const onPreview = vi.fn(); const onSave = vi.fn();
+    const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+    const render = (nextProject = value, lensId?: string) => root.render(<StoryRoutePanel project={nextProject} locale="en" context={{ lensId }} routeService={pendingService} onPreview={onPreview} onSave={onSave} />);
+    await act(async () => render());
+    const find = () => [...host.querySelectorAll("button")].find((button) => button.textContent === "Find route" || button.textContent === "Calculating…") as HTMLButtonElement;
+    await act(async () => find().click()); expect(find().textContent).toBe("Calculating…");
+
+    const renamed = { ...value, name: "Renamed while calculating", updatedAt: "2099-01-01T00:00:00.000Z" };
+    await act(async () => render(renamed, "presentation-only-lens"));
+    expect(pendingService.cancel).not.toHaveBeenCalled(); expect(find().textContent).toBe("Calculating…");
+
+    resolve({ status: "ready", result: findStoryRoutes(value, request!), attemptId: 1 });
+    await act(async () => { await Promise.resolve(); });
+    expect(host.textContent).toContain("Best route found"); expect(onPreview.mock.lastCall?.[0]).toMatchObject({ result: { status: "ready" } });
     await act(async () => root.unmount()); host.remove();
   });
 

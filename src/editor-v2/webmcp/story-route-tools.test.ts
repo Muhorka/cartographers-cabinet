@@ -101,7 +101,7 @@ describe("Story route WebMCP tools", () => {
     await tool(tools, "apply_prepared_editor_change").execute({ token: prepared.token });
     const current = await structured<{ routes: Array<{ id: string; stale: boolean }> }>(tool(tools, "inspect_saved_story_routes").execute({}));
     expect(current.routes[0]).toMatchObject({ id: "saved", stale: false });
-    session.executeTransaction({ id: "geometry-change", apply: (project) => ({ ...project, constructions: project.constructions.map((document) => ({ ...document, revision: document.revision + 1, walls: document.walls.map((value) => value.id === "south" ? { ...value, end: { x: 10.25, y: 0 } } : value) })) }) });
+    expect(session.executeTransaction({ id: "geometry-change", apply: (project) => ({ ...project, constructions: project.constructions.map((document) => ({ ...document, revision: document.revision + 1, openings: document.openings.map((opening) => opening.id === "door" ? { ...opening, width: opening.width + .25 } : opening) })) }) }).changed).toBe(true);
     const stale = await structured<{ routes: Array<{ id: string; stale: boolean }> }>(tool(tools, "inspect_saved_story_routes").execute({}));
     expect(stale.routes[0]?.stale).toBe(true);
   });

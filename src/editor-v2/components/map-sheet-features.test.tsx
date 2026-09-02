@@ -22,4 +22,27 @@ describe("map feature editing handles", () => {
     expect(html.match(/data-transition-id="stairs"/g)).toHaveLength(4);
     expect(html).toContain('data-resize-corner="north-west"');
   });
+
+  it("scopes SVG definitions when context transitions reuse an id", () => {
+    const sharedTransition = document.transitions[0]!;
+    const html = renderToStaticMarkup(<svg><MapSheetFeatures
+      document={document}
+      prefix="test"
+      selectedIds={new Set()}
+      copy={{}}
+      viewportZoom={2}
+      transitionOverrides={[
+        { transition: sharedTransition, scopeId: "ground-plan", index: 0 },
+        { transition: { ...sharedTransition, footprint: { kind: "rectangle", x: 7, y: 2, width: 4, height: 3 } }, scopeId: "upper-plan", index: 0, transform: [1, 0, 0, 1, 0, 0] },
+      ]}
+    /></svg>);
+
+    expect(html).toContain('id="test-ground-plan-stairs-stairs"');
+    expect(html).toContain('id="test-ground-plan-stairs-stairs-clip"');
+    expect(html).toContain('clip-path="url(#test-ground-plan-stairs-stairs-clip)"');
+    expect(html).toContain('id="test-upper-plan-stairs-stairs"');
+    expect(html).toContain('id="test-upper-plan-stairs-stairs-clip"');
+    expect(html).toContain('clip-path="url(#test-upper-plan-stairs-stairs-clip)"');
+    expect([...html.matchAll(/<clipPath id="([^"]+)"/g)].map((match) => match[1])).toHaveLength(2);
+  });
 });

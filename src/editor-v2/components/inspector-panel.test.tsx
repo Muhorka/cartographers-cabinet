@@ -35,6 +35,29 @@ describe("editor v2 inspector", () => {
     }
   });
 
+  it.each(["pl", "en"] as const)("shows authored door and stair names in the %s drawing inspector", (locale) => {
+    const base = createStarterProject("project", "Project", locale);
+    const level = base.places.find(({ kind }) => kind === "level")!;
+    const source = base.constructions.find(({ id }) => id === level.constructionId)!;
+    const opening = { id: "door-id", kind: "door" as const, wallId: source.walls[0]!.id, position: .5, width: 1 };
+    const transition = { id: "stairs-id", kind: "stairs" as const, footprint: { kind: "rectangle" as const, x: 1, y: 1, width: 2, height: 3 }, sourceLevelId: level.id, connectedLevelIds: [level.id] };
+    const project = {
+      ...base,
+      constructions: base.constructions.map((document) => document.id === source.id ? { ...document, openings: [opening], transitions: [transition] } : document),
+      story: { ...base.story, objects: [
+        { ref: { kind: "opening" as const, id: opening.id, scopeId: level.id }, metadata: { narrativeLabel: "Library threshold" } },
+        { ref: { kind: "transition" as const, id: transition.id, scopeId: source.id }, metadata: { narrativeLabel: "Servants' stair" } },
+      ] },
+    };
+
+    const doorMarkup = renderToStaticMarkup(<InspectorPanel project={project} activePlaceId={level.id} selections={[{ kind: "opening", id: opening.id }]} copy={workbenchCopy[locale]} {...actions}/>);
+    const stairMarkup = renderToStaticMarkup(<InspectorPanel project={project} activePlaceId={level.id} selections={[{ kind: "transition", id: transition.id }]} copy={workbenchCopy[locale]} {...actions}/>);
+    expect(doorMarkup).toContain("Library threshold");
+    expect(stairMarkup).toContain("Servants&#x27; stair");
+    expect(project.constructions[0]?.openings[0]?.id).toBe("door-id");
+    expect(project.constructions[0]?.transitions[0]?.id).toBe("stairs-id");
+  });
+
   it("keeps the Story view informative but removes every editing action", () => {
     const project = createStarterProject("project", "Project", "pl");
     const html = renderToStaticMarkup(<InspectorPanel project={project} activePlaceId="project:building" copy={workbenchCopy.pl} readOnly {...actions}/>);

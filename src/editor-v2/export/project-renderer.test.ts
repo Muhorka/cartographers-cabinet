@@ -70,14 +70,76 @@ describe("editor v2 export renderer", () => {
     expect(svg).toContain('aria-label="Room export · Ground floor"');
   });
 
+  it("scopes room label definitions when separate plans reuse a room id", () => {
+    const project = createStarterProject("scoped-room-export", "Scoped room export", "en");
+    const groundLevel = project.places.find(({ kind }) => kind === "level")!;
+    const groundDocument = project.constructions[0]!;
+    const upperDocument = structuredClone(groundDocument); upperDocument.id = "upper-plan";
+    project.constructions.push(upperDocument);
+    project.places.push({ ...groundLevel, id: "upper-level", name: "Upper level", constructionId: upperDocument.id });
+
+    const svg = renderProjectViewSvg({ project, viewport: { center: { x: 0, y: 0 }, zoom: 2, rotation: 0 } });
+    const roomId = groundDocument.rooms[0]!.id;
+    const svgId = (value: string) => value.replaceAll(/[^a-zA-Z0-9_-]/g, "-");
+
+    expect(svg).toMatch(new RegExp(`id="room-${svgId(groundDocument.id)}-${svgId(roomId)}-label-(?:clip|path)"`));
+    expect(svg).toMatch(new RegExp(`id="room-${svgId(upperDocument.id)}-${svgId(roomId)}-label-(?:clip|path)"`));
+  });
+
   it("uses the shared stair glyph geometry in exported construction views", () => {
     const project = createStarterProject("stairs-export", "Stairs export", "en");
     const level = project.places.find(({ kind }) => kind === "level")!;
     project.constructions[0]!.transitions.push({ id: "spiral", kind: "stairs", style: "spiral", footprint: { kind: "rectangle", x: -8, y: -5, width: 8, height: 8 } });
     const svg = renderProjectViewSvg({ project, activePlaceId: level.id, viewport: { center: { x: 0, y: 0 }, zoom: 2, rotation: 0 } });
-    expect(svg).toContain('aria-label="stairs"');
+    expect(svg).toContain('aria-label="Stairs 1"');
     expect(svg).toContain('<circle cx="-4" cy="-1"');
     expect(svg).toContain('stroke-width="0.5"');
+  });
+
+  it("exports the authored staircase name instead of its technical fallback", () => {
+    const project = createStarterProject("named-stairs-export", "Named stairs export", "en");
+    const level = project.places.find(({ kind }) => kind === "level")!;
+    const document = project.constructions[0]!;
+    document.transitions = [{ id: "stairs-technical", kind: "stairs", footprint: { kind: "rectangle", x: -8, y: -5, width: 8, height: 8 } }];
+    project.story.objects = [{ ref: { kind: "transition", id: "stairs-technical", scopeId: document.id }, metadata: { narrativeLabel: "Grand staircase" } }];
+
+    const svg = renderProjectViewSvg({ project, activePlaceId: level.id, locale: "en", viewport: { center: { x: 0, y: 0 }, zoom: 2, rotation: 0 } });
+
+    expect(svg).toContain('aria-label="Grand staircase"');
+    expect(svg).not.toContain('aria-label="Stairs 1"');
+    expect(svg).not.toContain("Grand staircase (Stairs 1)");
+  });
+
+  it("localizes an unnamed staircase fallback in the exported view", () => {
+    const project = createStarterProject("polish-stairs-export", "Polish stairs export", "pl");
+    const level = project.places.find(({ kind }) => kind === "level")!;
+    project.constructions[0]!.transitions = [{ id: "stairs-technical", kind: "stairs", footprint: { kind: "rectangle", x: -8, y: -5, width: 8, height: 8 } }];
+
+    const svg = renderProjectViewSvg({ project, activePlaceId: level.id, locale: "pl", viewport: { center: { x: 0, y: 0 }, zoom: 2, rotation: 0 } });
+
+    expect(svg).toContain('aria-label="Schody 1"');
+  });
+
+  it("scopes transition SVG definitions when separate plans reuse an id", () => {
+    const project = createStarterProject("scoped-stairs-export", "Scoped stairs export", "en");
+    const groundLevel = project.places.find(({ kind }) => kind === "level")!;
+    const groundDocument = project.constructions[0]!;
+    const upperDocument = { id: "upper-plan", revision: 0, walls: [], rooms: [], openings: [], transitions: [{ id: "shared-stairs", kind: "stairs" as const, footprint: { kind: "rectangle" as const, x: 8, y: 2, width: 4, height: 3 } }] };
+    groundDocument.transitions = [{ id: "shared-stairs", kind: "stairs", footprint: { kind: "rectangle", x: 1, y: 2, width: 4, height: 3 } }];
+    project.constructions.push(upperDocument);
+    project.places.push({ ...groundLevel, id: "upper-level", name: "Upper level", constructionId: upperDocument.id });
+
+    const svg = renderProjectViewSvg({ project, viewport: { center: { x: 0, y: 0 }, zoom: 2, rotation: 0 } });
+    const groundId = `transition-${groundDocument.id.replaceAll(/[^a-zA-Z0-9_-]/g, "-")}-shared-stairs`;
+    const upperId = "transition-upper-plan-shared-stairs";
+
+    expect(svg).toContain(`id="${groundId}-clip"`);
+    expect(svg).toContain(`clip-path="url(#${groundId}-clip)"`);
+    expect(svg).toContain(`id="${upperId}-clip"`);
+    expect(svg).toContain(`clip-path="url(#${upperId}-clip)"`);
+    const transitionClipIds = [...svg.matchAll(/<clipPath id="(transition-[^"]+-clip)"/g)].map((match) => match[1]);
+    expect(transitionClipIds).toHaveLength(4);
+    expect(new Set(transitionClipIds).size).toBe(transitionClipIds.length);
   });
 
   it("creates a self-contained cartographer thumbnail", () => {

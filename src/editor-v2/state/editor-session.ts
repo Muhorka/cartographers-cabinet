@@ -8,6 +8,7 @@ import { visibleLayerId } from "../toolbox/toolbox-model";
 import { immutableSnapshot } from "./immutable-snapshot";
 import { prepareProjectTransaction, type PreparedProjectTransaction, type ProjectTransaction } from "./project-transaction";
 import { reconcileSessionNavigation } from "../model/navigation-fallback";
+import { rebaseCurrentStoryRoutes } from "../story/routes/revision";
 export type { PreparedProjectTransaction, ProjectTransaction } from "./project-transaction";
 
 /** The only selectable things exposed by the editor session. */
@@ -101,7 +102,7 @@ export class EditorSession {
     this.createId = options.createId ?? (() => crypto.randomUUID());
     this.createRoomName = options.createRoomName ?? ((index) => `room-${index}`);
     this.state = {
-      project: immutableSnapshot(repairProjectConstructions(normalizeEditorProject(project), { createId: this.createId, createName: this.createRoomName })),
+      project: immutableSnapshot(rebaseCurrentStoryRoutes(repairProjectConstructions(normalizeEditorProject(project), { createId: this.createId, createName: this.createRoomName }))),
       activePlaceId: options.initialPlaceId,
       selection: [],
       boundaryEditing: false,

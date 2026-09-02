@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { storyRouteRevision } from "../story/routes/planner";
+import { isStoryRouteCurrent, storyRouteRevision } from "../story/routes/revision";
 import { routeRequestSchema } from "../story/routes/schema";
 import { checkStoryIntention } from "../story/review/intention-check-service";
 import { storyViewContextSchema } from "../story/schema";
@@ -54,7 +54,7 @@ export function createStoryRouteTools(bridge: EditorAgentBridge & EditorContextB
     } },
     { name: "inspect_saved_story_routes", description: "List saved route requests and whether source geometry/narrative revision is current. Recalculate stale routes; do not describe them as verified.", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true }, execute: async () => {
       const project = bridge.getSession().getState().project; const revision = storyRouteRevision(project);
-      return response({ revision, routes: project.story.routes.map((route) => ({ ...route, stale: route.sourceRevision !== revision })) });
+      return response({ revision, routes: project.story.routes.map((route) => ({ ...route, stale: !isStoryRouteCurrent(project, route) })) });
     } },
   ];
 }

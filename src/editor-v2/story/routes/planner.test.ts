@@ -183,7 +183,7 @@ describe("story route planner", () => {
   });
 
   it("keeps saved route records out of the stale revision", () => {
-    const project = fixture(); const before = storyRouteRevision(project); (project.story as unknown as { routes?: unknown[] }).routes = [{ id: "saved" }]; expect(storyRouteRevision(project)).toBe(before); project.story.objects.push({ ref: { kind: "place", id: "level" }, metadata: { narrativeLabel: "changed" } }); expect(storyRouteRevision(project)).not.toBe(before);
+    const project = fixture(); const before = storyRouteRevision(project); (project.story as unknown as { routes?: unknown[] }).routes = [{ id: "saved" }]; expect(storyRouteRevision(project)).toBe(before); project.story.objects.push({ ref: { kind: "place", id: "level" }, metadata: { narrativeLabel: "changed" } }); expect(storyRouteRevision(project)).toBe(before); project.places[0]!.access = ["staff"]; expect(storyRouteRevision(project)).not.toBe(before);
   });
 
   it("joins crossing roads and requires an explicit bridge over water", () => {

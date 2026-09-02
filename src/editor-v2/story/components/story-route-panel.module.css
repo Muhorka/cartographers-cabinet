@@ -18,6 +18,9 @@
 .precision p { color: #bbae91; font-size: .8em; }
 .panel [role="alert"] { color: #e7a99b; font-size: .72rem; }
 .result { display: grid; gap: .4rem; }
+.routeSummary { color: #c8bb9a; font-size: .75rem; }
+.routeNavigation { border: 1px solid #967540; padding: .4rem; }
+.routeNavigation > div { display: flex; flex-wrap: wrap; gap: .4rem; }
 .panel .override { display: flex; grid-template-columns: auto 1fr; align-items: center; gap: .4rem; margin: .4rem 0; }
 .override input { width: auto; }
 .preferences { display: grid; gap: .4rem; }

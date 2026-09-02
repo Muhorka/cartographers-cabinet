@@ -80,7 +80,7 @@ export function surfaceContextDepth(project: EditorProject, activePlaceId: strin
   return undefined;
 }
 
-export type TransitionView = { transition: VerticalTransition; transform?: AffineMatrix };
+export type TransitionView = { transition: VerticalTransition; scopeId: string; index: number; transform?: AffineMatrix };
 
 /** Returns one context copy of every transition whose connection includes the open level. */
 export function connectedTransitionsForView(project: EditorProject, activeLevelId: string, activeConstructionId?: string): TransitionView[] {
@@ -89,10 +89,10 @@ export function connectedTransitionsForView(project: EditorProject, activeLevelI
     if (document.id === activeConstructionId) continue;
     const owner = project.places.find(({ constructionId }) => constructionId === document.id);
     if (!owner) continue;
-    for (const transition of document.transitions) {
+    for (const [index, transition] of document.transitions.entries()) {
       const connected = new Set([transition.sourceLevelId, transition.targetLevelId, ...(transition.connectedLevelIds ?? [])].filter(Boolean));
       if (!connected.has(activeLevelId)) continue;
-      result.push({ transition, transform: relativePlaceMatrix(project, activeLevelId, owner.id) });
+      result.push({ transition, scopeId: document.id, index, transform: relativePlaceMatrix(project, activeLevelId, owner.id) });
     }
   }
   return result;

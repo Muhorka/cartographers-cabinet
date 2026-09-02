@@ -67,4 +67,6 @@ it("evaluates saved and temporary lenses across the public Silver Lindens object
   expect(savedMatches.every((count) => count > 0)).toBe(true);
   expect(previewMatches).toBe(savedMatches[0]);
   expect(project).toEqual(before);
-});
+// This is a full-fixture correctness test, not a timing benchmark. Under the
+// complete jsdom suite it shares the CPU with hundreds of other test files.
+}, 10_000);

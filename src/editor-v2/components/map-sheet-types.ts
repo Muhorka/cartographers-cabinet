@@ -8,7 +8,7 @@ import type { SheetViewport } from "./map-sheet-geometry";
 import type { SelectionRotationControl } from "./selection-rotation-handle";
 
 export type MapSelection = { kind: "place" | "element" | "surface" | "room" | "wall" | "opening" | "transition"; id: string };
-export type MapSheetCopy = { ariaLabel: string; empty: string; compass: string; zoomIn: string; zoomOut: string; resetView: string; back: string; northMark?: string; measurements?: { title: string; grid: string; axes?: string; opacity: string; spacing: string; cell?: string; snap: string; units: string; metric: string; imperial: string; roomAreas: string }; openingLabel?(kind: "door" | "window" | "gate" | "passage", id: string): string; transitionLabel?(id: string, kind?: "stairs" | "elevator"): string };
+export type MapSheetCopy = { ariaLabel: string; empty: string; compass: string; zoomIn: string; zoomOut: string; resetView: string; back: string; northMark?: string; measurements?: { title: string; grid: string; axes?: string; opacity: string; spacing: string; cell?: string; snap: string; units: string; metric: string; imperial: string; roomAreas: string }; openingLabel?(kind: "door" | "window" | "gate" | "passage", id: string, index: number): string; transitionLabel?(id: string, kind: "stairs" | "elevator" | undefined, index: number): string };
 
 export type MapSheetProps = {
   pointPicker?: import("./map-point-picker").MapPointPicker;

@@ -12,6 +12,7 @@ import type { MapSelection, MapSheetCopy } from "./map-sheet";
 import type { TransitionView } from "./map-sheet-geometry";
 import styles from "./map-sheet.module.css";
 import type { LabelLayoutPlan } from "../geometry/label-collision";
+import { createProjectStoryLabelResolver } from "../story/object-display-name";
 
 type RoomScope = { wallIds?: ReadonlySet<string>; transitionIds?: ReadonlySet<string> };
 
@@ -43,6 +44,7 @@ export function MapSheetConstruction({ project, document, network, owner, prefix
     for (const wallId of network.faces.find(({ id }) => id === room.faceId)?.wallIds ?? []) movedWallIds.add(wallId);
   }
   const translated = (moving: boolean) => moving && moveDelta ? `translate(${moveDelta.x} ${moveDelta.y})` : undefined;
+  const storyLabel = createProjectStoryLabelResolver(project);
 
   return <g className={`${styles.construction}${roomView ? ` ${styles.roomViewConstruction}` : ""}`}>
     {!roomView && network.faces.map((face) => {
@@ -66,7 +68,7 @@ export function MapSheetConstruction({ project, document, network, owner, prefix
         {selectionEditing && selectionLayerId === "construction" && selectedIds.has(wall.id) && <><circle className={styles.wallEndpoint} cx={wall.start.x} cy={wall.start.y} r={5 / viewportZoom} data-wall-endpoint="start" data-wall-id={wall.id}/><circle className={styles.wallEndpoint} cx={wall.end.x} cy={wall.end.y} r={5 / viewportZoom} data-wall-endpoint="end" data-wall-id={wall.id}/></>}
       </g>;
     })}
-    <MapSheetFeatures document={document} prefix={prefix} selectedIds={selectedIds} copy={copy} viewportZoom={viewportZoom} selectionEnabled={(selectionOnly || selectionEditing) && !activeGesture} selectionOnly={selectionOnly} selectableOpeningWallIds={roomScope.wallIds} selectableTransitionIds={roomScope.transitionIds} movingIds={movingIds} movingWallIds={movedWallIds} moveDelta={moveDelta} openingWidthPreview={openingWidthPreview} onSelect={activeGesture ? undefined : onSelect} transitionOverrides={[...document.transitions.map((transition) => ({ transition })), ...contextTransitions]}/>
+    <MapSheetFeatures document={document} prefix={prefix} selectedIds={selectedIds} copy={copy} storyLabel={storyLabel} viewportZoom={viewportZoom} selectionEnabled={(selectionOnly || selectionEditing) && !activeGesture} selectionOnly={selectionOnly} selectableOpeningWallIds={roomScope.wallIds} selectableTransitionIds={roomScope.transitionIds} movingIds={movingIds} movingWallIds={movedWallIds} moveDelta={moveDelta} openingWidthPreview={openingWidthPreview} onSelect={activeGesture ? undefined : onSelect} transitionOverrides={[...document.transitions.map((transition, index) => ({ transition, scopeId: document.id, index })), ...contextTransitions]}/>
   </g>;
 }
 

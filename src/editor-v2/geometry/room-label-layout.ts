@@ -2,6 +2,7 @@ import type { KernelPoint } from "./geometry-types";
 import type { MapLabelText } from "./map-area";
 import { createLabelCache, labelValueFingerprint } from "./label-layout-cache";
 import { prepareLabelFace, preparedDistanceToEdges, type LabelFace, type PreparedLabelFace, type PreparedLabelRing } from "./label-prepared-geometry";
+import { labelObstacleIntersectsBox } from "./label-obstacle-intersection";
 
 type Face = LabelFace;
 
@@ -14,6 +15,7 @@ export type InteriorLabelOptions = {
   preferredScreenSize?: number;
   maximumScreenSize?: number;
   allowCompact?: boolean;
+  requireObstacleFree?: boolean;
   obstacles?: readonly LabelObstacle[];
 };
 
@@ -23,7 +25,7 @@ export function clearRoomLabelLayoutCache() { roomLayoutCache.clear(); }
 export function roomLabelLayoutCacheSize() { return roomLayoutCache.size; }
 
 export function roomLabelLayout(name: MapLabelText, face: Face, zoom: number, options: InteriorLabelOptions = {}): RoomLabelLayout | undefined {
-  const key = labelValueFingerprint({ name, face, zoom, minimumScreenSize: options.minimumScreenSize ?? 4.5, preferredScreenSize: Math.max(options.minimumScreenSize ?? 4.5, options.preferredScreenSize ?? 8), maximumScreenSize: options.maximumScreenSize ?? 15, allowCompact: options.allowCompact ?? false, obstacles: options.obstacles ?? [] });
+  const key = labelValueFingerprint({ name, face, zoom, minimumScreenSize: options.minimumScreenSize ?? 4.5, preferredScreenSize: Math.max(options.minimumScreenSize ?? 4.5, options.preferredScreenSize ?? 8), maximumScreenSize: options.maximumScreenSize ?? 15, allowCompact: options.allowCompact ?? false, requireObstacleFree: options.requireObstacleFree ?? false, obstacles: options.obstacles ?? [] });
   const cached = roomLayoutCache.get(key);
   if (cached.hit) return cached.value;
   const result = freezeRoomLabelLayout(roomLabelLayoutUncached(name, face, zoom, options));
@@ -65,6 +67,7 @@ function roomLabelLayoutUncached(name: MapLabelText, face: Face, zoom: number, o
   if (!candidates.length) return undefined;
   const obstacleFree = (candidate: (typeof candidates)[number]) => candidate.obstacleFree;
   const preferredCandidates = candidates.filter(obstacleFree);
+  if (options.requireObstacleFree && !preferredCandidates.length) return undefined;
   const availableCandidates = preferredCandidates.length ? preferredCandidates : candidates;
   const horizontal = availableCandidates.find(({ rotation }) => rotation === 0);
   if (horizontal && horizontal.fullSize >= preferred) return horizontal.fullLayout;
@@ -231,6 +234,5 @@ function labelBoxFits(face: PreparedLabelFace, box: LabelBox) {
 }
 
 function labelBoxIntersectsObstacles(box: LabelBox, obstacles?: readonly PreparedLabelFace[]) {
-  const points = labelBoxPoints(box);
-  return (obstacles ?? []).some((obstacle) => points.some((point) => obstacle.contains(point)));
+  return (obstacles ?? []).some((obstacle) => labelObstacleIntersectsBox(box, obstacle));
 }

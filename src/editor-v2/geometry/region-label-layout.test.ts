@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { clearRegionLabelLayoutCache, regionLabelLayout, regionLabelLayoutCacheSize } from "./region-label-layout";
+import { conservativeQuantizedLabelLayoutZoom, quantizedLabelLayoutZoom } from "./label-layout-zoom";
 import { labelObstacleForLayout, roomLabelLayout, clearRoomLabelLayoutCache, roomLabelLayoutCacheSize } from "./room-label-layout";
 
 describe("region label layout", () => {
@@ -23,10 +24,39 @@ describe("region label layout", () => {
     expect((label?.fontSize ?? 0) * .75).toBeGreaterThanOrEqual(3.2);
   });
 
-  it("follows the real upper boundary of a broad ellipse", () => {
-    const label = regionLabelLayout("Dolina Brzasku", { kind: "ellipse", cx: 40, cy: 30, rx: 36, ry: 7 }, 1, true);
+  it("keeps a location inside across lower zoom buckets while the full label remains readable", () => {
+    const shape = { kind: "rectangle" as const, x: 0, y: 0, width: 100, height: 12 };
+    const liveZoom = 1.04;
+    const bucketZoom = quantizedLabelLayoutZoom(liveZoom);
+    expect(regionLabelLayout("Teren", shape, bucketZoom, true)?.kind).toBe("inside");
+    expect(regionLabelLayout("Teren", shape, conservativeQuantizedLabelLayoutZoom(liveZoom), true)?.kind).toBe("inside");
+    expect(regionLabelLayout("Teren", shape, conservativeQuantizedLabelLayoutZoom(.91), true)?.kind).toBe("inside");
+  });
+
+  it("uses a boundary fallback only when the shape has no usable interior", () => {
+    const label = regionLabelLayout("Teren bez głębokości", { kind: "rectangle", x: 0, y: 0, width: 20, height: 0 }, 1, true);
     expect(label?.kind).toBe("boundary");
-    if (label?.kind === "boundary") expect(label.path).toContain("23");
+  });
+
+  it("keeps the readable name inside when the optional area no longer fits", () => {
+    const label = regionLabelLayout({ name: "Parter bukszpanowy zachodni", area: "600 m²" }, { kind: "rectangle", x: 0, y: 0, width: 50, height: 5 }, 2, true);
+    expect(label?.kind).toBe("inside");
+    if (label?.kind !== "inside") return;
+    expect(label.text).toBe("Parter bukszpanowy zachodni");
+    expect(label.secondaryLine).toBeUndefined();
+    expect(label.fontSize * 2).toBeGreaterThanOrEqual(3.2);
+  });
+
+  it("uses the boundary instead of colliding with an obstacle that fills the interior", () => {
+    const shape = { kind: "rectangle" as const, x: 0, y: 0, width: 20, height: 10 };
+    const label = regionLabelLayout("Dziedziniec", shape, 1, true, { obstacles: [{ outer: [{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 10 }, { x: 0, y: 10 }] }] });
+    expect(label?.kind).toBe("boundary");
+  });
+
+  it("keeps a complete readable label inside a broad ellipse", () => {
+    const label = regionLabelLayout("Dolina Brzasku", { kind: "ellipse", cx: 40, cy: 30, rx: 36, ry: 7 }, 1, true);
+    expect(label?.kind).toBe("inside");
+    if (label?.kind === "inside") expect(label.fontSize).toBeGreaterThanOrEqual(3.2);
   });
 
   it("keeps a terrain label out of a palace obstacle when free space exists", () => {

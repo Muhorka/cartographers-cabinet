@@ -2,7 +2,7 @@ import type { EditorProject } from "../model/project-model";
 import { workbenchCopy } from "../i18n/workbench-copy";
 import { allStoryObjectRefs } from "../story/project-adapter";
 import { createProjectStoryObjectResolver } from "../story/project-effective";
-import { storyObjectDisplayName } from "../story/object-display-name";
+import { createProjectStoryDisplayNameResolver } from "../story/object-display-name";
 import type { StoryObjectRef, StoryPropertyDefinition, StoryViewContext } from "../story/types";
 
 type Locale = keyof typeof workbenchCopy;
@@ -36,9 +36,10 @@ export function createWorkbenchStoryResolution(
   const primaryResolver = createProjectStoryObjectResolver(project, context);
   const sharedContext = sameContext(context, inspectorContext);
   const inspectorResolver = sharedContext ? primaryResolver : createProjectStoryObjectResolver(project, inspectorContext);
+  const displayNames = createProjectStoryDisplayNameResolver(project, workbenchCopy[locale].objectList);
   const decorate = (value: NonNullable<ReturnType<ProjectStoryResolver>>): ResolvedProjectStoryObject => ({
     ...value,
-    name: storyObjectDisplayName(project, value, workbenchCopy[locale].objectList),
+    name: displayNames.list(value),
   });
   const resolveOne = (resolver: ProjectStoryResolver, ref: StoryObjectRef) => {
     const value = resolver(ref);

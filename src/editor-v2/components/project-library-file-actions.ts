@@ -25,7 +25,7 @@ export function projectLibraryFileActions({ snapshot, projects, locale, viewport
       const project = find(id); if (!project) return;
       onError(undefined);
       try {
-        await exportProjectView(format, { project, activePlaceId: project.id === snapshot?.project.id ? snapshot.activePlaceId : project.places.find((place) => !place.parentId)?.id, viewport: project.id === snapshot?.project.id ? viewport : undefined });
+        await exportProjectView(format, { project, activePlaceId: project.id === snapshot?.project.id ? snapshot.activePlaceId : project.places.find((place) => !place.parentId)?.id, viewport: project.id === snapshot?.project.id ? viewport : undefined, locale });
       } catch (error) { onError(projectLibraryExportError(error, locale)); }
     },
     async importProject(file: File) {
