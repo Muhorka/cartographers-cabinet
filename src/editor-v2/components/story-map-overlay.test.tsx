@@ -1,7 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { readFile } from "node:fs/promises";
 import { expect, it } from "vitest";
 import { StoryMapOverlay } from "./story-map-overlay";
 import { createProjectAtScale } from "../model/starter-project";
+import { parseProjectFile } from "../persistence/project-file";
+import { EditorSession } from "../state/editor-session";
+import { allStoryObjectRefs } from "../story/project-adapter";
 import { createProjectLensEvaluator, evaluateProjectLens } from "../story/evaluation";
 import type { StoryLens, StoryObjectRef } from "../story/types";
 
@@ -47,4 +51,20 @@ it("renders an unsaved preview using the same evaluator for places, terrain and 
   const host = document.createElement("div"); host.innerHTML = html;
   expect(host.querySelectorAll('path[stroke="#2244aa"]')).toHaveLength(3);
   expect(project).toEqual(before); expect(project.story.lenses).toHaveLength(1);
+});
+
+it("evaluates saved and temporary lenses across the public Silver Lindens object set", async () => {
+  const source = await readFile("public/examples/residence-of-the-silver-lindens.cartographer.json", "utf8");
+  const imported = parseProjectFile(source).project;
+  const session = new EditorSession(imported, { initialPlaceId: imported.places.find(({ parentId }) => !parentId)?.id });
+  const project = session.getViewState().project;
+  const refs = allStoryObjectRefs(project); const saved = project.story.lenses; const preview: StoryLens = { ...saved[0]!, id: "temporary-preview" };
+  const before = structuredClone(project); const evaluate = createProjectLensEvaluator(project, project.story);
+  const savedMatches = saved.map((lens) => refs.filter((ref) => evaluate(lens, ref).match).length);
+  const previewMatches = refs.filter((ref) => evaluate(preview, ref).match).length;
+
+  expect(refs.length).toBeGreaterThan(700);
+  expect(savedMatches.every((count) => count > 0)).toBe(true);
+  expect(previewMatches).toBe(savedMatches[0]);
+  expect(project).toEqual(before);
 });

@@ -52,13 +52,13 @@ function constructionForScope(project: EditorProject, scopeId: string | undefine
   const owner = project.places.find(({ id, constructionId }) => id === scopeId && constructionId);
   return owner ? project.constructions.find(({ id }) => id === owner.constructionId) : undefined;
 }
-function canonicalProjectRef(project: EditorProject, ref: StoryObjectRef): StoryObjectRef {
+function canonicalProjectRef(project: EditorProject, ref: StoryObjectRef, knownRefs?: readonly StoryObjectRef[]): StoryObjectRef {
   if (ref.kind === "place") {
     const place = project.places.find(({ id, kind }) => id === ref.id && (kind === "room" || kind === "standalone-room"));
-    if (place) return canonicalProjectRef(project, { kind: "room", id: place.id, ...(ref.scopeId ? { scopeId: ref.scopeId } : {}) });
+    if (place) return canonicalProjectRef(project, { kind: "room", id: place.id, ...(ref.scopeId ? { scopeId: ref.scopeId } : {}) }, knownRefs);
   }
   if (ref.kind === "room") {
-    const candidates = allStoryObjectRefs(project).filter((candidate) => candidate.kind === "room" && candidate.id === ref.id &&
+    const candidates = (knownRefs ?? allStoryObjectRefs(project)).filter((candidate) => candidate.kind === "room" && candidate.id === ref.id &&
       (!ref.scopeId || candidate.scopeId === ref.scopeId || project.places.some((place) => place.id === ref.id &&
         (place.kind === "room" || place.kind === "standalone-room") && roomScopeMatches(project, place, ref.scopeId) && candidate.scopeId === constructionIdForRoomPlace(project, place))));
     return candidates.length === 1 ? candidates[0]! : ref;
@@ -69,8 +69,8 @@ function canonicalProjectRef(project: EditorProject, ref: StoryObjectRef): Story
   }
   return ref;
 }
-export function canonicalProjectStoryRef(project: EditorProject, ref: StoryObjectRef) {
-  return canonicalProjectRef(project, ref);
+export function canonicalProjectStoryRef(project: EditorProject, ref: StoryObjectRef, knownRefs?: readonly StoryObjectRef[]) {
+  return canonicalProjectRef(project, ref, knownRefs);
 }
 function sourceObject(project: EditorProject, ref: StoryObjectRef) {
   const place = ref.kind === "place" || ref.kind === "room" ? sourcePlace(project, ref) : undefined;
@@ -163,15 +163,16 @@ export function allStoryObjectRefs(project: EditorProject): StoryObjectRef[] {
   if (!cacheable) return unique;
   const immutable = immutableSnapshot(unique); allStoryObjectRefsCache.set(project, immutable); return immutable;
 }
-export function resolveStoryObject(project: EditorProject, input: StoryData | unknown, ref: StoryObjectRef): ResolvedStoryObject | undefined {
+export function resolveStoryObject(project: EditorProject, input: StoryData | unknown, ref: StoryObjectRef, knownRefs?: readonly StoryObjectRef[]): ResolvedStoryObject | undefined {
   const story = migrateStoryData(input);
-  const normalizedRef = canonicalProjectRef(project, ref);
+  const refs = knownRefs ?? allStoryObjectRefs(project);
+  const normalizedRef = canonicalProjectRef(project, ref, refs);
   const roomPlace = normalizedRef.kind === "room" ? project.places.find(({ id, kind }) => id === normalizedRef.id && (kind === "room" || kind === "standalone-room")) : undefined;
   const roomConstruction = roomPlace ? constructionIdForRoomPlace(project, roomPlace) : undefined;
   const canonicalRoomScope = roomPlace ? roomConstruction ?? `place:${roomPlace.id}` : undefined;
   const roomAliasAccepted = roomPlace ? roomScopeMatches(project, roomPlace, normalizedRef.scopeId) : !normalizedRef.scopeId;
   const candidates = normalizedRef.kind === "room"
-    ? allStoryObjectRefs(project).filter((candidate) => candidate.kind === "room" && candidate.id === normalizedRef.id &&
+    ? refs.filter((candidate) => candidate.kind === "room" && candidate.id === normalizedRef.id &&
       (!normalizedRef.scopeId || candidate.scopeId === normalizedRef.scopeId || Boolean(roomPlace && roomAliasAccepted && candidate.scopeId === canonicalRoomScope)))
     : [];
   if (normalizedRef.kind === "room" && candidates.length !== 1) return undefined;
@@ -225,12 +226,12 @@ function sourceShape(project: EditorProject, ref: StoryObjectRef): RegionShape |
     ? { kind: "polygon", points: sampleBezier(element.geometry.nodes, true) }
     : undefined;
 }
-export function zoneMatchesProject(project: EditorProject, input: StoryData | unknown, zoneId: string, ref: StoryObjectRef): { matches: boolean; relation?: StoryZoneRelation; partial?: boolean; reason: string } {
+export function zoneMatchesProject(project: EditorProject, input: StoryData | unknown, zoneId: string, ref: StoryObjectRef, knownRefs?: readonly StoryObjectRef[]): { matches: boolean; relation?: StoryZoneRelation; partial?: boolean; reason: string } {
   const story = migrateStoryData(input); const zone = story.zones.find(({ id }) => id === zoneId); if (!zone) return { matches: false, reason: "zone-not-found" };
   if (zone.ownerPlaceId && !project.places.some(({ id }) => id === zone.ownerPlaceId)) return { matches: false, reason: "zone-owner-not-found" };
-  const canonicalRef = canonicalProjectRef(project, ref);
-  const manual = zone.members.find((member) => sameStoryRef(canonicalProjectRef(project, member.ref), canonicalRef)); if (manual) return { matches: true, relation: manual.relation, partial: manual.partial, reason: "authored-membership" };
-  const resolved = resolveStoryObject(project, story, canonicalRef);
+  const canonicalRef = canonicalProjectRef(project, ref, knownRefs);
+  const manual = zone.members.find((member) => sameStoryRef(canonicalProjectRef(project, member.ref, knownRefs), canonicalRef)); if (manual) return { matches: true, relation: manual.relation, partial: manual.partial, reason: "authored-membership" };
+  const resolved = resolveStoryObject(project, story, canonicalRef, knownRefs);
   const placeBackedRef = resolved && (resolved.ref.kind === "place" || resolved.ref.kind === "room")
     ? project.places.some(({ id, kind }) => id === resolved.ref.id && (resolved.ref.kind === "place" ? kind !== "room" && kind !== "standalone-room" : (kind === "room" || kind === "standalone-room")))
     : false;
@@ -252,8 +253,7 @@ function isWithinPlace(project: EditorProject, candidateId: string, ownerId: str
   while (current && !seen.has(current.id)) {
     if (current.id === ownerId) return true;
     seen.add(current.id);
-    const parentId = current.parentId;
-    current = parentId ? project.places.find(({ id }) => id === parentId) : undefined;
+    const parentId = current.parentId; current = parentId ? project.places.find(({ id }) => id === parentId) : undefined;
   }
   return false;
 }

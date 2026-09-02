@@ -1,7 +1,7 @@
 import type { EditorProject } from "../model/project-model";
 import { effectiveCanonicalStoryMetadata, effectiveCanonicalStoryObject, effectiveStoryObject, storyAccessForMetadata, type StoryAccessResult } from "./effective";
 import { migrateStoryData } from "./migration";
-import { canonicalProjectStoryRef, resolveStoryObject, zoneMatchesProject } from "./project-adapter";
+import { allStoryObjectRefs, canonicalProjectStoryRef, resolveStoryObject, zoneMatchesProject } from "./project-adapter";
 import { resolveStoryOwnership } from "./ownership";
 import { defaultStoryAccessPolicy, sameStoryRef, storyRefKey, type StoryAccessPolicy, type StoryData, type StoryLensExpression, type StoryObjectMetadata, type StoryObjectRef, type StoryPropertyValue, type StoryRelation, type StoryViewContext, type StoryZone } from "./types";
 import { immutableSnapshot, isImmutableSnapshot } from "../state/immutable-snapshot";
@@ -50,9 +50,9 @@ function joinAccess(first: StoryAccessPolicy, second: StoryAccessPolicy): StoryA
 }
 
 /** Zone membership is always resolved against project geometry and canonical refs. */
-export function projectZonesForRef(project: EditorProject, story: StoryData, ref: StoryObjectRef): StoryZone[] {
-  const canonical = canonicalProjectStoryRef(project, ref);
-  return story.zones.filter(({ id }) => zoneMatchesProject(project, story, id, canonical).matches);
+export function projectZonesForRef(project: EditorProject, story: StoryData, ref: StoryObjectRef, knownRefs?: readonly StoryObjectRef[]): StoryZone[] {
+  const canonical = canonicalProjectStoryRef(project, ref, knownRefs);
+  return story.zones.filter(({ id }) => zoneMatchesProject(project, story, id, canonical, knownRefs).matches);
 }
 
 type ProjectZonesResolver = (ref: StoryObjectRef) => StoryZone[];
@@ -140,8 +140,8 @@ function nativePropertyEvidence(project: EditorProject, resolved: ReturnType<typ
 }
 
 /** Hydrates one map object for UI/routes: native source text/flags plus effective story metadata. */
-function effectiveProjectStoryObjectFromCanonicalStory(project: EditorProject, story: StoryData, ref: StoryObjectRef, context: StoryViewContext = {}, zonesForRef: ProjectZonesResolver = (target) => projectZonesForRef(project, story, target)) {
-  const resolved = resolveStoryObject(project, story, ref); if (!resolved) return undefined;
+function effectiveProjectStoryObjectFromCanonicalStory(project: EditorProject, story: StoryData, ref: StoryObjectRef, context: StoryViewContext = {}, zonesForRef: ProjectZonesResolver = (target) => projectZonesForRef(project, story, target, knownRefs), knownRefs?: readonly StoryObjectRef[]) {
+  const resolved = resolveStoryObject(project, story, ref, knownRefs); if (!resolved) return undefined;
   const narrative = story.objects.find(({ ref: candidate }) => candidate.kind === resolved.ref.kind && candidate.id === resolved.ref.id && candidate.scopeId === resolved.ref.scopeId);
   const nativeProperties = resolved.legacyMetadata.properties ?? {};
   const ownMetadata = { ...narrative?.metadata, properties: { ...nativeProperties, ...narrative?.metadata.properties } };
@@ -164,18 +164,19 @@ export function effectiveProjectStoryObject(project: EditorProject, ref: StoryOb
 }
 
 /** One canonical story migration and one result per scoped ref for a single read batch. */
-export function createProjectStoryObjectResolver(project: EditorProject, context: StoryViewContext = {}) {
-  const story = projectStoryData(project);
+export function createProjectStoryObjectResolver(project: EditorProject, context: StoryViewContext = {}, canonicalStory?: StoryData) {
+  const story = canonicalStory ?? projectStoryData(project);
+  const refs = allStoryObjectRefs(project);
   const resolved = new Map<string, ReturnType<typeof effectiveProjectStoryObjectFromCanonicalStory>>();
   const zones = new Map<string, StoryZone[]>();
   const zonesForRef = (ref: StoryObjectRef) => {
     const key = storyRefKey(ref);
-    if (!zones.has(key)) zones.set(key, projectZonesForRef(project, story, ref));
+    if (!zones.has(key)) zones.set(key, projectZonesForRef(project, story, ref, refs));
     return zones.get(key)!;
   };
   return (ref: StoryObjectRef) => {
     const key = storyRefKey(ref);
-    if (!resolved.has(key)) resolved.set(key, effectiveProjectStoryObjectFromCanonicalStory(project, story, ref, context, zonesForRef));
+    if (!resolved.has(key)) resolved.set(key, effectiveProjectStoryObjectFromCanonicalStory(project, story, ref, context, zonesForRef, refs));
     return resolved.get(key);
   };
 }

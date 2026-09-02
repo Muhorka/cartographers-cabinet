@@ -1,7 +1,7 @@
 import { sameStoryRef, storyRefKey, type StoryData, type StoryLens, type StoryLensExpression, type StoryObjectMetadata, type StoryObjectRef, type StoryViewContext } from "./types";
 import type { EditorProject } from "../model/project-model";
-import { canonicalProjectStoryRef, zoneMatchesProject } from "./project-adapter";
-import { canonicalLensExpression, effectiveProjectStoryObject, projectStoryData } from "./project-effective";
+import { allStoryObjectRefs, canonicalProjectStoryRef, zoneMatchesProject } from "./project-adapter";
+import { canonicalLensExpression, createProjectStoryObjectResolver, projectStoryData } from "./project-effective";
 import { effectiveStoryMetadata, effectiveStoryObject, storyAccessForMetadata, type StoryAccessResult } from "./effective";
 import { migrateStoryData } from "./migration";
 export { effectiveStoryMetadata, effectiveStoryObject, type StoryAccessResult } from "./effective";
@@ -45,18 +45,25 @@ export function evaluateProjectLens(project: EditorProject, story: StoryData, le
 
 /** Saved and temporary lenses share evaluation; cache lives only for this read. */
 export function createProjectLensEvaluator(project: EditorProject, story: StoryData, context: StoryViewContext = {}) {
-  const effectiveProject = { ...project, story }; const canonicalStory = projectStoryData(effectiveProject);
-  const metadata = new Map<string, StoryObjectMetadata | undefined>();
+  const effectiveProject = story === project.story ? project : { ...project, story }; const canonicalStory = projectStoryData(effectiveProject);
+  const refs = allStoryObjectRefs(effectiveProject);
+  const resolveStoryObject = createProjectStoryObjectResolver(effectiveProject, context, canonicalStory);
+  const metadata = new Map<string, StoryObjectMetadata | undefined>(); const zoneMatches = new Map<string, boolean>();
   const expressions = new Map<StoryLensExpression, StoryLensExpression>();
   const resolve: MetadataResolver = (target) => {
     const key = storyRefKey(target);
-    if (!metadata.has(key)) metadata.set(key, effectiveProjectStoryObject(effectiveProject, target, context)?.metadata);
+    if (!metadata.has(key)) metadata.set(key, resolveStoryObject(target)?.metadata);
     return metadata.get(key);
   };
   return (lens: StoryLens, ref: StoryObjectRef): LensEvaluation => {
-    const canonicalRef = canonicalProjectStoryRef(project, ref); const reasons: string[] = [];
+    const canonicalRef = canonicalProjectStoryRef(effectiveProject, ref, refs); const reasons: string[] = [];
     if (!expressions.has(lens.expression)) expressions.set(lens.expression, canonicalLensExpression(project, lens.expression));
-    return { lensId: lens.id, color: lens.color, match: evaluateExpression(canonicalStory, canonicalRef, expressions.get(lens.expression)!, reasons, context, (zoneId, target) => zoneMatchesProject(effectiveProject, canonicalStory, zoneId, target).matches, resolve), reasons };
+    const zoneMatcher = (zoneId: string, target: StoryObjectRef) => {
+      const key = `${zoneId}:${storyRefKey(target)}`;
+      if (!zoneMatches.has(key)) zoneMatches.set(key, zoneMatchesProject(effectiveProject, canonicalStory, zoneId, target, refs).matches);
+      return zoneMatches.get(key)!;
+    };
+    return { lensId: lens.id, color: lens.color, match: evaluateExpression(canonicalStory, canonicalRef, expressions.get(lens.expression)!, reasons, context, zoneMatcher, resolve), reasons };
   };
 }
 
