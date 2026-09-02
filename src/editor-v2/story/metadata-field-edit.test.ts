@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { createConstructionDocument } from "../construction/construction-document";
+import type { CanonicalWall } from "../geometry/geometry-types";
 import { emptyProject } from "../model/project-model";
 import { applyProjectStoryMetadata } from "./project-commands";
 import { effectiveProjectStoryObject } from "./project-effective";
@@ -38,6 +40,29 @@ describe("shared sparse Story field edits", () => {
     expect(effectiveProjectStoryObject(after, ref)?.metadata.access?.physicalState).toBe("open");
     expect(effectiveProjectStoryObject(after, ref, { scenarioId: "night" })?.metadata.access).toMatchObject({ allow: ["a"], keyIds: ["key-a"], physicalState: "closed" });
     expect(before.story.scenarios[0].patches).toEqual([]);
+  });
+
+  it("does not turn an inherited Nobody rule into a permanent local door rule", () => {
+    const wall: CanonicalWall = { id: "wall", start: { x: 0, y: 0 }, end: { x: 10, y: 0 }, role: "partition", thickness: 0.2 };
+    const construction = createConstructionDocument("plan", [wall], { createId: () => "room", createName: () => "Room" });
+    construction.openings = [{ id: "door", kind: "door", wallId: wall.id, position: 0.5, width: 1 }];
+    const before = emptyProject("zone-door", "Zone door");
+    before.places.push({ id: "level", name: "Level", kind: "level", constructionId: construction.id, transform: { x: 0, y: 0, rotation: 0 }, tags: [], access: [], properties: {} });
+    before.constructions.push(construction);
+    const ref = { kind: "opening" as const, id: "door", scopeId: construction.id };
+    before.story.zones = [{ id: "ruins", name: "Ruins", members: [{ ref, relation: "inside", partial: false }], tags: [], metadata: { access: { ...defaultStoryAccessPolicy(), permission: "nobody" } } }];
+
+    const edited = applyProjectStoryMetadata(before, {
+      refs: [ref], action: "replace",
+      metadata: { access: { ...defaultStoryAccessPolicy(), physicalState: "closed", lock: "locked" } },
+      accessFields: ["physicalState", "lock"],
+    });
+    const authored = edited.story.objects.find(({ ref: candidate }) => candidate.kind === ref.kind && candidate.id === ref.id && candidate.scopeId === ref.scopeId)?.metadata.access;
+    expect(authored).toMatchObject({ permission: "open", physicalState: "closed", lock: "locked" });
+    expect(effectiveProjectStoryObject(edited, ref)?.metadata.access).toMatchObject({ permission: "nobody", physicalState: "closed", lock: "locked" });
+
+    const withoutZone = { ...edited, story: { ...edited.story, zones: [] } };
+    expect(effectiveProjectStoryObject(withoutZone, ref)?.metadata.access).toMatchObject({ permission: "open", physicalState: "closed", lock: "locked" });
   });
 
   it("does not materialize an empty scenario patch and keeps StoryData valid", () => {

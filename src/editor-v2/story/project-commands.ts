@@ -70,6 +70,9 @@ function patchId(target: StoryObjectRef, existing: readonly StoryTextPatch[]) {
   let index = 2; while (used.has(`${base}:${index}`)) index++; return `${base}:${index}`;
 }
 function patchIsEmpty(patch: StoryTextPatch) { return !has(patch, "title") && !has(patch, "description") && !patch.properties && !patch.metadata; }
+function authoredBaseAccess(story: StoryData, ref: StoryObjectRef): StoryAccessPolicy {
+  return story.objects.find(({ ref: candidate }) => sameStoryRef(candidate, ref))?.metadata.access ?? defaultStoryAccessPolicy();
+}
 function editPatch(existing: StoryTextPatch | undefined, target: StoryObjectRef, command: ProjectStoryMetadataCommand, allPatches: readonly StoryTextPatch[]): StoryTextPatch | undefined {
   const metadata = command.metadata; const next: StoryTextPatch = { ...(existing ?? { id: patchId(target, allPatches), target }), target };
   const label = has(metadata, "narrativeLabel") ? metadata.narrativeLabel : undefined; const description = has(metadata, "narrativeDescription") ? metadata.narrativeDescription : undefined;
@@ -128,7 +131,9 @@ export function applyProjectStoryMetadata(project: EditorProject, command: Proje
   if (command.accessFields && command.metadata.access) {
     const { access, ...other } = command.metadata;
     return refs.reduce((current, ref) => {
-      const policy = effectiveProjectStoryObject(current, ref, target === "scenario" ? context : {})?.metadata.access ?? defaultStoryAccessPolicy();
+      const policy = target === "base"
+        ? authoredBaseAccess(projectStoryData(current), ref)
+        : effectiveProjectStoryObject(current, ref, context)?.metadata.access ?? defaultStoryAccessPolicy();
       // Do not materialize an empty scenario patch while splitting the access
       // edit. An empty intermediate patch is invalid StoryData and would make
       // the next recursive pass fall back to the legacy migration path.

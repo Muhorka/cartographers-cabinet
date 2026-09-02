@@ -57,7 +57,7 @@ function mergeMetadata(contributors: readonly StoryMetadataContributor[], local?
   if (!local) return { metadata: inherited, conflicts: [...conflicts] };
   const localProperties = local.properties ?? {};
   for (const key of Object.keys(localProperties)) { inherited.properties[key] = localProperties[key]!; conflicts.delete(`zone:${key}`); }
-  return { metadata: { ...inherited, ...local, owners: local.owners ?? inherited.owners, access: local.access ?? inherited.access, tags: local.tags ? [...new Set([...inherited.tags, ...local.tags])] : inherited.tags, properties: inherited.properties }, conflicts: [...conflicts] };
+  return { metadata: { ...inherited, ...local, owners: local.owners ?? inherited.owners, access: local.access ? mergeAccess(inherited.access, { ...defaultStoryAccessPolicy(), ...local.access }) : inherited.access, tags: local.tags ? [...new Set([...inherited.tags, ...local.tags])] : inherited.tags, properties: inherited.properties }, conflicts: [...conflicts] };
 }
 
 export function effectiveStoryMetadata(input: StoryData, ref: StoryObjectRef, options: EffectiveStoryOptions = {}): { metadata: StoryObjectMetadata; conflicts: string[] } {
