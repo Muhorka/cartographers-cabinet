@@ -37,6 +37,16 @@ export function expandedPlaceIds(project: EditorProject, activePlaceId: string) 
   return result;
 }
 
+/** Opens only the branch containing the active sheet when a project is installed. */
+export function initialExpandedPlaceIds(project: EditorProject, activePlaceId?: string) {
+  return new Set(expandedPlaceIds(project, activePlaceId ?? ""));
+}
+
+/** Adds a newly visited branch without closing branches the user opened earlier. */
+export function mergeExpandedPlaceIds(current: ReadonlySet<string>, project: EditorProject, activePlaceId?: string) {
+  return new Set([...current, ...expandedPlaceIds(project, activePlaceId ?? "")]);
+}
+
 type Input = {
   session?: EditorSession; snapshot?: EditorSessionState;
   setSnapshot(snapshot: EditorSessionState): void;
@@ -65,7 +75,7 @@ export function useWorkbenchSessionRefresh(input: Input) {
     if (!activeChanged) return;
     input.setCutoutActive(false); input.setAddOutlineActive(false); input.setViewport(viewportFor(after.project, after.activePlaceId));
     if (!after.activePlaceId) return;
-    input.setExpandedIds((current) => new Set([...current, ...expandedPlaceIds(after.project, after.activePlaceId!)]));
+    input.setExpandedIds((current) => mergeExpandedPlaceIds(current, after.project, after.activePlaceId));
     void setPreference(`activePlaceId:${after.project.id}`, after.activePlaceId);
   }
   return { refresh };

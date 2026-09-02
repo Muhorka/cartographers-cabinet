@@ -48,7 +48,7 @@ import { useWorkbenchProjectSwitch } from "./use-workbench-project-switch";
 import { useEditorV2Tools } from "../webmcp/use-editor-tools";
 import { requestStoryViewTransition } from "./story-view-transition";
 import { canContinueSemanticDraft } from "./toolbox-change-policy";
-import { TransitionCreationDialog } from "./transition-creation-dialog"; import { WorkbenchMasthead } from "./workbench-masthead"; import { useWorkbenchSessionRefresh } from "./use-workbench-session-refresh"; import { ProjectLibraryRecovery } from "./project-library-recovery";
+import { TransitionCreationDialog } from "./transition-creation-dialog"; import { WorkbenchMasthead } from "./workbench-masthead"; import { initialExpandedPlaceIds, useWorkbenchSessionRefresh } from "./use-workbench-session-refresh"; import { ProjectLibraryRecovery } from "./project-library-recovery";
 import { useEditorTransaction } from "./use-editor-transaction";
 import { inspectorFocus, resolvedInspectedPlaceId, type InspectorFocus } from "./workbench-inspector-focus"; import { openWorkbenchPlace } from "./workbench-place-navigation";
 const ProjectLibraryDialog = lazy(() => import("./project-library-dialog").then((module) => ({ default: module.ProjectLibraryDialog }))); type Mode = "drawing" | "story";
@@ -76,7 +76,7 @@ export function EditorWorkbench() {
   function installLoadedProject(loaded: Awaited<ReturnType<typeof restoreWorkbenchProject>>) {
     setSession(loaded.session); setSnapshot(loaded.snapshot); setSelections([]); setViewport(loaded.viewport);
     setInspectorTarget(inspectorFocus(loaded.project, loaded.snapshot.activePlaceId));
-    setExpandedIds(new Set(loaded.project.places.map(({ id }) => id))); setSketchVisible(loaded.sketchVisible); setSketchOpacity(loaded.sketchOpacity);
+    setExpandedIds(initialExpandedPlaceIds(loaded.project, loaded.snapshot.activePlaceId)); setSketchVisible(loaded.sketchVisible); setSketchOpacity(loaded.sketchOpacity);
     setEraserSize(loaded.eraserSize); setGapClosingEnabled(loaded.gapClosingEnabled); setGapClosingTolerance(loaded.gapClosingTolerance);
   }
   const projectNavigation = useWorkbenchProjectSwitch({ session, locale, autosave, install: installLoadedProject, onError: setOperationError });

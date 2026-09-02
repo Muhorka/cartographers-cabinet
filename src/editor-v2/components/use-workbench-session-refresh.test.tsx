@@ -11,7 +11,7 @@ import type { MapSelection } from "./map-sheet-types";
 import { viewportFor } from "./workbench-helpers";
 import type { useProjectAutosave } from "./use-project-autosave";
 import { useWorkbenchProjectSwitch } from "./use-workbench-project-switch";
-import { expandedPlaceIds, reconcileMapSelections, useWorkbenchSessionRefresh } from "./use-workbench-session-refresh";
+import { expandedPlaceIds, initialExpandedPlaceIds, mergeExpandedPlaceIds, reconcileMapSelections, useWorkbenchSessionRefresh } from "./use-workbench-session-refresh";
 import { inspectorFocus, type InspectorFocus } from "./workbench-inspector-focus";
 
 const storage = vi.hoisted(() => ({ read: vi.fn(), preference: vi.fn().mockResolvedValue(undefined), error: vi.fn() }));
@@ -67,6 +67,28 @@ describe("workbench project snapshot reconciliation", () => {
     expect(reconcileMapSelections(project, existing)).toBe(existing);
     expect(reconcileMapSelections(project, mixed)).toEqual(existing);
     expect(expandedPlaceIds(project, "ground")).toEqual(["ground", "building", "world"]);
+  });
+
+  it("opens only the active branch when a project is installed", () => {
+    const project = hierarchy();
+    expect(initialExpandedPlaceIds(project, "ground")).toEqual(new Set(["ground", "building", "world"]));
+    expect(initialExpandedPlaceIds(project, "ground").size).toBe(3);
+  });
+
+  it("merges a visited branch without closing a manually opened branch", () => {
+    const project = createPlace(hierarchy(), { id: "annex", parentId: "world", name: "Annex", kind: "location" });
+    const current = new Set(["building"]);
+    expect(mergeExpandedPlaceIds(current, project, "annex")).toEqual(new Set(["building", "annex", "world"]));
+  });
+
+  it("resets the expanded state to the new project's active branch", () => {
+    const first = hierarchy();
+    const second = createPlace(emptyProject("second", "Second"), { id: "new-world", name: "New world", kind: "world" });
+    const firstState = initialExpandedPlaceIds(first, "ground");
+    const secondState = initialExpandedPlaceIds(second, "new-world");
+    expect(firstState).toEqual(new Set(["ground", "building", "world"]));
+    expect(secondState).toEqual(new Set(["new-world"]));
+    expect([...secondState].some((id) => firstState.has(id))).toBe(false);
   });
 
   it("reconciles an actual WebMCP undo through the shared refresh boundary", async () => {
