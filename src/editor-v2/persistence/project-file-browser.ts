@@ -18,7 +18,7 @@ function recoveryFileName(primaryKey: IDBValidKey) {
 }
 
 export function serializeProjectRecovery(record: ProjectLibraryRecoveryRecord, exportedAt = new Date().toISOString()) {
-  return JSON.stringify({ format: "cartographers-cabinet.project-recovery", fileVersion: 1, exportedAt, primaryKey: record.primaryKey, rawRecord: record.rawRecord }, null, 2);
+  return JSON.stringify({ format: "cartographers-cabinet.project-recovery", fileVersion: 1, exportedAt, primaryKey: record.primaryKey, rawRecord: record.rawRecord, reason: record.reason }, null, 2);
 }
 
 export function exportProjectRecoveryFile(record: ProjectLibraryRecoveryRecord) {
