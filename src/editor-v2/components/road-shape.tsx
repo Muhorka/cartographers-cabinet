@@ -7,13 +7,16 @@ import { PathAnchorHandles } from "./path-anchor-handles";
 import { mapLabelWithArea, mapRegionArea } from "../geometry/map-area";
 import { regionLabelLayout } from "../geometry/region-label-layout";
 import { MapSheetRegionLabel } from "./map-sheet-region-label";
+import type { AffineMatrix } from "../geometry/affine-transform";
+import type { LabelCollisionRegistry } from "../geometry/label-collision";
+import type { LabelObstacle } from "../geometry/room-label-layout";
 
-export function RoadShape({ element, prefix, zoom, handles, selected, showArea = false, units = "metric" }: { element: DrawingElement; prefix: string; zoom: number; handles: boolean; selected: boolean; showArea?: boolean; units?: "metric" | "imperial" }) {
+export function RoadShape({ element, prefix, zoom, handles, selected, showArea = false, units = "metric", labelObstacles, labelMatrix, labelCollision }: { element: DrawingElement; prefix: string; zoom: number; handles: boolean; selected: boolean; showArea?: boolean; units?: "metric" | "imperial"; labelObstacles?: readonly LabelObstacle[]; labelMatrix?: AffineMatrix; labelCollision?: LabelCollisionRegistry }) {
   const shape = ribbonShape(element); if (!shape) return null;
   const path = regionPath(shape); const filter = `${prefix}-road-${element.id.replaceAll(/[^a-zA-Z0-9_-]/g, "-")}`;
   const width = ribbonWidth(element); const { fillColor: color, fillOpacity } = ribbonAppearance(element);
   const edges = ribbonEdges(element); const stride = Math.max(1, Math.ceil(edges.length / 12));
-  const clipId = `${filter}-clip`; const label = regionLabelLayout(mapLabelWithArea(element.name, mapRegionArea(shape), units, showArea), shape, zoom);
+  const clipId = `${filter}-clip`; const label = regionLabelLayout(mapLabelWithArea(element.name, mapRegionArea(shape), units, showArea), shape, zoom, false, { obstacles: [...(labelObstacles ?? []), ...(labelCollision?.obstaclesFor(labelMatrix) ?? [])] }); labelCollision?.register(label?.kind === "inside" ? label : undefined, labelMatrix);
   return <>
     <defs><filter id={filter} x="-20%" y="-20%" width="140%" height="140%" colorInterpolationFilters="sRGB"><feGaussianBlur stdDeviation={width * .045}/></filter><clipPath id={clipId}><path d={path} fillRule="evenodd"/></clipPath>{label?.kind === "boundary" && <path id={`${clipId}-label-path`} d={label.path}/>}</defs>
     <g opacity={fillOpacity} pointerEvents="none"><path d={path} fill={color} fillRule="evenodd" filter={`url(#${filter})`}/><path d={path} fill={color} fillOpacity={.15} fillRule="evenodd"/></g>

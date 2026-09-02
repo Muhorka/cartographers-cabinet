@@ -11,10 +11,11 @@ import { roomPath } from "./map-sheet-geometry";
 import type { MapSelection, MapSheetCopy } from "./map-sheet";
 import type { TransitionView } from "./map-sheet-geometry";
 import styles from "./map-sheet.module.css";
+import type { LabelCollisionRegistry } from "../geometry/label-collision";
 
 type RoomScope = { wallIds?: ReadonlySet<string>; transitionIds?: ReadonlySet<string> };
 
-export function MapSheetConstruction({ project, document, network, owner, prefix, copy, selectedIds, viewportZoom, roomView, roomScope, activeGesture, selectionEditing, selectionOnly = false, selectionLayerId, movingIds, moveDelta, openingWidthPreview, onSelect, onOpenPlace, contextTransitions = [] }: {
+export function MapSheetConstruction({ project, document, network, owner, prefix, copy, selectedIds, viewportZoom, roomView, roomScope, activeGesture, selectionEditing, selectionOnly = false, selectionLayerId, movingIds, moveDelta, openingWidthPreview, labelMatrix, labelCollision, onSelect, onOpenPlace, contextTransitions = [] }: {
   project: EditorProject;
   document: ConstructionDocument;
   network: WallNetworkResult;
@@ -32,6 +33,8 @@ export function MapSheetConstruction({ project, document, network, owner, prefix
   movingIds: ReadonlySet<string>;
   moveDelta?: KernelPoint;
   openingWidthPreview?: { id: string; width: number };
+  labelMatrix?: import("../geometry/affine-transform").AffineMatrix;
+  labelCollision?: LabelCollisionRegistry;
   onSelect?(selection: MapSelection, additive?: boolean): void;
   onOpenPlace?(placeId: string): void;
   contextTransitions?: readonly TransitionView[];
@@ -47,7 +50,7 @@ export function MapSheetConstruction({ project, document, network, owner, prefix
       const room = document.rooms.find(({ faceId }) => faceId === face.id); if (!room) return null;
       const roomPlace = project.places.find(({ id }) => id === room.id); if (room.visible === false || roomPlace?.visible === false) return null; const appearance = roomPlace?.appearance ?? owner?.appearance;
       const clipId = `${prefix}-room-${safeId(room.id)}`; const canOpen = project.places.some(({ id }) => id === room.id);
-      const selectable = !activeGesture && (selectionOnly || selectionEditing) && (selectionOnly || room.locked !== true && roomPlace?.locked !== true); const editable = selectionEditing && !activeGesture && room.locked !== true && roomPlace?.locked !== true; const interactive = !activeGesture && (!selectionEditing || editable || selectionOnly); const displayName = mapLabelWithArea(room.name, mapRoomArea(face), project.measureSettings.units, project.measureSettings.showRoomAreas); const label = roomLabelLayout(displayName, face, viewportZoom);
+      const selectable = !activeGesture && (selectionOnly || selectionEditing) && (selectionOnly || room.locked !== true && roomPlace?.locked !== true); const editable = selectionEditing && !activeGesture && room.locked !== true && roomPlace?.locked !== true; const interactive = !activeGesture && (!selectionEditing || editable || selectionOnly); const displayName = mapLabelWithArea(room.name, mapRoomArea(face), project.measureSettings.units, project.measureSettings.showRoomAreas); const label = roomLabelLayout(displayName, face, viewportZoom, { obstacles: labelCollision?.obstaclesFor(labelMatrix) }); labelCollision?.register(label, labelMatrix);
       const canNavigate = canOpen && !selectionEditing;
       return <g key={room.id} className={styles.roomTarget} style={interactive || canNavigate ? undefined : { pointerEvents: "none" }} transform={translated(movingIds.has(room.id))} data-selectable={selectable ? "true" : undefined} data-selection-layer={selectable ? "construction" : undefined} data-selection-kind={selectable ? "room" : undefined} data-selection-id={selectable ? room.id : undefined} role={interactive || canNavigate ? "button" : undefined} tabIndex={interactive || canNavigate ? 0 : undefined} aria-label={interactive || canNavigate ? room.name : undefined} onClick={interactive ? (event) => { event.stopPropagation(); onSelect?.({ kind: "room", id: room.id }, additiveSelection(event)); } : undefined} onDoubleClick={canNavigate && !activeGesture ? (event) => { event.stopPropagation(); onOpenPlace?.(room.id); } : undefined} onKeyDown={(event) => { if (event.key === "Enter" && canNavigate && !activeGesture) { event.preventDefault(); onOpenPlace?.(room.id); } else activateByKeyboard(event, () => { if (interactive) onSelect?.({ kind: "room", id: room.id }); }); }}>
         <defs><clipPath id={clipId}><path d={roomPath(face)} fillRule="evenodd"/></clipPath></defs>

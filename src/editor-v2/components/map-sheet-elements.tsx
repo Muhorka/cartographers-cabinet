@@ -9,10 +9,11 @@ import { mapLabelWithArea, mapRoomArea } from "../geometry/map-area";
 import { labelObstacleForLayout, roomLabelLayout, type LabelObstacle } from "../geometry/room-label-layout";
 import { labelObstaclesForShape } from "../geometry/region-label-layout";
 import { applyAffinePoint } from "../geometry/affine-transform";
+import type { LabelCollisionRegistry } from "../geometry/label-collision";
 
 type ElementSelection = { kind: "element"; id: string };
 
-export function MapSheetElements({ project, activePlaceId, terrain, prefix, selected, movingIds, movingTransform, selectionEditing, selectionOnly = false, selectionLayerId, sketchVisible, sketchOpacity, viewportZoom, showArea = false, units = "metric", onSelect, onNoteTextChange }: {
+export function MapSheetElements({ project, activePlaceId, terrain, prefix, selected, movingIds, movingTransform, selectionEditing, selectionOnly = false, selectionLayerId, sketchVisible, sketchOpacity, viewportZoom, showArea = false, units = "metric", labelCollision, onSelect, onNoteTextChange }: {
   project: EditorProject;
   activePlaceId: string;
   terrain: boolean;
@@ -28,6 +29,7 @@ export function MapSheetElements({ project, activePlaceId, terrain, prefix, sele
   viewportZoom: number;
   showArea?: boolean;
   units?: "metric" | "imperial";
+  labelCollision?: LabelCollisionRegistry;
   onSelect?(selection: ElementSelection, additive?: boolean): void;
   onNoteTextChange?(id: string, text: string): void;
 }) {
@@ -50,7 +52,8 @@ export function MapSheetElements({ project, activePlaceId, terrain, prefix, sele
     const contextOpacity = depth < 0 ? .42 : .68;
     const ownerTransform = depth === 0 ? undefined : matrixAttribute(relativePlaceMatrix(project, activePlaceId, element.belongsToId));
     const elementObstacles = element.belongsToId === activePlaceId ? labelObstacles : transformLabelObstacles(relativePlaceMatrix(project, element.belongsToId, activePlaceId), labelObstacles);
-    return <g key={element.id} transform={ownerTransform}><g transform={movingIds.has(element.id) ? movingTransform : undefined}><ElementShape element={element} opacity={element.layerId === "sketch" ? sketchOpacity : depth === 0 ? 1 : contextOpacity} prefix={prefix} viewportZoom={viewportZoom} pointRadius={5 / viewportZoom} resizeHandleSize={5 / viewportZoom} selectable={selectable} showResizeHandles={editable && selectionLayerId === element.layerId && selected.has(element.id)} selected={selected.has(element.id)} showArea={showArea} units={units} labelObstacles={elementObstacles} onNoteTextChange={editableOwner && !element.locked ? onNoteTextChange : undefined} onSelect={selectable ? (additive) => onSelect?.({ kind: "element", id: element.id }, additive) : undefined}/></g></g>;
+    const labelMatrix = relativePlaceMatrix(project, activePlaceId, element.belongsToId);
+    return <g key={element.id} transform={ownerTransform}><g transform={movingIds.has(element.id) ? movingTransform : undefined}><ElementShape element={element} opacity={element.layerId === "sketch" ? sketchOpacity : depth === 0 ? 1 : contextOpacity} prefix={prefix} viewportZoom={viewportZoom} pointRadius={5 / viewportZoom} resizeHandleSize={5 / viewportZoom} selectable={selectable} showResizeHandles={editable && selectionLayerId === element.layerId && selected.has(element.id)} selected={selected.has(element.id)} showArea={showArea} units={units} labelObstacles={elementObstacles} labelMatrix={labelMatrix} labelCollision={labelCollision} onNoteTextChange={editableOwner && !element.locked ? onNoteTextChange : undefined} onSelect={selectable ? (additive) => onSelect?.({ kind: "element", id: element.id }, additive) : undefined}/></g></g>;
   });
   const roads = new Map(project.elements.filter((element) => element.layerId === "roads").map((element) => [element.id, element]));
   const markers = terrain ? [] : (project.roadJunctions ?? []).flatMap((junction) => {
