@@ -3,7 +3,7 @@ import type { StoryLocale } from "../components/story-types";
 export const worldEntryTraitsCopy = {
   pl: {
     title: "Cechy własne i dziedziczone",
-    hint: "Wpis zachowuje własne cechy, a dodatkowo otrzymuje cechy grup i frakcji, do których należy. Własna wartość ma pierwszeństwo.",
+    hint: "Zobacz cechy przypisane bezpośrednio do wpisu oraz te przejęte z jego grup i frakcji. Własna wartość zastępuje wartość odziedziczoną.",
     noDefinitions: "Najpierw dodaj cechy w Słowniku cech.",
     inherited: "Dziedziczone",
     from: "z",
@@ -12,7 +12,7 @@ export const worldEntryTraitsCopy = {
   },
   en: {
     title: "Own and inherited traits",
-    hint: "An entry keeps its own traits and also receives traits from its groups and factions. Its own value takes precedence.",
+    hint: "See the traits assigned directly to this entry and those inherited from its groups and factions. A value set directly on the entry overrides an inherited value.",
     noDefinitions: "Add traits to the Trait dictionary first.",
     inherited: "Inherited",
     from: "from",

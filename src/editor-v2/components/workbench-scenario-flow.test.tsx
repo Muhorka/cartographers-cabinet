@@ -76,7 +76,7 @@ describe("scenario workspace through the real editor session", () => {
     act(() => (panel.querySelector('input[type="checkbox"]') as HTMLInputElement).click());
     await act(async () => button("Sprawdź założenia", panel).click());
     expect(panel.textContent).toContain("Reguły pozwalają na dostęp.");
-    expect(panel.textContent).toContain("Nie potwierdza fizycznego przejścia.");
+    expect(panel.textContent).toContain("Fizyczną możliwość dotarcia do niego ocenia osobno trasa.");
     expect(state().story.intentions[0].status).toBe("accepted");
     expect(state().story.routes).toEqual([]);
     click("Edytuj założenia");

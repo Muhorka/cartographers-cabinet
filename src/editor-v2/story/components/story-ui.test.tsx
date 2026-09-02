@@ -118,11 +118,11 @@ describe("story UI contract", () => {
     expect(explanationFor({ kind: "predicate", predicate: { kind: "group", groupId: "legacy" } }, storyCopy.en, story, [])).toBe("Zone: Legacy places");
   });
 
-  it("explains that zones group places without changing hierarchy", () => {
+  it("explains that zones form a logical whole with shared traits", () => {
     const html = renderToStaticMarkup(<StoryZoneList zones={[]} selectionCount={0} locale="en" onSelect={vi.fn()} onCreate={vi.fn()} />);
-    expect(html).toContain("rooms in an apartment");
-    expect(html).toContain("keeps its own data");
-    expect(html).toContain("without changing hierarchy");
+    expect(html).toContain("one logical whole");
+    expect(html).toContain("shared traits");
+    expect(html).toContain("located in the Atlas");
   });
 
   it("labels zone-provided values as inherited in the inspector", () => {

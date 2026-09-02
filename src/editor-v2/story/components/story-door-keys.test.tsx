@@ -59,7 +59,7 @@ describe("StoryDoorKeys", () => {
   it("shows scenario context and exposes the worldbook escape hatch", () => {
     const project = fixture(); project.story.world.push({ id: "night", kind: "key", name: "Night key", tags: [], properties: {} }); project.story.scenarios = [{ id: "scene", name: "Scene", patches: [{ id: "door", target: ref, metadata: { access: { allow: [], deny: [], permission: "open", physicalState: "open", lock: "locked", keyIds: ["night"], guardIds: [], secretKnowledge: [] } } }], steps: [] }];
     const onOpenWorldbook = vi.fn(); const { host, root } = render(project, { target: "scenario", context: { scenarioId: "scene" }, onOpenWorldbook });
-    expect(host.textContent).toContain("Klucz na drzwiach jest edytowany w wybranym scenariuszu");
+    expect(host.textContent).toContain("W scenariuszu możesz zmienić, jaki klucz otwiera dane drzwi");
     expect(host.textContent).toContain("Klucz: Night key");
     act(() => [...host.querySelectorAll("button")].find((button) => button.textContent === "Otwórz Księgę świata")?.click());
     expect(onOpenWorldbook).toHaveBeenCalledTimes(1);

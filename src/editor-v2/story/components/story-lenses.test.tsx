@@ -149,15 +149,15 @@ describe("StoryLenses", () => {
   it("keeps the introductory and action wording localized", () => {
     const polish = renderToStaticMarkup(<StoryLenses story={emptyStoryData()} copy={storyCopy.pl} lenses={[]} onSelect={vi.fn()} onChange={vi.fn()} onPreview={vi.fn()}/>);
     const english = renderToStaticMarkup(<StoryLenses story={emptyStoryData()} copy={storyCopy.en} lenses={[]} onSelect={vi.fn()} onChange={vi.fn()} onPreview={vi.fn()}/>);
-    expect(polish).toContain("Soczewki wyróżniają kolorem");
-    expect(polish).toContain("Wybierz, co chcesz podświetlić na mapie.");
+    expect(polish).toContain("Pokaż na mapie obiekty spełniające wybrane warunki");
+    expect(polish).toContain("Określ, jakie obiekty chcesz teraz wyróżnić na mapie.");
     expect(polish).toContain("Pokaż na mapie");
     expect(polish).toContain("Zapisz soczewkę");
-    expect(polish).toContain("Podgląd na mapie jest jednorazowy");
-    expect(english).toContain("Lenses highlight objects");
-    expect(english).toContain("Choose what you want to highlight on the map.");
+    expect(polish).toContain("Wypróbuj filtr od razu na mapie");
+    expect(english).toContain("Show objects on the map that match selected conditions");
+    expect(english).toContain("Define which objects you want to highlight on the map.");
     expect(english).toContain("Show on map");
     expect(english).toContain("Save lens");
-    expect(english).toContain("Map preview is one-time");
+    expect(english).toContain("Try the filter on the map immediately without saving it.");
   });
 });

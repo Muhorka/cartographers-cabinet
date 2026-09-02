@@ -32,7 +32,7 @@ describe("scene intention panel", () => {
     const before = structuredClone(project); const { host, initial, button, select } = await renderPanel({ project });
     await select(1, "saved"); await act(async () => button("Check intentions").click());
     expect(host.querySelector('[data-review-status="satisfied"]')).not.toBeNull();
-    expect(host.textContent).toContain("Applies only to this calculated route");
+    expect(host.textContent).toContain("The result applies to this particular calculated path");
     await act(async () => button("Show object").click());
     expect(initial.onFocus).toHaveBeenCalledWith([{ kind: "place", id: "level" }]);
     await act(async () => button("Show calculated route").click());

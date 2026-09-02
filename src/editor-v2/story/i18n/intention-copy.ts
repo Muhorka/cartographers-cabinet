@@ -38,7 +38,7 @@ const en: IntentionCopy = {
   actor: "Who is allowed or denied?",
   text: "Author's description",
   authorStatus: "Author status",
-  authorStatusHint: "This records your editorial decision. It is not a route or access check result.",
+  authorStatusHint: "Record your own editorial decision about this assumption. The result of an automatic check is stored separately.",
   authorDraft: "Draft",
   authorAccepted: "Accepted by author",
   authorRejected: "Rejected by author",
@@ -51,9 +51,9 @@ const en: IntentionCopy = {
   noObjects: "No map objects are available.",
   noZones: "No authored zones are available.",
   noActors: "No characters, factions, or people groups are available.",
-  textHint: "Keep this as the author's wording; a review result is recorded elsewhere.",
-  customHint: "A custom intention is descriptive only and is not presented as proven.",
-  validationNote: "No check is run here. A route or access review needs complete references and explicit endpoints.",
+  textHint: "Describe in your own words what you want to achieve or check. The Cabinet keeps this description independently of any later check results.",
+  customHint: "Use this for an assumption the Cabinet cannot check automatically. You can record a question or condition and assess it yourself.",
+  validationNote: "Check whether the intention includes all the information needed for a later review, such as a specified target, zone, or required points. Run the actual check separately.",
 };
 
 const pl: IntentionCopy = {
@@ -66,7 +66,7 @@ const pl: IntentionCopy = {
   actor: "Kogo wpuszczać lub nie wpuszczać?",
   text: "Opis autora",
   authorStatus: "Status autora",
-  authorStatusHint: "To Twoja decyzja redakcyjna, a nie wynik sprawdzenia trasy ani dostępu.",
+  authorStatusHint: "Oznacz własną decyzję redakcyjną dotyczącą tego założenia. Wynik automatycznego sprawdzenia jest przechowywany osobno.",
   authorDraft: "Szkic",
   authorAccepted: "Zaakceptowana przez autora",
   authorRejected: "Odrzucona przez autora",
@@ -79,9 +79,9 @@ const pl: IntentionCopy = {
   noObjects: "Brak dostępnych obiektów mapy.",
   noZones: "Brak zapisanych stref.",
   noActors: "Brak postaci, frakcji i grup osób.",
-  textHint: "Zachowaj tu słowa autora; wynik sprawdzenia jest zapisywany osobno.",
-  customHint: "Intencja niestandardowa jest tylko opisem i nie jest przedstawiana jako dowiedziona.",
-  validationNote: "Tutaj nic nie jest sprawdzane. Przegląd trasy lub dostępu wymaga pełnych odnośników i jawnych punktów końcowych.",
+  textHint: "Zapisz własnymi słowami, co chcesz osiągnąć lub sprawdzić. Gabinet zachowa ten opis niezależnie od późniejszych wyników kontroli.",
+  customHint: "Użyj jej dla założenia, którego Gabinet nie potrafi sprawdzić automatycznie. Zapiszesz pytanie lub warunek, a jego ocenę pozostawisz sobie.",
+  validationNote: "Sprawdź, czy intencja ma wszystkie informacje potrzebne do późniejszej kontroli — np. wskazany cel, strefę lub wymagane punkty. Właściwe sprawdzenie wykonujesz osobno.",
 };
 
 export function intentionCopy(copy: StoryCopy): IntentionCopy {
