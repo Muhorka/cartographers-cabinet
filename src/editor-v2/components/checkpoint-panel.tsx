@@ -15,7 +15,7 @@ export function CheckpointPanel({ checkpoints, activeCheckpointId, tracingOpacit
   onTracing(id?: string): void;
   onOpacity(opacity: number): void;
   onRestore(id: string): void;
-  onRemove(id: string): void;
+  onRemove(id: string): void | Promise<void>;
 }) {
   const [name, setName] = useState("");
   const [confirmation, setConfirmation] = useState<{ kind: "restore" | "remove"; id: string }>();
@@ -34,7 +34,7 @@ export function CheckpointPanel({ checkpoints, activeCheckpointId, tracingOpacit
       const pending = confirmation?.id === checkpoint.id ? confirmation.kind : undefined;
       return <li key={checkpoint.id} className={activeCheckpointId === checkpoint.id ? styles.active : undefined}>
         <div><strong>{checkpoint.name}</strong><time dateTime={checkpoint.createdAt}>{new Date(checkpoint.createdAt).toLocaleString(locale === "pl" ? "pl-PL" : "en-GB", { dateStyle: "short", timeStyle: "short" })}</time></div>
-        {pending ? <div className={styles.confirm}><p>{pending === "restore" ? copy.confirmRestore : copy.confirmRemove}</p><button type="button" onClick={() => { setConfirmation(undefined); (pending === "restore" ? onRestore : onRemove)(checkpoint.id); }}>{copy.confirm}</button><button type="button" onClick={() => setConfirmation(undefined)}>{copy.cancel}</button></div>
+        {pending ? <div className={styles.confirm}><p>{pending === "restore" ? copy.confirmRestore : copy.confirmRemove}</p><button type="button" onClick={() => { setConfirmation(undefined); const result = (pending === "restore" ? onRestore : onRemove)(checkpoint.id); void Promise.resolve(result).catch(() => undefined); }}>{copy.confirm}</button><button type="button" onClick={() => setConfirmation(undefined)}>{copy.cancel}</button></div>
           : <div className={styles.actions}><button type="button" aria-pressed={activeCheckpointId === checkpoint.id} onClick={() => onTracing(activeCheckpointId === checkpoint.id ? undefined : checkpoint.id)}>{activeCheckpointId === checkpoint.id ? copy.hideTracing : copy.showTracing}</button><button type="button" onClick={() => setConfirmation({ kind: "restore", id: checkpoint.id })}>{checkpoint.kind === "proposal" ? locale === "pl" ? "Przyjmij propozycję" : "Adopt proposal" : copy.restore}</button><button type="button" onClick={() => setConfirmation({ kind: "remove", id: checkpoint.id })}>{copy.remove}</button></div>}
       </li>;
     })}</ol></details>)}

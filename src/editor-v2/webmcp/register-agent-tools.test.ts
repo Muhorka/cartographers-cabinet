@@ -24,6 +24,17 @@ describe("agent checkpoint response", () => {
     const full = (await tool.execute({ name: "Before edit", includeSnapshot: true })) as { structuredContent: { checkpoint: Record<string, unknown> } };
     expect(full.structuredContent.checkpoint.snapshot).toEqual(checkpoint.snapshot);
   });
+
+  it("propagates checkpoint deletion failures to WebMCP", async () => {
+    const project = createProjectAtScale("checkpoint-delete-test", "Checkpoint delete test", "en", "world");
+    const session = new EditorSession(project, { initialPlaceId: project.places[0].id });
+    const checkpoint = createProjectCheckpoint(project, { id: "checkpoint-delete", name: "Delete me" });
+    const tools = createEditorAgentTools({ getSession: () => session, getActivePlaceId: () => project.places[0].id, refresh: () => undefined, getCheckpoints: () => [checkpoint], deleteCheckpoint: async () => { throw new Error("Delete failed"); } });
+    const prepare = tools.find(({ name }) => name === "prepare_delete_checkpoint")!;
+    const apply = tools.find(({ name }) => name === "apply_checkpoint_deletion")!;
+    const prepared = await prepare.execute({ checkpointId: checkpoint.id }) as { structuredContent: { token: string } };
+    await expect(apply.execute({ token: prepared.structuredContent.token })).rejects.toThrow("Delete failed");
+  });
 });
 
 describe("agent focus receipt", () => {
