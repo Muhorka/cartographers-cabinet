@@ -53,7 +53,7 @@ import { useEditorTransaction } from "./use-editor-transaction";
 import { inspectorFocus, resolvedInspectedPlaceId, type InspectorFocus } from "./workbench-inspector-focus"; import { openWorkbenchPlace } from "./workbench-place-navigation";
 const ProjectLibraryDialog = lazy(() => import("./project-library-dialog").then((module) => ({ default: module.ProjectLibraryDialog }))); type Mode = "drawing" | "story";
 export function EditorWorkbench() {
-  const [locale, setLocale] = useState<EditorLocale>("pl"); const copy = workbenchCopy[locale];
+  const [locale, setLocale] = useState<EditorLocale>("en"); const copy = workbenchCopy[locale];
   const [projects, setProjects] = useState<EditorProject[]>([]); const [session, setSession] = useState<EditorSession>(); const [snapshot, setSnapshot] = useState<EditorSessionState>();
   const [mode, setMode] = useState<Mode>("drawing"); const [libraryOpen, setLibraryOpen] = useState(false); const [draftName, setDraftName] = useState(""); const [startingScale, setStartingScale] = useState<StartingScale>("world"); const [pendingDeleteId, setPendingDeleteId] = useState<string>();
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set()); const [selections, setSelections] = useState<MapSelection[]>([]); const selectedIds = useMemo(() => selections.map(({ id }) => id), [selections]); const [toolboxCollapsed, setToolboxCollapsed] = useState(false);

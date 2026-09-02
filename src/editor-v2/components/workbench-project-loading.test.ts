@@ -26,6 +26,15 @@ describe("shared workbench restoration", () => {
     const result = await loadInitialWorkbenchProject();
     expect(result.loaded?.project.id).toBe("p"); expect(storage.save).not.toHaveBeenCalled(); expect(example.load).not.toHaveBeenCalled();
   });
+  it("defaults a fresh browser to English when no locale preference exists", async () => {
+    storage.preferences.delete("locale"); localStorage.removeItem("cartographer-locale");
+    storage.list.mockResolvedValue({ projects: [project()], recoveryRecords: [] });
+    await expect(loadInitialWorkbenchProject()).resolves.toMatchObject({ locale: "en" });
+  });
+  it.each(["pl", "en"] as const)("restores a manually saved %s locale", async (locale) => {
+    storage.preferences.set("locale", locale); storage.list.mockResolvedValue({ projects: [project()], recoveryRecords: [] });
+    await expect(loadInitialWorkbenchProject()).resolves.toMatchObject({ locale });
+  });
   it("installs the English example only in an empty healthy library", async () => {
     storage.list.mockResolvedValue({ projects: [], recoveryRecords: [] });
     const result = await loadInitialWorkbenchProject();

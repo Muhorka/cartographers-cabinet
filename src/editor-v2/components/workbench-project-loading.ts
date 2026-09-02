@@ -17,7 +17,7 @@ export async function restoreWorkbenchProject(project: EditorProject, locale: "p
 
 export async function loadInitialWorkbenchProject() {
   const stored = await getPreference("locale") ?? localStorage.getItem("cartographer-locale");
-  const locale: "pl" | "en" = stored === "en" ? "en" : "pl";
+  const locale: "pl" | "en" = stored === "pl" ? "pl" : "en";
   const scan = await scanProjectLibrary();
   let projects = scan.projects;
   if (!projects.length && !scan.recoveryRecords.length) projects = [await saveProject(await loadExampleProject(crypto.randomUUID()))];
