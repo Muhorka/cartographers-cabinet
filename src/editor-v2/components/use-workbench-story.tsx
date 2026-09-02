@@ -18,7 +18,7 @@ import { assignProjectKeyHolders } from "../story/project-key-holders";
 import { StoryDoorKeys } from "../story/components/story-door-keys";
 import { applyProjectStoryMetadata } from "../story/project-commands";
 import { allStoryObjectRefs } from "../story/project-adapter";
-import { effectiveProjectStoryObject } from "../story/project-effective";
+import { createProjectStoryObjectResolver } from "../story/project-effective";
 import { assertProjectStoryObjectEditable } from "../story/story-locks";
 import { resolveStoryOwnership } from "../story/ownership";
 import { displayProject } from "../story/project-view";
@@ -79,16 +79,25 @@ export function useWorkbenchStory({ session, snapshot, selections, inspectedPlac
   const rawRefs = project ? scopedSelectionRefs(project, selections, snapshot?.activePlaceId) : [];
   const inspectingOpenPlace = !selections.length;
   const inspectedRefs = inspectingOpenPlace && project && inspectedPlaceId ? scopedSelectionRefs(project, [{ kind: "place", id: inspectedPlaceId }], snapshot?.activePlaceId) : rawRefs;
+  const storyResolution = useMemo(() => {
+    if (!project) return { resolvedObjects: [], resolvedInspectorObjects: [], inspectorResolver: undefined };
+    const refs = allStoryObjectRefs(project);
+    const decorate = (value: NonNullable<ReturnType<ReturnType<typeof createProjectStoryObjectResolver>>>) => ({ ...value, name: storyObjectDisplayName(project, value, workbenchCopy[locale].objectList) });
+    const primaryResolver = createProjectStoryObjectResolver(project, { scenarioId, stepId });
+    const inspectorResolver = scenarioId === inspectorScenarioId && stepId === inspectorStepId
+      ? primaryResolver
+      : createProjectStoryObjectResolver(project, { scenarioId: inspectorScenarioId, stepId: inspectorStepId });
+    return {
+      resolvedObjects: refs.flatMap((ref) => { const value = primaryResolver(ref); return value ? [decorate(value)] : []; }),
+      resolvedInspectorObjects: refs.flatMap((ref) => { const value = inspectorResolver(ref); return value ? [decorate(value)] : []; }),
+      inspectorResolver,
+    };
+  }, [project, scenarioId, stepId, inspectorScenarioId, inspectorStepId, locale]);
   const selected = inspectedRefs.flatMap(({ type, id, scopeId }) => {
-    const result = project ? effectiveProjectStoryObject(project, { kind: type, id, scopeId }, { scenarioId: inspectorScenarioId, stepId: inspectorStepId }) : undefined;
+    const result = storyResolution.inspectorResolver?.({ kind: type, id, scopeId });
     return result && project ? [{ ...result, name: storyObjectDisplayName(project, result, workbenchCopy[locale].objectList) }] : [];
   });
-  const resolvedObjects = useMemo(() => project ? allStoryObjectRefs(project).flatMap((ref) => {
-    const value = effectiveProjectStoryObject(project, ref, { scenarioId, stepId }); return value ? [{ ...value, name: storyObjectDisplayName(project, value, workbenchCopy[locale].objectList) }] : [];
-  }) : [], [project, scenarioId, stepId, locale]);
-  const resolvedInspectorObjects = useMemo(() => project ? allStoryObjectRefs(project).flatMap((ref) => {
-    const value = effectiveProjectStoryObject(project, ref, { scenarioId: inspectorScenarioId, stepId: inspectorStepId }); return value ? [{ ...value, name: storyObjectDisplayName(project, value, workbenchCopy[locale].objectList) }] : [];
-  }) : [], [project, inspectorScenarioId, inspectorStepId, locale]);
+  const { resolvedObjects, resolvedInspectorObjects } = storyResolution;
   const selection = selected.map((item) => ({ ...item.ref, name: item.name, metadata: item.metadata as Record<string, unknown> }));
   function setView(patch: EditorStoryView) {
     const next: Parameters<typeof updateView>[0] = {};

@@ -7,6 +7,7 @@ import { assessRegionConstraint } from "../geometry/region-constraints";
 import { relativePlaceMatrix, transformRegion } from "../geometry/affine-transform";
 import { canonicalStoryRef, defaultStoryAccessPolicy, sameStoryRef, storyRefKey, type StoryData, type StoryObjectMetadata, type StoryObjectRef, type StoryZoneRelation } from "./types";
 import { migrateStoryData } from "./migration";
+import { immutableSnapshot, isImmutableSnapshot } from "../state/immutable-snapshot";
 
 export type ResolvedStoryObject = {
   ref: StoryObjectRef;
@@ -139,7 +140,10 @@ function sourceObject(project: EditorProject, ref: StoryObjectRef) {
   return undefined;
 }
 
+const allStoryObjectRefsCache = new WeakMap<EditorProject, StoryObjectRef[]>();
 export function allStoryObjectRefs(project: EditorProject): StoryObjectRef[] {
+  const cacheable = isImmutableSnapshot(project); const cached = cacheable ? allStoryObjectRefsCache.get(project) : undefined;
+  if (cached) return cached;
   const refs: StoryObjectRef[] = project.places.map((place) => place.kind === "room" || place.kind === "standalone-room"
     ? canonicalStoryRef({ kind: "room", id: place.id }, constructionIdForRoomPlace(project, place) ?? `place:${place.id}`)
     : { kind: "place", id: place.id });
@@ -155,7 +159,9 @@ export function allStoryObjectRefs(project: EditorProject): StoryObjectRef[] {
       ...construction.transitions.map(({ id }) => ({ kind: "transition" as const, id, scopeId: construction.id })),
     );
   }
-  return [...new Map(refs.map((ref) => [storyRefKey(ref), ref])).values()];
+  const unique = [...new Map(refs.map((ref) => [storyRefKey(ref), ref])).values()];
+  if (!cacheable) return unique;
+  const immutable = immutableSnapshot(unique); allStoryObjectRefsCache.set(project, immutable); return immutable;
 }
 export function resolveStoryObject(project: EditorProject, input: StoryData | unknown, ref: StoryObjectRef): ResolvedStoryObject | undefined {
   const story = migrateStoryData(input);

@@ -1,12 +1,20 @@
 import type { EditorProject } from "../model/project-model";
-import { effectiveStoryMetadata, effectiveStoryObject, storyAccessForMetadata, type StoryAccessResult } from "./effective";
+import { effectiveCanonicalStoryMetadata, effectiveCanonicalStoryObject, effectiveStoryObject, storyAccessForMetadata, type StoryAccessResult } from "./effective";
 import { migrateStoryData } from "./migration";
 import { canonicalProjectStoryRef, resolveStoryObject, zoneMatchesProject } from "./project-adapter";
 import { resolveStoryOwnership } from "./ownership";
 import { defaultStoryAccessPolicy, sameStoryRef, storyRefKey, type StoryAccessPolicy, type StoryData, type StoryLensExpression, type StoryObjectMetadata, type StoryObjectRef, type StoryPropertyValue, type StoryRelation, type StoryViewContext, type StoryZone } from "./types";
+import { immutableSnapshot, isImmutableSnapshot } from "../state/immutable-snapshot";
+
+const projectStoryDataCache = new WeakMap<EditorProject, StoryData>();
 
 /** Returns migrated narrative data and normalizes resolvable legacy room scopes. */
 export function projectStoryData(project: EditorProject): StoryData {
+  const cacheable = isImmutableSnapshot(project);
+  if (cacheable) {
+    const cached = projectStoryDataCache.get(project);
+    if (cached) return cached;
+  }
   const migrated = migrateStoryData(project.story); const seen = new Set<string>();
   const canonical = (ref: StoryObjectRef) => canonicalProjectStoryRef(project, ref);
   const objects = migrated.objects.map((object) => { const resolved = resolveStoryObject(project, migrated, object.ref); const candidate = resolved?.ref ?? canonical(object.ref); if (seen.has(storyRefKey(candidate))) return { ...object, ref: candidate }; seen.add(storyRefKey(candidate)); return { ...object, ref: candidate }; });
@@ -21,7 +29,11 @@ export function projectStoryData(project: EditorProject): StoryData {
   const relations = migrated.relations.map((relation) => ({ ...relation, from: endpoint(relation.from), to: endpoint(relation.to) }));
   const intentions = migrated.intentions.map((intention) => ({ ...intention, subject: canonical(intention.subject), target: intention.target ? canonical(intention.target) : undefined, through: intention.through?.map(canonical) }));
   const evidence = migrated.evidence.map((item) => ({ ...item, refs: item.refs.map(canonical) }));
-  return { ...migrated, objects, zones, scenarios, lenses, relations, intentions, evidence };
+  const story = { ...migrated, objects, zones, scenarios, lenses, relations, intentions, evidence };
+  if (!cacheable) return story;
+  const immutable = immutableSnapshot(story);
+  projectStoryDataCache.set(project, immutable);
+  return immutable;
 }
 
 export function canonicalLensExpression(project: EditorProject, expression: StoryLensExpression): StoryLensExpression {
@@ -43,9 +55,11 @@ export function projectZonesForRef(project: EditorProject, story: StoryData, ref
   return story.zones.filter(({ id }) => zoneMatchesProject(project, story, id, canonical).matches);
 }
 
-function zonePropertySources(project: EditorProject, story: StoryData, ref: StoryObjectRef) {
+type ProjectZonesResolver = (ref: StoryObjectRef) => StoryZone[];
+
+function zonePropertySources(ref: StoryObjectRef, zonesForRef: ProjectZonesResolver) {
   const sources = new Map<string, string[]>();
-  for (const zone of projectZonesForRef(project, story, ref)) for (const propertyId of Object.keys(zone.metadata?.properties ?? {})) sources.set(propertyId, [...(sources.get(propertyId) ?? []), zone.id]);
+  for (const zone of zonesForRef(ref)) for (const propertyId of Object.keys(zone.metadata?.properties ?? {})) sources.set(propertyId, [...(sources.get(propertyId) ?? []), zone.id]);
   return sources;
 }
 
@@ -66,7 +80,7 @@ function parentPlaces(project: EditorProject, resolved: ReturnType<typeof resolv
   }
   return chain;
 }
-function parentStoryMetadata(project: EditorProject, story: StoryData, resolved: ReturnType<typeof resolveStoryObject> extends infer R ? Exclude<R, undefined> : never, context: StoryViewContext): StoryObjectMetadata {
+function parentStoryMetadata(project: EditorProject, story: StoryData, resolved: ReturnType<typeof resolveStoryObject> extends infer R ? Exclude<R, undefined> : never, context: StoryViewContext, zonesForRef: ProjectZonesResolver): StoryObjectMetadata {
   const chain = parentPlaces(project, resolved);
   let metadata: StoryObjectMetadata = {};
   // Apply the outer container first: the nearest parent then wins scalar values.
@@ -74,20 +88,25 @@ function parentStoryMetadata(project: EditorProject, story: StoryData, resolved:
     const parentRef: StoryObjectRef = { kind: "place", id: parent.id };
     const hasRecord = story.objects.some(({ ref }) => sameStoryRef(ref, parentRef));
     const parentStory = hasRecord ? story : { ...story, objects: [...story.objects, { ref: parentRef, metadata: {} }] };
-    const inherited = effectiveStoryObject(parentStory, parentRef, context, { applicableZones: projectZonesForRef(project, story, parentRef) })?.metadata ?? effectiveStoryMetadata(parentStory, parentRef, { applicableZones: projectZonesForRef(project, story, parentRef) }).metadata;
+    const parentObject = parentStory.objects.find(({ ref }) => sameStoryRef(ref, parentRef));
+    const zones = zonesForRef(parentRef);
+    const inherited = parentObject
+      ? effectiveCanonicalStoryObject(parentStory, parentObject, context, { applicableZones: zones }).metadata
+      : effectiveCanonicalStoryMetadata(parentStory, parentRef, { applicableZones: zones }).metadata;
     metadata = { ...metadata, tags: [...new Set([...(metadata.tags ?? []), ...(inherited.tags ?? [])])], properties: { ...(metadata.properties ?? {}), ...(inherited.properties ?? {}) }, access: joinAccess(metadata.access ?? defaultStoryAccessPolicy(), inherited.access ?? defaultStoryAccessPolicy()) };
   }
   return metadata;
 }
 
 type PropertyEvidence = { propertyId: string; value: StoryPropertyValue; source: string; patchIds?: string[]; conflict?: boolean };
-function parentPropertyEvidence(project: EditorProject, story: StoryData, resolved: ReturnType<typeof resolveStoryObject> extends infer R ? Exclude<R, undefined> : never, context: StoryViewContext) {
+function parentPropertyEvidence(project: EditorProject, story: StoryData, resolved: ReturnType<typeof resolveStoryObject> extends infer R ? Exclude<R, undefined> : never, context: StoryViewContext, zonesForRef: ProjectZonesResolver) {
   const entries = new Map<string, PropertyEvidence>(); const conflicts: string[] = [];
   for (const parent of [...parentPlaces(project, resolved)].reverse()) {
     const ref: StoryObjectRef = { kind: "place", id: parent.id }; const hasRecord = story.objects.some(({ ref: candidate }) => sameStoryRef(candidate, ref));
     const parentStory = hasRecord ? story : { ...story, objects: [...story.objects, { ref, metadata: {} }] };
-    const effective = effectiveStoryObject(parentStory, ref, context, { applicableZones: projectZonesForRef(project, story, ref) });
-    const zoneSources = zonePropertySources(project, story, ref);
+    const parentObject = parentStory.objects.find(({ ref: candidate }) => sameStoryRef(candidate, ref));
+    const effective = parentObject ? effectiveCanonicalStoryObject(parentStory, parentObject, context, { applicableZones: zonesForRef(ref) }) : undefined;
+    const zoneSources = zonePropertySources(ref, zonesForRef);
     for (const item of effective?.effectiveProperties ?? []) {
       const previous = entries.get(item.propertyId); const conflict = Boolean(previous && JSON.stringify(previous.value) !== JSON.stringify(item.value));
       if (conflict) conflicts.push(`parent:${item.propertyId}`);
@@ -98,10 +117,10 @@ function parentPropertyEvidence(project: EditorProject, story: StoryData, resolv
   }
   return { entries, conflicts };
 }
-function childPropertyEvidence(project: EditorProject, story: StoryData, ref: StoryObjectRef, effective: ReturnType<typeof effectiveStoryObject>, nativeProperties: Record<string, StoryPropertyValue>) {
+function childPropertyEvidence(story: StoryData, ref: StoryObjectRef, effective: ReturnType<typeof effectiveStoryObject>, nativeProperties: Record<string, StoryPropertyValue>, zonesForRef: ProjectZonesResolver) {
   const entries = new Map<string, PropertyEvidence>(); if (!effective) return entries;
   const local = story.objects.find(({ ref: candidate }) => sameStoryRef(candidate, ref))?.metadata.properties ?? {};
-  const zoneSources = zonePropertySources(project, story, ref);
+  const zoneSources = zonePropertySources(ref, zonesForRef);
   for (const item of effective.effectiveProperties) {
     let source: string = item.source;
     if (item.source === "base") {
@@ -121,24 +140,44 @@ function nativePropertyEvidence(project: EditorProject, resolved: ReturnType<typ
 }
 
 /** Hydrates one map object for UI/routes: native source text/flags plus effective story metadata. */
-export function effectiveProjectStoryObject(project: EditorProject, ref: StoryObjectRef, context: StoryViewContext = {}) {
-  const story = projectStoryData(project); const resolved = resolveStoryObject(project, story, ref); if (!resolved) return undefined;
+function effectiveProjectStoryObjectFromCanonicalStory(project: EditorProject, story: StoryData, ref: StoryObjectRef, context: StoryViewContext = {}, zonesForRef: ProjectZonesResolver = (target) => projectZonesForRef(project, story, target)) {
+  const resolved = resolveStoryObject(project, story, ref); if (!resolved) return undefined;
   const narrative = story.objects.find(({ ref: candidate }) => candidate.kind === resolved.ref.kind && candidate.id === resolved.ref.id && candidate.scopeId === resolved.ref.scopeId);
   const nativeProperties = resolved.legacyMetadata.properties ?? {};
   const ownMetadata = { ...narrative?.metadata, properties: { ...nativeProperties, ...narrative?.metadata.properties } };
-  const transient: StoryData = { ...story, objects: [...story.objects.filter((object) => !sameStoryRef(object.ref, resolved.ref)), { ref: resolved.ref, metadata: ownMetadata }] };
-  const zones = projectZonesForRef(project, story, resolved.ref);
-  const native = nativeMetadata(project, resolved); const parents = parentStoryMetadata(project, story, resolved, context);
-  const effective = effectiveStoryObject(transient, resolved.ref, context, { applicableZones: zones, contributors: [{ kind: "native", id: `native:${resolved.ref.kind}:${resolved.ref.id}`, metadata: native }, { kind: "parent", id: `parent:${resolved.ownerPlaceId ?? "root"}`, metadata: parents }] });
+  const zones = zonesForRef(resolved.ref);
+  const native = nativeMetadata(project, resolved); const parents = parentStoryMetadata(project, story, resolved, context, zonesForRef);
+  const effective = effectiveCanonicalStoryObject(story, { ref: resolved.ref, metadata: ownMetadata }, context, { applicableZones: zones, contributors: [{ kind: "native", id: `native:${resolved.ref.kind}:${resolved.ref.id}`, metadata: native }, { kind: "parent", id: `parent:${resolved.ownerPlaceId ?? "root"}`, metadata: parents }] });
   const ownership = resolveStoryOwnership(project, story, resolved.ref, context);
-  const metadata: StoryObjectMetadata = { ...(effective?.metadata ?? {}), owners: ownership.effectiveOwners };
+  const metadata: StoryObjectMetadata = { ...effective.metadata, owners: ownership.effectiveOwners };
   const hasScenarioText = Boolean(effective?.view.scenario && effective?.view.patches.some(({ target, title, description: text }) => sameStoryRef(target, resolved.ref) && (title !== undefined || text !== undefined)));
   const hasNativeText = ["wall", "opening", "transition"].includes(resolved.ref.kind);
-  const propertyEvidence = nativePropertyEvidence(project, resolved); const parentEvidence = parentPropertyEvidence(project, story, resolved, context); for (const [propertyId, item] of parentEvidence.entries) propertyEvidence.set(propertyId, item);
-  for (const [propertyId, item] of childPropertyEvidence(project, story, resolved.ref, effective, nativeProperties)) propertyEvidence.set(propertyId, item);
+  const propertyEvidence = nativePropertyEvidence(project, resolved); const parentEvidence = parentPropertyEvidence(project, story, resolved, context, zonesForRef); for (const [propertyId, item] of parentEvidence.entries) propertyEvidence.set(propertyId, item);
+  for (const [propertyId, item] of childPropertyEvidence(story, resolved.ref, effective, nativeProperties, zonesForRef)) propertyEvidence.set(propertyId, item);
   for (const propertyId of propertyEvidence.keys()) if (!Object.hasOwn(metadata.properties ?? {}, propertyId)) propertyEvidence.delete(propertyId);
   for (const [propertyId, value] of Object.entries(metadata.properties ?? {})) propertyEvidence.set(propertyId, { ...(propertyEvidence.get(propertyId) ?? { propertyId, source: "effective" }), value });
   return { ...resolved, name: hasScenarioText || hasNativeText ? effective?.label ?? resolved.name : resolved.name, description: hasScenarioText || hasNativeText ? effective?.description ?? resolved.description : resolved.description, metadata, storyView: effective?.view, effectiveProperties: [...propertyEvidence.values()], conflicts: [...new Set([...(effective?.conflicts ?? []), ...parentEvidence.conflicts])] };
+}
+
+export function effectiveProjectStoryObject(project: EditorProject, ref: StoryObjectRef, context: StoryViewContext = {}) {
+  return effectiveProjectStoryObjectFromCanonicalStory(project, projectStoryData(project), ref, context);
+}
+
+/** One canonical story migration and one result per scoped ref for a single read batch. */
+export function createProjectStoryObjectResolver(project: EditorProject, context: StoryViewContext = {}) {
+  const story = projectStoryData(project);
+  const resolved = new Map<string, ReturnType<typeof effectiveProjectStoryObjectFromCanonicalStory>>();
+  const zones = new Map<string, StoryZone[]>();
+  const zonesForRef = (ref: StoryObjectRef) => {
+    const key = storyRefKey(ref);
+    if (!zones.has(key)) zones.set(key, projectZonesForRef(project, story, ref));
+    return zones.get(key)!;
+  };
+  return (ref: StoryObjectRef) => {
+    const key = storyRefKey(ref);
+    if (!resolved.has(key)) resolved.set(key, effectiveProjectStoryObjectFromCanonicalStory(project, story, ref, context, zonesForRef));
+    return resolved.get(key);
+  };
 }
 
 /** Access decision hydrated with native object and parent-place metadata. */
