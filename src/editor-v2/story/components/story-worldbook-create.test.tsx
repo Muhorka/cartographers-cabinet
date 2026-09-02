@@ -10,6 +10,22 @@ import { useStoryView } from "./use-story-view";
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe("worldbook creation uses the same live object catalogue as editing", () => {
+  it("renders a character description below its name with the shared book-description style", async () => {
+    const story = { ...emptyStoryData(), world: [{ id: "anna", kind: "character" as const, name: "Anna", description: "Keeper of the eastern archive", tags: [], properties: {} }] };
+    function Harness() {
+      const controller = useStoryView(story);
+      return <StoryWorldbook story={story} copy={storyCopy.en} controller={controller}/>;
+    }
+    const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+    await act(async () => root.render(<Harness/>));
+    const entry = [...host.querySelectorAll("button")].find((button) => button.getAttribute("aria-label")?.endsWith(": Anna"))!;
+    expect(entry.className).toContain("worldbookEntry");
+    expect(entry.children[0]).toMatchObject({ tagName: "STRONG", textContent: "Anna" });
+    expect(entry.children[1]).toMatchObject({ tagName: "SMALL", textContent: "Keeper of the eastern archive" });
+    expect((entry.children[1] as HTMLElement).className).toContain("worldbookEntryDescription");
+    await act(async () => root.unmount()); host.remove();
+  });
+
   it("groups worldbook collections by their narrative purpose", async () => {
     const story = { ...emptyStoryData(), world: [{ id: "guards", kind: "access-group" as const, name: "Guards", tags: [], properties: {} }] };
     function Harness() {

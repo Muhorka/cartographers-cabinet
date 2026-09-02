@@ -36,7 +36,7 @@ export function StoryWorldbook({ story, copy, controller, resolvedObjects = [], 
     {active !== "routes" && !isCreating && <div className={flow.toolbar}><button type="button" onClick={() => setCreating(active)}>{labels.add}</button></div>}
     {entries.length > 0 && <p className={flow.hint}>{help.chooseEntry}</p>}
     <div className={styles.entryList} aria-label={help.savedEntries}>
-      {entries.map((entry) => <button key={entry.id} type="button" aria-label={`${help.editHint}: ${entry.name}`} aria-pressed={!isCreating && selected?.id === entry.id} className={!isCreating && selected?.id === entry.id ? styles.selectedEntry : undefined} onClick={() => { setCreating(undefined); selectEntry(entry.id); }}><strong>{entry.name}</strong>{entry.description && <small>{String(entry.description)}</small>}</button>)}
+      {entries.map((entry) => <button key={entry.id} type="button" aria-label={`${help.editHint}: ${entry.name}`} aria-pressed={!isCreating && selected?.id === entry.id} className={`${styles.worldbookEntry} ${!isCreating && selected?.id === entry.id ? styles.selectedEntry : ""}`} onClick={() => { setCreating(undefined); selectEntry(entry.id); }}><strong>{entry.name}</strong>{entry.description && <small className={styles.worldbookEntryDescription}>{String(entry.description)}</small>}</button>)}
     </div>
     {!entries.length && !isCreating && <p className={flow.hint}>{help.noEntries}</p>}
     {isCreating ? <StoryCreateEntry key={active} collection={active} story={story} copy={copy} resolvedObjects={resolvedObjects} onCancel={() => setCreating(undefined)} onCreate={(entry) => {

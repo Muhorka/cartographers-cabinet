@@ -43,6 +43,9 @@
 .entryLayout, .lensGrid { display: grid; grid-template-columns: minmax(145px, 30%) minmax(0, 1fr); gap: 13px; }
 .entryList { display: grid; align-content: start; gap: 3px; }
 .entryList h2 { margin: 0 0 5px; }
+.worldbookEntry { display: grid; width: 100%; justify-items: start; gap: .22rem; text-align: left; }
+.worldbookEntry strong { display: block; }
+.worldbookEntryDescription { composes: description from "../../components/book-typography.module.css"; display: block; max-width: 100%; font-size: .61rem; white-space: normal; }
 .selectedEntry { composes: selected from "../../components/book-controls.module.css"; }
 .clearAllButton { display: flex; width: 100%; align-items: center; gap: 8px; padding: 7px 8px; text-align: left; }
 .lensRow { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); align-items: stretch; min-height: 56px; margin-bottom: 4px; overflow: hidden; border: 1px solid #b58a4633; }
