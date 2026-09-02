@@ -40,6 +40,18 @@ describe("immutable editor UI snapshots", () => {
     expect(session.getViewState().project).toBe(after);
   });
 
+  it("uses structural transactions without cloning the full project", () => {
+    const session = sessionFixture(); const before = session.getViewState().project;
+    const nativeClone = globalThis.structuredClone; let clones = 0;
+    globalThis.structuredClone = ((value: unknown, options?: StructuredSerializeOptions) => { clones += 1; return nativeClone(value, options); }) as typeof structuredClone;
+    try {
+      expect(session.executeTransaction({ id: "structural", isolation: "structural", apply: (draft) => { draft.name = "Changed"; return draft; } }).code).toBe("committed");
+    } finally { globalThis.structuredClone = nativeClone; }
+    const after = session.getViewState().project;
+    expect(clones).toBe(0); expect(after.name).toBe("Changed");
+    expect(after.places).toBe(before.places); expect(after.story).toBe(before.story);
+  });
+
   it("preserves repeated undo/redo and branches from the restored version", () => {
     const session = sessionFixture(); const states = [session.getViewState().project];
     for (let index = 1; index <= 12; index += 1) {

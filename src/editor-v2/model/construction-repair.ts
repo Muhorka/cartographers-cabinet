@@ -30,11 +30,17 @@ function rememberedRoomFaces(project: EditorProject, construction: EditorProject
 }
 
 /** Repairs construction topology and the matching navigable room places. */
-export function repairProjectConstructions(project: EditorProject, identity: RepairIdentity) {
-  let repaired = structuredClone(project);
+export function repairProjectConstructions(project: EditorProject, identity: RepairIdentity, previous?: EditorProject) {
+  let repaired = project;
+  const previousConstructions = new Map(previous?.constructions.map((construction) => [construction.id, construction]));
+  const previousPlaces = new Map(previous?.places.map((place) => [place.id, place]));
+  const currentPlaces = new Map(project.places.map((place) => [place.id, place]));
   for (const original of project.constructions) {
+    const sameConstruction = previousConstructions.get(original.id) === original;
+    const sameRememberedRooms = original.rooms.every(({ id }) => previousPlaces.get(id) === currentPlaces.get(id));
+    if (previous && sameConstruction && sameRememberedRooms) continue;
     const rememberedRooms = original.rooms.map((room) => {
-      const rememberedPlace = project.places.find(({ id }) => id === room.id);
+      const rememberedPlace = currentPlaces.get(room.id);
       return rememberedPlace ? {
         ...room,
         name: rememberedPlace.name,

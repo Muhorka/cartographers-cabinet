@@ -6,8 +6,9 @@ import { sameStoryRef, storyRefKey, type StoryData, type StoryObjectMetadata, ty
 import { patchStoryLensView } from "../lens-view";
 
 const initialView: StoryViewState = { tab: "atlas", activeCollection: "characters", scenarioContext: "base" };
+export type StoryDocumentUpdate = StoryDocumentLike | ((current: StoryDocumentLike) => StoryDocumentLike);
 
-export function useStoryView(story: StoryDocumentLike, onStoryChange?: (next: StoryDocumentLike, transaction: StoryTransaction) => void, resolvedObjects: StoryResolvedObject[] = [], scopeKey = "default") {
+export function useStoryView(story: StoryDocumentLike, onStoryChange?: (update: StoryDocumentUpdate, transaction: StoryTransaction) => void, resolvedObjects: StoryResolvedObject[] = [], scopeKey = "default") {
   const [state, setState] = useState({ scopeKey, view: initialView });
   const view = state.scopeKey === scopeKey ? state.view : initialView;
   const [selection, setSelection] = useState<StorySelection | undefined>();
@@ -18,20 +19,24 @@ export function useStoryView(story: StoryDocumentLike, onStoryChange?: (next: St
   const selectEntry = useCallback((selectedEntryId?: string) => updateView({ selectedEntryId }), [updateView]);
   const selectGroup = useCallback((selectedGroupId?: string) => updateView({ selectedGroupId }), [updateView]);
 
-  const commit = useCallback((next: StoryDocumentLike, transaction: StoryTransaction) => onStoryChange?.(next, transaction), [onStoryChange]);
+  const commit = useCallback((update: StoryDocumentUpdate, transaction: StoryTransaction) => onStoryChange?.(update, transaction), [onStoryChange]);
+  const updateCollection = useCallback((collection: StoryCollection, update: (current: StoryRecord[]) => StoryRecord[], label: string, suppliedResolvedObjects?: StoryResolvedObject[]) => {
+    commit((currentStory) => {
+      const currentItems = collectionItems(currentStory, collection);
+      return replaceStoryCollection(currentStory, collection, update(currentItems), suppliedResolvedObjects ?? resolvedObjects);
+    }, { id: `story:${collection}:${Date.now()}`, label, scope: "story" });
+  }, [commit, resolvedObjects]);
   const editCollection = useCallback((collection: StoryCollection, nextItems: StoryRecord[], label: string, suppliedResolvedObjects?: StoryResolvedObject[]) => {
-    const currentItems = collectionItems(story, collection);
-    const next = replaceStoryCollection(story, collection, nextItems, suppliedResolvedObjects ?? resolvedObjects);
-    commit(next, { id: `story:${collection}:${Date.now()}`, label, scope: "story", changedIds: [...currentItems.map(({ id }) => id), ...nextItems.flatMap((item) => typeof item === "object" && item && "id" in item ? [String((item as { id: unknown }).id)] : [])] });
-  }, [commit, resolvedObjects, story]);
+    updateCollection(collection, () => nextItems, label, suppliedResolvedObjects);
+  }, [updateCollection]);
 
   const collections = useMemo<StoryCollections>(() => ({ characters: collectionItems(story, "characters"), factions: collectionItems(story, "factions"), accessGroups: collectionItems(story, "accessGroups"), keys: collectionItems(story, "keys"), propertyDefinitions: collectionItems(story, "propertyDefinitions"), objects: collectionItems(story, "objects"), objectGroups: collectionItems(story, "objectGroups"), zones: collectionItems(story, "zones"), relations: collectionItems(story, "relations"), scenarios: collectionItems(story, "scenarios"), intentions: collectionItems(story, "intentions"), routes: collectionItems(story, "routes"), lenses: collectionItems(story, "lenses") }), [story]);
 
-  return { view, selection, setSelection, chooseTab, chooseCollection, selectEntry, selectGroup, updateView, editCollection, commit, collections };
+  return { view, selection, setSelection, chooseTab, chooseCollection, selectEntry, selectGroup, updateView, editCollection, updateCollection, commit, collections };
 }
 
 export function replaceStoryCollection(story: StoryData, collection: StoryCollection, items: StoryRecord[], resolvedObjects: StoryResolvedObject[] = []): StoryData {
-  const next = structuredClone(story);
+  const next = { ...story };
   const availableRefs = [...story.objects.map(({ ref }) => ref), ...resolvedObjects.map(({ ref }) => ref)];
   if (["characters", "factions", "accessGroups", "keys"].includes(collection)) {
     const kind = collection === "characters" ? "character" : collection === "factions" ? "faction" : collection === "accessGroups" ? "access-group" : "key";

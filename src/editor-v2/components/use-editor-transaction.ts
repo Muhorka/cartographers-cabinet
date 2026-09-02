@@ -25,7 +25,7 @@ export function useEditorTransaction(
   const commit: EditorTransactionCommit = useCallback((id, change) => {
     if (!session) return false;
     const apply = typeof change === "function" ? change : () => change;
-    return accept(session.executeTransaction({ id, apply }));
+    return accept(session.executeTransaction({ id, apply, isolation: "structural" }));
   }, [accept, session]);
   return { accept, commit };
 }

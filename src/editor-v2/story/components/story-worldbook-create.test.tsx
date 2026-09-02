@@ -47,7 +47,7 @@ describe("worldbook creation uses the same live object catalogue as editing", ()
     let latest: StoryData = { ...emptyStoryData(), world: [{ id: "anna", name: "Anna", kind: "character", tags: [], properties: {} }] };
     function Harness() {
       const [story, setStory] = useState(latest);
-      const controller = useStoryView(story, (next) => { latest = storyDataSchema.parse(next); setStory(latest); });
+      const controller = useStoryView(story, (update) => { latest = storyDataSchema.parse(typeof update === "function" ? update(latest) : update); setStory(latest); });
       return <StoryWorldbook story={story} copy={storyCopy.en} controller={controller} resolvedObjects={[{ ref: room, name: "Hall" }]}/>;
     }
     const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);

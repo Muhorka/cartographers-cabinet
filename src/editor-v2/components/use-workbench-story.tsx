@@ -45,13 +45,14 @@ export function useWorkbenchStory({ session, snapshot, selections, inspectedPlac
   const showRoutes = () => { setBookOpen((current) => ({ ...current, routes: true, worldbook: false })); };
   function commit(transaction: ProjectTransaction) {
     if (!session) return false;
-    const result = session.executeTransaction(transaction);
+    const result = session.executeTransaction({ ...transaction, isolation: "structural" });
     if (result.code !== "committed" && result.code !== "no-change") throw new Error(result.reason ?? (locale === "pl" ? "Zmiana nie została zapisana. Dotychczasowe dane pozostały bez zmian." : "The change was not saved. Existing data is unchanged."));
     setError(undefined); refresh(); return true;
   }
-  const controller = useStoryView(project?.story ?? empty, (next, transaction) => {
+  const controller = useStoryView(project?.story ?? empty, (update, transaction) => {
     if (!session) return;
-    try { const story = storyDataSchema.parse(next); commit({ id: transaction.id, apply: (current) => {
+    try { commit({ id: transaction.id, apply: (current) => {
+      const story = storyDataSchema.parse(typeof update === "function" ? update(current.story) : update);
       const validated = replaceProjectScenarios(current, story.scenarios);
       return { ...validated, story: { ...story, scenarios: validated.story.scenarios } };
     } }); }

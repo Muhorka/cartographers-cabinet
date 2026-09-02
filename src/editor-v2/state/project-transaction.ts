@@ -4,10 +4,13 @@ import { repairProjectConstructions } from "../model/construction-repair";
 import { reconcileRoadRoutes } from "../roads/road-transaction";
 import { immutableSnapshot } from "./immutable-snapshot";
 import { projectRevision } from "./project-revision";
+import { produce, type Draft } from "immer";
 
 export type ProjectTransaction = {
   id: string;
   apply: (project: EditorProject) => EditorProject;
+  /** Structural mode is reserved for trusted, typed editor operations. */
+  isolation?: "isolated" | "structural";
 };
 
 type TransactionIdentity = {
@@ -26,6 +29,19 @@ export type PreparedProjectTransaction =
   | (PreparedBase & { status: "blocked"; code: "transaction-failed" | "road-obstacle"; reason?: string });
 
 const clone = <T>(value: T): T => structuredClone(value);
+
+function applyTransaction(before: EditorProject, transaction: ProjectTransaction) {
+  if (transaction.isolation !== "structural") {
+    // Compatibility boundary for imported/agent-authored transaction producers:
+    // they may mutate and retain their editable input or return external data.
+    return normalizeEditorProject(transaction.apply(clone(before)));
+  }
+  return produce(before, (draft) => {
+    const result = transaction.apply(draft as unknown as EditorProject);
+    if (result !== draft) return result as Draft<EditorProject>;
+  });
+}
+
 /** Resolves every canonical consequence once, without mutating the live session. */
 export function prepareProjectTransaction(
   before: EditorProject,
@@ -35,8 +51,9 @@ export function prepareProjectTransaction(
   let next: EditorProject;
   try {
     next = repairProjectConstructions(
-      normalizeEditorProject(clone(transaction.apply(clone(before)))),
+      applyTransaction(before, transaction),
       { createId: identity.createId, createName: identity.createRoomName },
+      before,
     );
     const routed = reconcileRoadRoutes(before, next);
     if (!routed) return { status: "blocked", code: "road-obstacle", transactionId: transaction.id, before };

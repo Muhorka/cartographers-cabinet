@@ -6,9 +6,10 @@ import { reconcileRoadJunctions } from "./road-joining";
  * moving a building after drawing a road, imports and agent-authored changes. */
 export function reconcileRoadRoutes(before: EditorProject, next: EditorProject): EditorProject | undefined {
   if (!next.elements.some((element) => element.layerId === "roads")) return reconcileRoadJunctions(next);
+  if (before.elements === next.elements && before.places === next.places) return reconcileRoadJunctions(next);
   const context = (project: EditorProject) => JSON.stringify(project.places.map(({ id, parentId, kind, transform, boundary, properties }) => ({ id, parentId, kind, transform, boundary, subjectId: properties.subjectId, semanticType: properties.semanticType })));
   const roadGeometry = (element: EditorProject["elements"][number]) => ({ belongsToId: element.belongsToId, layerId: element.layerId, geometry: element.geometry, widthMeters: element.widthMeters, widthProfile: element.widthProfile, ribbonCutouts: element.ribbonCutouts });
-  const obstaclesChanged = context(before) !== context(next);
+  const obstaclesChanged = before.places !== next.places && context(before) !== context(next);
   const old = new Map(before.elements.map((element) => [element.id, element]));
   let changed = false; const elements = [];
   for (const element of next.elements) {
