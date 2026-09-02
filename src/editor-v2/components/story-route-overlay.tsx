@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { EditorProject } from "../model/project-model";
 import type { StoryRouteRecord } from "../story/routes/types";
 import type { StoryViewContext } from "../story/types";
@@ -11,7 +12,7 @@ type StoryRouteOverlayProps = {
   route?: StoryRouteRecord;
 };
 
-export function StoryRouteOverlay({ project, activePlaceId, context, route }: StoryRouteOverlayProps) {
+export const StoryRouteOverlay = memo(function StoryRouteOverlay({ project, activePlaceId, context, route }: StoryRouteOverlayProps) {
   if (!route || route.sourceRevision !== storyRouteRevision(project)) return null;
   if (route.query.scenarioId !== context.scenarioId || route.query.stepId !== context.stepId) return null;
   const active = project.places.find(({ id }) => id === activePlaceId); const levelId = active?.kind === "room" || active?.kind === "standalone-room" ? active.parentId : active?.id;
@@ -22,4 +23,4 @@ export function StoryRouteOverlay({ project, activePlaceId, context, route }: St
     else if (active?.kind !== "world" && active?.kind !== "location" && segment.placeId !== activePlaceId) return null;
     return <path key={`${alternative.id}:${index}`} transform={matrixAttribute(relativePlaceMatrix(project, activePlaceId, segment.placeId))} d={pointsPath(segment.points, false)} fill="none" stroke={colors[alternativeIndex % colors.length]} strokeWidth={2.5} strokeDasharray="7 4" strokeLinecap="round" vectorEffect="non-scaling-stroke"/>;
   }))}</g>;
-}
+}, (previous, next) => previous.project === next.project && previous.activePlaceId === next.activePlaceId && previous.route === next.route && previous.context.scenarioId === next.context.scenarioId && previous.context.stepId === next.context.stepId);

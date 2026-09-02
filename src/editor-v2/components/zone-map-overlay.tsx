@@ -1,12 +1,20 @@
+import { memo, useDeferredValue } from "react";
 import type { EditorProject } from "../model/project-model";
 import { allStoryObjectRefs, canonicalProjectStoryRef, zoneMatchesProject } from "../story/project-adapter";
 import { storyRefKey } from "../story/types";
 import { storyMapPath } from "./story-map-paths";
 
 /** Narrative ink only: no fill, hit targets, geometry changes or hidden room walls. */
-export function ZoneMapOverlay({ project, activePlaceId, zoom, selectedZoneId }: {
+export function ZoneMapOverlay(props: ZoneMapOverlayProps) {
+  const layoutZoom = useDeferredValue(props.zoom);
+  return <DeferredZoneMapOverlay {...props} zoom={layoutZoom}/>;
+}
+
+type ZoneMapOverlayProps = {
   project: EditorProject; activePlaceId: string; zoom: number; selectedZoneId?: string;
-}) {
+};
+
+const DeferredZoneMapOverlay = memo(function DeferredZoneMapOverlay({ project, activePlaceId, zoom, selectedZoneId }: ZoneMapOverlayProps) {
   if (!project.story.zones.length) return null;
   const shapes = allStoryObjectRefs(project).filter((ref) => ref.kind !== "wall").flatMap((ref) => {
     const geometry = storyMapPath(project, activePlaceId, ref, zoom);
@@ -21,4 +29,4 @@ export function ZoneMapOverlay({ project, activePlaceId, zoom, selectedZoneId }:
         strokeOpacity={selected ? .95 : .5} strokeWidth={selected ? 3 : 1.8} vectorEffect="non-scaling-stroke" strokeDasharray={selected ? undefined : "6 3"}/>;
     })}</g>;
   })}</g>;
-}
+});

@@ -168,6 +168,18 @@ describe("editor v2 map sheet", () => {
     expect(zoomed.zoom).toBe(100); expect(zoomed.center).not.toEqual(viewport.center);
   });
 
+  it("captures the mouse wheel with a non-passive listener while zooming the map", () => {
+    const container = document.createElement("div"); document.body.appendChild(container); const root = createRoot(container); const onViewportChange = vi.fn();
+    act(() => root.render(createElement(MapSheet, { project: project(), activePlaceId: "floor", viewport, copy, onViewportChange })));
+    const svg = container.querySelector("svg")!; Object.defineProperty(svg, "getBoundingClientRect", { value: () => ({ left: 0, top: 0, width: 1000, height: 700 }) });
+    const wheel = new WheelEvent("wheel", { bubbles: true, cancelable: true, clientX: 600, clientY: 350, deltaY: 120 });
+    let accepted = true; act(() => { accepted = svg.dispatchEvent(wheel); });
+    expect(accepted).toBe(false); expect(wheel.defaultPrevented).toBe(true);
+    expect(onViewportChange).toHaveBeenCalledWith(expect.objectContaining({ zoom: expect.any(Number) }));
+    expect(onViewportChange.mock.calls[0][0].zoom).toBeLessThan(viewport.zoom);
+    act(() => root.unmount()); container.remove();
+  });
+
   it("converts screen points through sheet fitting, zoom and rotation", () => {
     const converted = clientPointToMap({ x: 620, y: 350 }, { left: 0, top: 0, width: 1200, height: 700 }, { width: 1000, height: 700 }, { center: { x: 50, y: 35 }, zoom: 2, rotation: 90 });
     expect(converted.x).toBeCloseTo(50); expect(converted.y).toBeCloseTo(25);

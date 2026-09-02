@@ -1,5 +1,6 @@
 import { constructionNetwork } from "../construction/construction-network";
 
+import { memo } from "react";
 import type { EditorProject } from "../model/project-model";
 import { constructionPlaceForView, matrixAttribute, relativePlaceMatrix, roomEditingScope, visiblePlaceGroups } from "./map-sheet-geometry";
 import { MapSheetConstruction } from "./map-sheet-construction";
@@ -8,7 +9,7 @@ import { PlaceShape } from "./map-sheet-shapes";
 import type { MapSheetCopy } from "./map-sheet-types";
 import styles from "./map-sheet.module.css";
 
-export function MapSheetTracing({ project, activePlaceId, prefix, copy, viewportZoom, opacity }: { project: EditorProject; activePlaceId: string; prefix: string; copy: MapSheetCopy; viewportZoom: number; opacity: number }) {
+export const MapSheetTracing = memo(function MapSheetTracing({ project, activePlaceId, prefix, copy, viewportZoom, opacity }: { project: EditorProject; activePlaceId: string; prefix: string; copy: MapSheetCopy; viewportZoom: number; opacity: number }) {
   const groups = visiblePlaceGroups(project, activePlaceId); if (!groups.active) return null;
   const owner = constructionPlaceForView(project, activePlaceId);
   const document = project.constructions.find(({ id }) => id === owner?.constructionId);
@@ -25,4 +26,4 @@ export function MapSheetTracing({ project, activePlaceId, prefix, copy, viewport
     {network && document && <MapSheetConstruction project={project} document={document} network={network} owner={owner} prefix={prefix} copy={copy} selectedIds={new Set()} viewportZoom={viewportZoom} roomView={roomView} roomScope={roomScope} activeGesture={false} selectionEditing={false} movingIds={new Set()}/>}
     <MapSheetElements project={project} activePlaceId={activePlaceId} terrain={false} prefix={prefix} selected={new Set()} movingIds={new Set()} selectionEditing={false} sketchVisible sketchOpacity={1} viewportZoom={viewportZoom}/>
   </g>;
-}
+});
