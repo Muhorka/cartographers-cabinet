@@ -64,6 +64,26 @@ describe("Story WebMCP integration", () => {
     expect(session.getState().project.story.objects[0].metadata.access).toMatchObject({ permission: "nobody", hidden: true, knownBy: ["staff"], keyIds: ["brass"] });
   });
 
+  it("adds and removes canonical hidden-passage witnesses without changing other access fields", async () => {
+    const { tools, session } = setup();
+    const current = session.getState().project.story.objects[0]!.metadata.access!;
+    const add = await structured<{ status: string; token: string }>(tool(tools, "prepare_set_story_metadata").execute({ refs: [{ type: "place", id: "room" }], metadata: { access: { ...current, knownBy: ["staff"] } }, accessFields: ["knownBy"], action: "add", target: "base" }));
+    expect(add.status).toBe("prepared"); await tool(tools, "apply_prepared_editor_change").execute({ token: add.token });
+    expect(session.getState().project.story.objects[0]!.metadata.access).toMatchObject({ knownBy: ["staff"], keyIds: ["brass"] });
+    const remove = await structured<{ status: string; token: string }>(tool(tools, "prepare_set_story_metadata").execute({ refs: [{ type: "place", id: "room" }], metadata: { access: { ...session.getState().project.story.objects[0]!.metadata.access!, knownBy: ["staff"] } }, accessFields: ["knownBy"], action: "remove", target: "base" }));
+    expect(remove.status).toBe("prepared"); await tool(tools, "apply_prepared_editor_change").execute({ token: remove.token });
+    expect(session.getState().project.story.objects[0]!.metadata.access).toMatchObject({ knownBy: [], keyIds: ["brass"] });
+  });
+
+  it("rejects new member-of links to keys while preserving valid groups", async () => {
+    const { tools, session } = setup(); const before = structuredClone(session.getState().project.story.memberships);
+    const invalid = await structured<{ status: string; message?: string }>(tool(tools, "prepare_edit_story").execute({ collection: "memberships", action: "upsert", entries: [{ subjectId: "alice", groupId: "brass", kind: "member-of", source: "manual" }] }));
+    expect(invalid.status).not.toBe("prepared"); expect(session.getState().project.story.memberships).toEqual(before);
+    const valid = await structured<{ status: string; token: string }>(tool(tools, "prepare_edit_story").execute({ collection: "memberships", action: "upsert", entries: [{ subjectId: "alice", groupId: "staff", kind: "member-of", source: "manual" }] }));
+    expect(valid.status).toBe("prepared"); await tool(tools, "apply_prepared_editor_change").execute({ token: valid.token });
+    expect(session.getState().project.story.memberships).toContainEqual({ subjectId: "alice", groupId: "staff", kind: "member-of", source: "manual" });
+  });
+
   it("returns deferred when the host guards a Story view transition", async () => {
     const { tools, setViewResult } = setup(); setViewResult({ status: "deferred", reason: "draft" });
     const result = await structured<{ status: string; reason: string }>(tool(tools, "set_story_view").execute({ scenarioId: "night" }));

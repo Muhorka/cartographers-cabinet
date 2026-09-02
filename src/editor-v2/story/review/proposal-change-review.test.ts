@@ -87,6 +87,16 @@ describe("proposal change review", () => {
     ]);
   });
 
+  it("shows hidden-passage knowledge changes in proposal review", () => {
+    const { before } = proposalPair(); const after = structuredClone(before);
+    after.story.objects[0]!.metadata.access = { ...after.story.objects[0]!.metadata.access!, hidden: true, knownBy: ["alice"] };
+    const result = readProposalChanges(checkpoint(before, after), before, { checkpointId: "proposal", refs: [roomA] });
+    expect(result.status).toBe("ready");
+    if (result.status !== "ready") return;
+    expect(result.rows.map(({ fieldKey }) => fieldKey)).toEqual(expect.arrayContaining(["access.hidden", "access.knownBy"]));
+    expect(result.rows.find(({ fieldKey }) => fieldKey === "access.knownBy")?.display.pl).toMatchObject({ field: "Kto zna przejście", authoredAfter: "Alice" });
+  });
+
   it("keeps scoped room references separate and preserves historical names", () => {
     const { before, after } = proposalPair();
     const saved = checkpoint(before, after);

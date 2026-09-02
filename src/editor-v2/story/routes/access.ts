@@ -25,6 +25,6 @@ export function storyAccessDecision(project: EditorProject, entity: { kind: keyo
     else conditions.push(`Open ${entity.id}.`);
   }
   if (access.guardIds.length) conditions.push(`A guard rule for ${entity.id} must be satisfied.`);
-  if (access.secretKnowledge.length && !access.secretKnowledge.some((id) => knowledge.has(id))) return { allowed: false, unknown: true, reason: `Secret knowledge for ${entity.id} is missing.` };
+  if (access.knownBy === undefined && access.secretKnowledge.length && !access.secretKnowledge.some((id) => identities.has(id) || knowledge.has(id))) return { allowed: false, unknown: true, reason: `Secret knowledge for ${entity.id} is missing.` };
   return conditions.length ? { allowed: true, conditions } : true;
 }

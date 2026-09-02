@@ -1,5 +1,6 @@
 import { defaultStoryAccessPolicy, sameStoryRef, type StoryAccessPolicy, type StoryData, type StoryObject, type StoryObjectMetadata, type StoryObjectRef, type StoryPropertyValue, type StoryScenario, type StoryTextPatch, type StoryViewContext, type StoryZone } from "./types";
 import { migrateStoryData } from "./migration";
+import { isCompatiblePeopleGroupTarget } from "./membership-semantics";
 
 type StoryView = { scenario?: StoryScenario; stepId?: string; patches: StoryTextPatch[] };
 function storyView(story: StoryData, context: StoryViewContext = {}): StoryView {
@@ -20,6 +21,9 @@ function mergeAccess(first: ReturnType<typeof defaultStoryAccessPolicy>, second:
   const permission: StoryAccessPolicy["permission"] = first.permission === "nobody" || second.permission === "nobody" ? "nobody" : first.permission === "restricted" || second.permission === "restricted" ? "restricted" : "open";
   const physicalState: StoryAccessPolicy["physicalState"] = first.physicalState === "closed" || second.physicalState === "closed" ? "closed" : "open";
   const lock: StoryAccessPolicy["lock"] = first.lock === "sealed" || second.lock === "sealed" ? "sealed" : first.lock === "locked" || second.lock === "locked" ? "locked" : "none";
+  const knownBy = first.knownBy === undefined && second.knownBy === undefined
+    ? undefined
+    : [...new Set([...(first.knownBy ?? []), ...(second.knownBy ?? [])])];
   return {
     ...first,
     ...second,
@@ -32,7 +36,7 @@ function mergeAccess(first: ReturnType<typeof defaultStoryAccessPolicy>, second:
     physicalState,
     lock,
     hidden: Boolean(first.hidden || second.hidden),
-    knownBy: [...new Set([...(first.knownBy ?? []), ...(second.knownBy ?? [])])],
+    ...(knownBy === undefined ? {} : { knownBy }),
   };
 }
 
@@ -86,15 +90,22 @@ export function effectiveStoryObject(input: StoryData, ref: StoryObjectRef, cont
 /** Identity closure used by access policy, ownership, and possession checks. */
 export function storyActorGroups(story: StoryData, actorId: string) {
   const groups = new Set<string>([actorId]); let changed = true;
-  while (changed) { changed = false; for (const membership of story.memberships) if (membership.kind === "member-of" && groups.has(membership.subjectId) && !groups.has(membership.groupId)) { groups.add(membership.groupId); changed = true; } }
+  while (changed) { changed = false; for (const membership of story.memberships) if (membership.kind === "member-of" && groups.has(membership.subjectId) && isCompatiblePeopleGroupTarget(story, membership.groupId) && !groups.has(membership.groupId)) { groups.add(membership.groupId); changed = true; } }
   return groups;
+}
+function storyActorKnowledge(story: StoryData, groups: ReadonlySet<string>) {
+  return new Set(story.memberships.filter(({ kind, subjectId }) => kind === "knows" && groups.has(subjectId)).map(({ groupId }) => groupId));
 }
 export type StoryAccessResult = { allowed: boolean; physicalOpen: boolean; reason: string; unknown?: boolean };
 export function storyAccessForMetadata(story: StoryData, metadata: StoryObjectMetadata, actorId?: string): StoryAccessResult {
   const access = { ...defaultStoryAccessPolicy(), ...(metadata.access ?? {}) }; const groups = actorId ? storyActorGroups(story, actorId) : new Set<string>();
   if (access.permission === "nobody") return { allowed: false, physicalOpen: access.physicalState === "open", reason: "nobody" };
   if (access.deny.some((id) => groups.has(id))) return { allowed: false, physicalOpen: access.physicalState === "open", reason: "explicit-deny" };
-  if (actorId && access.hidden && !(access.knownBy ?? []).some((id) => groups.has(id))) return { allowed: false, physicalOpen: access.physicalState === "open", reason: "hidden", unknown: true };
+  if (actorId && access.hidden) {
+    const directKnowledge = access.knownBy ?? access.secretKnowledge;
+    const legacyKnowledge = access.knownBy === undefined ? storyActorKnowledge(story, groups) : new Set<string>();
+    if (!directKnowledge.some((id) => groups.has(id) || legacyKnowledge.has(id))) return { allowed: false, physicalOpen: access.physicalState === "open", reason: "hidden", unknown: true };
+  }
   if ((metadata.owners ?? []).some((id) => groups.has(id))) return { allowed: true, physicalOpen: access.physicalState === "open", reason: "owner" };
   const permission = access.permission === "open" || access.allow.some((id) => groups.has(id));
   if (!actorId && access.permission === "restricted") return { allowed: false, physicalOpen: access.physicalState === "open", reason: "actor-required", unknown: true };

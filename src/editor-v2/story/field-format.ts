@@ -8,8 +8,8 @@ import { storyRefKey, type StoryObjectRef, type StoryViewContext } from "./types
 type StoryLocale = "pl" | "en";
 
 const ACCESS_LABELS = {
-  pl: { allow: "Kto może wejść", deny: "Kto nie może wejść", permission: "Prawo wstępu", physicalState: "Stan przejścia", lock: "Zabezpieczenie", keyIds: "Klucze", guardIds: "Strażnicy", secretKnowledge: "Wiedza o przejściu" },
-  en: { allow: "Who may enter", deny: "Who is denied", permission: "Permission", physicalState: "Passage state", lock: "Security", keyIds: "Keys", guardIds: "Guards", secretKnowledge: "Passage knowledge" },
+  pl: { allow: "Kto może wejść", deny: "Kto nie może wejść", permission: "Prawo wstępu", physicalState: "Stan przejścia", lock: "Zabezpieczenie", keyIds: "Klucze", guardIds: "Strażnicy", secretKnowledge: "Starszy warunek wiedzy", hidden: "Ukryte przejście", knownBy: "Kto zna przejście" },
+  en: { allow: "Who may enter", deny: "Who is denied", permission: "Permission", physicalState: "Passage state", lock: "Security", keyIds: "Keys", guardIds: "Guards", secretKnowledge: "Legacy knowledge condition", hidden: "Hidden passage", knownBy: "Who knows the passage" },
 } as const;
 
 const ENUM_LABELS = {

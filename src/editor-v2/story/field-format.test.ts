@@ -52,6 +52,8 @@ describe("story field formatting", () => {
 
     expect(storyFieldLabel(project, "owners", "pl")).toBe("Właściciele");
     expect(storyFieldLabel(project, "access.permission", "en")).toBe("Permission");
+    expect(storyFieldLabel(project, "access.hidden", "pl")).toBe("Ukryte przejście");
+    expect(storyFieldLabel(project, "access.knownBy", "en")).toBe("Who knows the passage");
     expect(storyFieldObjectName(project, target, {}, "pl")).toBe("Hall");
     expect(storyFieldObjectName(project, target, { scenarioId: "night" }, "pl")).toBe("Night hall");
     expect(project.story.scenarios[0]!.patches[0]!.title).toBe("Night hall");

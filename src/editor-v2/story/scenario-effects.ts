@@ -7,7 +7,7 @@ import { storyRefKey, type StoryObjectRef, type StoryTextPatch, type StoryViewCo
 export type ScenarioEffectField = { key: string; before: unknown; after: unknown; authored: unknown; changed: boolean };
 export type ScenarioEffect = { patchId: string; target: StoryObjectRef; objectName: string; missing: boolean; locked: boolean; fields: ScenarioEffectField[] };
 
-const accessKeys = ["allow", "deny", "permission", "physicalState", "lock", "keyIds", "guardIds", "secretKnowledge"] as const;
+const accessKeys = ["allow", "deny", "permission", "physicalState", "lock", "keyIds", "guardIds", "secretKnowledge", "hidden", "knownBy"] as const;
 const has = (value: object, key: PropertyKey) => Object.prototype.hasOwnProperty.call(value, key);
 const copy = <T>(value: T): T => structuredClone(value);
 const equal = (first: unknown, second: unknown) => JSON.stringify(first) === JSON.stringify(second);

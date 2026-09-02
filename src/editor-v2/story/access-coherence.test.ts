@@ -53,10 +53,32 @@ describe("canonical story access", () => {
     expect(storyAccessDecision(nobody, opening, { actorId: "anna" })).toMatchObject({ allowed: false, reason: "door: nobody." });
 
     const hidden = fixture();
-    hidden.story.objects[0]!.metadata = { ...hidden.story.objects[0]!.metadata, owners: ["owner"], access: { ...hidden.story.objects[0]!.metadata.access!, permission: "open", hidden: true, knownBy: ["staff"] } };
+    hidden.story.world.push({ id: "court", kind: "access-group", name: "Court", tags: [], properties: {} });
+    hidden.story.memberships.push({ subjectId: "staff", groupId: "court", kind: "member-of", source: "manual" });
+    hidden.story.objects[0]!.metadata = { ...hidden.story.objects[0]!.metadata, owners: ["owner"], access: { ...hidden.story.objects[0]!.metadata.access!, permission: "open", lock: "none", physicalState: "open", hidden: true, knownBy: ["court"], secretKnowledge: ["owner"] } };
     expect(storyAccessDecision(hidden, opening, { actorId: "stranger" })).toMatchObject({ allowed: false, unknown: true, reason: "door: hidden." });
-    expect(storyAccessDecision(hidden, opening, { actorId: "anna" })).toMatchObject({ allowed: true });
+    expect(storyAccessDecision(hidden, opening, { actorId: "anna" })).toBe(true);
     expect(storyAccessDecision(hidden, opening, { actorId: "owner" })).toMatchObject({ allowed: false, unknown: true, reason: "door: hidden." });
+    hidden.story.objects[0]!.metadata.access!.knownBy = [];
+    expect(storyAccessDecision(hidden, opening, { actorId: "anna" })).toMatchObject({ allowed: false, reason: "door: hidden." });
+    expect(storyAccessDecision(hidden, opening, {})).toBe(true);
+  });
+
+  it("keeps legacy secretKnowledge usable only when canonical knownBy is absent", () => {
+    const project = fixture(); const access = project.story.objects[0]!.metadata.access!;
+    Object.assign(access, { permission: "open", physicalState: "open", lock: "none", hidden: true, secretKnowledge: ["owner"] });
+    delete access.knownBy;
+    project.story.memberships.push({ subjectId: "anna", groupId: "owner", kind: "knows", source: "manual" });
+    expect(storyAccessDecision(project, opening, { actorId: "anna" })).toBe(true);
+    expect(storyAccessDecision(project, opening, { actorId: "owner" })).toBe(true);
+    expect(storyAccessDecision(project, opening, { actorId: "stranger" })).toMatchObject({ allowed: false, reason: "door: hidden." });
+  });
+
+  it("does not treat a character or key as a member-of group", () => {
+    const project = fixture(); const access = project.story.objects[0]!.metadata.access!;
+    Object.assign(access, { permission: "restricted", allow: ["brass"], physicalState: "open", lock: "none" });
+    project.story.memberships.push({ subjectId: "visitor", groupId: "brass", kind: "member-of", source: "manual" });
+    expect(storyAccessDecision(project, opening, { actorId: "visitor" })).toMatchObject({ allowed: false, reason: "door: not-allowed." });
   });
 
   it("inherits nobody through a zone without materializing an object-local rule", () => {

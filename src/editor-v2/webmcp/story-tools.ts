@@ -14,6 +14,7 @@ import { projectRevision } from "../state/project-revision";
 import { storyCollectionEntryId } from "../story/collection-identity";
 import { legacyStoryGroups, migrateStoryData, replaceLegacyStoryGroups } from "../story/migration";
 import { effectiveWorldEntry } from "../story/world-entry-effective";
+import { invalidMemberOfIds } from "../story/membership-semantics";
 
 type Bridge = EditorAgentBridge & EditorContextBridge;
 const response = <T,>(value: T) => ({ content: [{ type: "text", text: JSON.stringify(value) }], structuredContent: value });
@@ -53,7 +54,7 @@ export function createStoryAgentTools(bridge: Bridge, coordinator: EditorCommand
       const matches = objects.filter((object) => terms.every((term) => JSON.stringify(object).toLocaleLowerCase().includes(term)));
       return response({ revision: projectRevision(project), context, total: matches.length, objects: matches.slice(input.offset, input.offset + input.limit) });
     } },
-    { name: "prepare_edit_story", description: "Upsert/remove Story entries using inspect_story_catalog schemas. Omitted fields persist; new entries must be complete. Memberships: subjectId/groupId/kind; objects: scoped refs. Geometry is unchanged, including removals. Apply/propose via execute_editor_batch or token.", inputSchema: z.toJSONSchema(editSchema, { io: "input" }), annotations: { readOnlyHint: false }, execute: async (raw) => {
+    { name: "prepare_edit_story", description: "Upsert/remove Story entries using inspect_story_catalog schemas. Omitted fields persist; new entries must be complete. For member-of, groupId must identify a faction or people group. General knows memberships do not replace the knownBy list on new hidden passages. Objects use scoped refs. Geometry is unchanged, including removals. Apply/propose via execute_editor_batch or token.", inputSchema: z.toJSONSchema(editSchema, { io: "input" }), annotations: { readOnlyHint: false }, execute: async (raw) => {
       const input = editSchema.parse(raw);
       if (input.action === "upsert" && input.collection === "objects") throw new Error("Use prepare_set_story_metadata for map annotations: it preserves native text, scope, locks and scenario targeting.");
       if (input.action === "upsert" && input.collection === "routes") throw new Error("Use prepare_save_story_route to calculate a verified route from an explicit query.");
@@ -67,11 +68,14 @@ export function createStoryAgentTools(bridge: Bridge, coordinator: EditorCommand
         const story = input.collection === "groups"
           ? replaceLegacyStoryGroups(canonical, storyCollectionSchemas.groups.parse(next))
           : migrateStoryData(storyDataSchema.parse({ ...canonical, [input.collection]: storyCollectionSchemas[input.collection].parse(next) }));
+        const invalidBefore = invalidMemberOfIds(canonical); const invalidAfter = invalidMemberOfIds(story);
+        const introduced = [...invalidAfter].filter(([id]) => !invalidBefore.has(id));
+        if (introduced.length) throw new Error(introduced.map(([, message]) => message).join(" "));
         const changed = input.collection === "scenarios" ? replaceProjectScenarios(project, story.scenarios) : { ...project, story };
         return { project: changed, summary: `Opowieść: ${input.collection} (${input.action}).` };
       }));
     } },
-    { name: "prepare_set_story_metadata", description: "Prepare scoped owners, typed traits, access/keys/guards/secrets, tags or text. Defaults to active scenario; target=base overrides. replace changes supplied fields/property keys; owners is exact ([]=none). remove deletes supplied values/keys. resetOwnership=true, metadata={} restores inheritance. Keys grant no permission; editor locks apply. narrativeLabel/narrativeDescription also update supported native text.", inputSchema: z.toJSONSchema(metadataSchema, { io: "input" }), annotations: { readOnlyHint: false }, execute: async (raw) => {
+    { name: "prepare_set_story_metadata", description: "Prepare scoped owners, typed traits, access/keys/guards, tags or text. Hidden passages use hidden=true with knownBy containing characters, factions or people groups; knownBy=[] means nobody knows. secretKnowledge is accepted only for compatibility with earlier saves. Defaults to active scenario; target=base overrides. replace changes supplied fields/property keys; owners is exact ([]=none). remove deletes supplied values/keys. resetOwnership=true, metadata={} restores inheritance. Keys grant no permission; editor locks apply. narrativeLabel/narrativeDescription also update supported native text.", inputSchema: z.toJSONSchema(metadataSchema, { io: "input" }), annotations: { readOnlyHint: false }, execute: async (raw) => {
       const input = metadataSchema.parse(raw); const refs = input.refs.map(storyRef); const context = input.context ?? currentContext(); const target = input.target ?? bridge.getEditorContext?.().view.editTarget;
       return response(coordinator.prepare(`story-metadata:${crypto.randomUUID()}`, (project) => ({ project: applyProjectStoryMetadata(project, { ...input, metadata: input.metadata as StoryObjectMetadata, refs, context, target }), summary: `Zmieniono właściwości opowieści: ${refs.length}.` })));
     } },

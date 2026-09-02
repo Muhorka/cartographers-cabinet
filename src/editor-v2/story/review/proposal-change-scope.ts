@@ -4,8 +4,8 @@ import { canonicalProjectStoryRef } from "../project-adapter";
 import { storyRefKey, type StoryObjectMetadata, type StoryObjectRef, type StoryPropertyValue, type StoryTextPatch } from "../types";
 import type { ProposalChangeSource, ProposalValue } from "./proposal-change-types";
 
-export const proposalSupportedFields = ["owners", "tags", "narrativeLabel", "narrativeDescription", "access.allow", "access.deny", "access.permission", "access.physicalState", "access.lock", "access.keyIds", "access.guardIds", "access.secretKnowledge", "property:*"];
-const accessKeys = ["allow", "deny", "permission", "physicalState", "lock", "keyIds", "guardIds", "secretKnowledge"] as const;
+export const proposalSupportedFields = ["owners", "tags", "narrativeLabel", "narrativeDescription", "access.allow", "access.deny", "access.permission", "access.physicalState", "access.lock", "access.keyIds", "access.guardIds", "access.secretKnowledge", "access.hidden", "access.knownBy", "property:*"];
+const accessKeys = ["allow", "deny", "permission", "physicalState", "lock", "keyIds", "guardIds", "secretKnowledge", "hidden", "knownBy"] as const;
 type AuthoredField = { key: string; slot: ProposalValue };
 type SourceRecord = { ref: StoryObjectRef; source: ProposalChangeSource; fields: Map<string, AuthoredField> };
 export type ProposalCandidate = { id: string; ref: StoryObjectRef; source: ProposalChangeSource; fieldKey: string; authoredPath: string; before: ProposalValue; after: ProposalValue };

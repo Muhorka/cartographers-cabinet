@@ -8,7 +8,7 @@ import { applyProjectStoryMetadata } from "./project-commands";
 
 const placeRef = { kind: "place" as const, id: "place" };
 const roomRef = { kind: "room" as const, id: "room", scopeId: "plan" };
-const access = { allow: ["friends"], deny: ["foes"], permission: "restricted" as const, physicalState: "closed" as const, lock: "none" as const, keyIds: ["key"], guardIds: ["guard"], secretKnowledge: ["secret"] };
+const access = { allow: ["friends"], deny: ["foes"], permission: "restricted" as const, physicalState: "closed" as const, lock: "none" as const, keyIds: ["key"], guardIds: ["guard"], secretKnowledge: ["secret"], hidden: true, knownBy: ["friends"] };
 
 function fixture(): EditorProject {
   const story: StoryData = { ...emptyStoryData(), world: [{ id: "friends", kind: "access-group", name: "Friends", tags: [], properties: {} }, { id: "foes", kind: "access-group", name: "Foes", tags: [], properties: {} }, { id: "key", kind: "key", name: "Key", tags: [], properties: {} }, { id: "guard", kind: "character", name: "Guard", tags: [], properties: {} }, { id: "secret", kind: "character", name: "Secret", tags: [], properties: {} }], objects: [{ ref: placeRef, metadata: { narrativeDescription: "Base description", owners: ["base-owner"], tags: ["base-tag"], access: { ...access, allow: [], deny: [], keyIds: [], guardIds: [], secretKnowledge: [] }, properties: { mood: "base", empty: "before" } } }, { ref: roomRef, metadata: { properties: { mood: "room-base" } } }], scenarios: [{ id: "scene", name: "Scene", patches: [{ id: "whole", target: placeRef, title: "After", description: "", metadata: { owners: ["scenario-owner"], tags: [], access }, properties: { mood: "scenario", empty: "" } }], steps: [{ id: "step-a", name: "First", patches: [{ id: "step", target: placeRef, properties: { mood: "step" } }] }, { id: "step-b", name: "Second", patches: [] }] }, { id: "other", name: "Other", patches: [], steps: [] }] };
@@ -19,7 +19,7 @@ describe("scenario effects", () => {
   it("reports all authored fields against base and preserves empty authored values", () => {
     const effect = readScenarioEffects(fixture(), "scene")[0]!;
     expect(effect.target).toEqual(placeRef); expect(effect.missing).toBe(false); expect(effect.objectName).toBe("After");
-    expect(effect.fields.map(({ key }) => key)).toEqual(expect.arrayContaining(["narrativeLabel", "narrativeDescription", "owners", "tags", "access.allow", "access.deny", "access.permission", "access.physicalState", "access.lock", "access.keyIds", "access.guardIds", "access.secretKnowledge", "property:mood", "property:empty"]));
+    expect(effect.fields.map(({ key }) => key)).toEqual(expect.arrayContaining(["narrativeLabel", "narrativeDescription", "owners", "tags", "access.allow", "access.deny", "access.permission", "access.physicalState", "access.lock", "access.keyIds", "access.guardIds", "access.secretKnowledge", "access.hidden", "access.knownBy", "property:mood", "property:empty"]));
     expect(effect.fields.find(({ key }) => key === "narrativeDescription")).toMatchObject({ before: "Base description", after: "", authored: "", changed: true });
     expect(effect.fields.find(({ key }) => key === "property:empty")).toMatchObject({ before: "before", after: "", authored: "", changed: true });
   });

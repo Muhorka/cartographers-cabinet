@@ -13,4 +13,12 @@ describe("sparse bulk access editing", () => {
       expect(result.deny).toEqual(["intruder"]); expect(result.guardIds).toEqual(["guard"]); expect(result.allow).toEqual(action === "remove" ? [] : ["staff"]);
     }
   });
+  it("adds and removes knownBy without materializing it when untouched", () => {
+    const untouched = editedAccessFields(base, { ...defaultStoryAccessPolicy(), allow: ["guest"] }, ["allow"], "add");
+    expect(untouched.knownBy).toBeUndefined();
+    const added = editedAccessFields(base, { ...defaultStoryAccessPolicy(), knownBy: ["staff"] }, ["knownBy"], "add");
+    expect(added.knownBy).toEqual(["staff"]);
+    const removed = editedAccessFields(added, { ...defaultStoryAccessPolicy(), knownBy: ["staff"] }, ["knownBy"], "remove");
+    expect(removed.knownBy).toEqual([]);
+  });
 });

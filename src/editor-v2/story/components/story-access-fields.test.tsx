@@ -24,8 +24,10 @@ describe("StoryAccessFields", () => {
   it("shows peer access details and the explicit nobody/hidden-by-actors controls", () => {
     const view = render();
     expect([...view.host.querySelectorAll("summary")].map((item) => item.textContent)).toEqual(["Kto może tu wejść?", "Stan przejścia", "Klucze: Brak przypisanego klucza", "Wyjątki i dodatkowe ograniczenia"]);
-    expect(view.host.textContent).toContain("Nikt"); expect(view.host.textContent).toContain("Ukryj przejście przed trasami postaci");
-    expect(view.host.textContent).toContain("Kto wie, że ono istnieje?"); expect(view.host.textContent).toContain("Anna"); expect(view.host.textContent).toContain("Staff");
+    expect(view.host.textContent).toContain("Nikt"); expect(view.host.textContent).toContain("Przejście jest ukryte przed trasami postaci");
+    expect(view.host.textContent).toContain("Kto zna to ukryte przejście?"); expect(view.host.textContent).toContain("Anna"); expect(view.host.textContent).toContain("Staff");
+    expect(view.host.textContent?.match(/Kto zna to ukryte przejście\?/g)).toHaveLength(1);
+    expect(view.host.textContent).not.toContain("Starszy warunek wiedzy");
     expect((view.host.querySelector('input[type="checkbox"]') as HTMLInputElement).checked).toBe(true);
     const passage = [...view.host.querySelectorAll("details")].find((item) => item.querySelector("summary")?.textContent === "Stan przejścia");
     const access = [...view.host.querySelectorAll("details")].find((item) => item.querySelector("summary")?.textContent === "Kto może tu wejść?");

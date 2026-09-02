@@ -13,7 +13,7 @@ export function StoryAccessFields({ story, copy, value, passage, dirty, keyHolde
   const c = inspectorCopy[copy.locale === "pl" ? "pl" : "en"];
   const [keysOpen, setKeysOpen] = useState(() => value.lock === "locked");
   const people = story.world.filter(({ kind }) => kind !== "key");
-  const choices = (field: "allow" | "deny" | "guardIds" | "secretKnowledge", label: string) => <StoryReferenceChoices label={label} values={value[field]} options={people} empty={c.noEntries} onChange={(ids) => onChange({ [field]: ids })}/>;
+  const choices = (field: "allow" | "deny" | "guardIds", label: string) => <StoryReferenceChoices label={label} values={value[field]} options={people} empty={c.noEntries} onChange={(ids) => onChange({ [field]: ids })}/>;
   return <div className={accessStyles.accessFields}>
     <details className={accessStyles.section}><summary>{c.access}</summary><div className={accessStyles.body}>
       <p className={accessStyles.hint}>{c.permissionHint}</p>
@@ -37,6 +37,6 @@ export function StoryAccessFields({ story, copy, value, passage, dirty, keyHolde
       <label className={accessStyles.check}><input type="checkbox" checked={Boolean(value.hidden)} onChange={(event) => onChange({ hidden: event.currentTarget.checked })}/><span>{c.hidden}</span></label>
       {value.hidden && <StoryReferenceChoices label={c.knownBy} hint={c.hiddenNobody} values={value.knownBy ?? []} options={people} empty={c.noEntries} onChange={(ids) => onChange({ knownBy: ids })}/>}
     </div></details>}
-    <details className={accessStyles.section}><summary>{c.exceptions}</summary><div className={accessStyles.body}>{choices("deny", c.denied)}{choices("guardIds", c.guard)}{passage && <>{choices("secretKnowledge", c.secret)}<p className={accessStyles.hint}>{c.secretHint}</p></>}</div></details>
+    <details className={accessStyles.section}><summary>{c.exceptions}</summary><div className={accessStyles.body}>{choices("deny", c.denied)}{choices("guardIds", c.guard)}</div></details>
   </div>;
 }

@@ -49,6 +49,23 @@ describe("story domain", () => {
     expect(danglingStoryReferences(after.story).some(({ code }) => code === "unresolved-reference")).toBe(true);
   });
 
+  it("diagnoses hidden-knowledge refs and malformed member-of targets without deleting them", () => {
+    const story = fixture();
+    story.objects[0]!.metadata.access = { ...story.objects[0]!.metadata.access!, hidden: true, knownBy: ["missing-witness"] };
+    story.zones = [{ id: "hidden-zone", name: "Hidden zone", members: [], tags: [], metadata: { access: { ...story.objects[0]!.metadata.access!, knownBy: ["missing-zone-witness"] } } }];
+    story.scenarios = [{ id: "night", name: "Night", patches: [{ id: "hidden-at-night", target: ref, metadata: { access: { ...story.objects[0]!.metadata.access!, knownBy: ["missing-scenario-witness"] } } }], steps: [] }];
+    story.memberships.push({ subjectId: "alice", groupId: "brass", kind: "member-of", source: "manual" });
+    const diagnostics = danglingStoryReferences(story);
+    expect(diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "unresolved-world-reference", ids: ["missing-witness"] }),
+      expect.objectContaining({ code: "unresolved-world-reference", ids: ["missing-zone-witness"] }),
+      expect.objectContaining({ code: "unresolved-world-reference", ids: ["missing-scenario-witness"] }),
+      expect.objectContaining({ code: "invalid-membership-target", ids: ["alice", "brass"] }),
+    ]));
+    expect(story.objects[0]!.metadata.access!.knownBy).toEqual(["missing-witness"]);
+    expect(story.memberships).toContainEqual(expect.objectContaining({ groupId: "brass", kind: "member-of" }));
+  });
+
   it("searches only local object, world and evidence records", () => {
     const story = fixture(); const result = searchStory(story, "room-1");
     expect(result[0]).toMatchObject({ kind: "object", label: "room-1" });

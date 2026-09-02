@@ -1,6 +1,7 @@
 import { storyCollectionSchemas, storyDataSchema } from "./schema";
 import { legacyStoryGroups, migrateStoryData, replaceLegacyStoryGroups } from "./migration";
 import { defaultStoryAccessPolicy, sameStoryRef, storyRefKey, type StoryCommandResult, type StoryData, type StoryDiagnostic, type StoryEvidence, type StoryGroup, type StoryLens, type StoryMetadataBulkCommand, type StoryObject, type StoryObjectMetadata, type StoryObjectRef, type StoryPropertyDefinition, type StoryPropertyValue, type StoryRelation, type StoryScenario, type StoryWorldEntry, type StoryZone } from "./types";
+import { memberOfSemanticIssue } from "./membership-semantics";
 
 type StoryCollection = "world" | "propertyDefinitions" | "objects" | "groups" | "zones" | "lenses" | "scenarios" | "relations" | "intentions" | "evidence" | "routes";
 type StoryItem = StoryWorldEntry | StoryPropertyDefinition | StoryObject | StoryGroup | StoryZone | StoryLens | StoryScenario | StoryRelation | StoryData["intentions"][number] | StoryEvidence | StoryData["routes"][number];
@@ -20,7 +21,9 @@ export function mergeStoryMetadata(base: StoryObjectMetadata, change: Partial<St
   const combine = (before: string[], after: string[]) => action === "replace" ? [...after] : action === "add" ? [...new Set([...before, ...after])] : before.filter((entry) => !after.includes(entry));
   const beforeAccess = { ...defaultStoryAccessPolicy(), ...(base.access ?? {}) }; const afterAccess = change.access;
   const accessField = (before: string[], after: string[] | undefined) => after === undefined ? before : action === "replace" ? [...after] : combine(before, after);
-  const access = afterAccess ? { ...beforeAccess, ...(action === "replace" ? afterAccess : {}), allow: accessField(beforeAccess.allow, afterAccess.allow), deny: accessField(beforeAccess.deny, afterAccess.deny), keyIds: accessField(beforeAccess.keyIds, afterAccess.keyIds), guardIds: accessField(beforeAccess.guardIds, afterAccess.guardIds), secretKnowledge: accessField(beforeAccess.secretKnowledge, afterAccess.secretKnowledge) } : base.access;
+  const optionalAccessField = (before: string[] | undefined, after: string[] | undefined) => after === undefined ? before : action === "replace" ? [...after] : combine(before ?? [], after);
+  const knownBy = afterAccess ? optionalAccessField(beforeAccess.knownBy, afterAccess.knownBy) : undefined;
+  const access = afterAccess ? { ...beforeAccess, ...(action === "replace" ? afterAccess : {}), allow: accessField(beforeAccess.allow, afterAccess.allow), deny: accessField(beforeAccess.deny, afterAccess.deny), keyIds: accessField(beforeAccess.keyIds, afterAccess.keyIds), guardIds: accessField(beforeAccess.guardIds, afterAccess.guardIds), secretKnowledge: accessField(beforeAccess.secretKnowledge, afterAccess.secretKnowledge), ...(knownBy === undefined ? {} : { knownBy }) } : base.access;
   const properties: Record<string, StoryPropertyValue> = { ...(base.properties ?? {}) };
   if (change.properties !== undefined) {
     if (action === "replace" || action === "add") Object.assign(properties, change.properties);
@@ -46,12 +49,18 @@ export function danglingStoryReferences(story: StoryData): StoryDiagnostic[] {
   const inspectWorld = (id: string, source: string) => { if (!worldIds.has(id)) diagnostics.push(diagnostic("unresolved-world-reference", `${source} references world entry ${id}; it was not retargeted.`, undefined, [id])); };
   for (const group of story.groups) group.memberRefs.forEach((ref) => inspect(ref, `Group ${group.id}`));
   for (const group of story.groups) group.entryIds.forEach((id) => inspectWorld(id, `Group ${group.id}`));
-  for (const membership of story.memberships) { inspectWorld(membership.subjectId, "Membership subject"); inspectWorld(membership.groupId, "Membership group"); }
-  for (const object of story.objects) {
-    const access = object.metadata.access; for (const id of [...(object.metadata.owners ?? []), ...(access?.allow ?? []), ...(access?.deny ?? []), ...(access?.keyIds ?? []), ...(access?.guardIds ?? []), ...(access?.secretKnowledge ?? [])]) inspectWorld(id, `Object ${storyRefKey(object.ref)}`);
+  for (const membership of story.memberships) {
+    inspectWorld(membership.subjectId, "Membership subject"); inspectWorld(membership.groupId, "Membership group");
+    const issue = memberOfSemanticIssue(story, membership); if (issue) diagnostics.push(diagnostic("invalid-membership-target", issue, undefined, [membership.subjectId, membership.groupId]));
   }
-  for (const zone of story.zones) { zone.members.forEach(({ ref }) => inspect(ref, `Zone ${zone.id}`)); zone.entryIds?.forEach((id) => inspectWorld(id, `Zone ${zone.id}`)); }
-  for (const scenario of story.scenarios) { const patches = [...scenario.patches, ...scenario.steps.flatMap(({ patches: values }) => values)]; patches.forEach(({ target }) => inspect(target, `Scenario ${scenario.id}`)); }
+  const inspectMetadata = (metadata: StoryObjectMetadata | undefined, source: string) => {
+    const access = metadata?.access;
+    for (const id of [...(metadata?.owners ?? []), ...(access?.allow ?? []), ...(access?.deny ?? []), ...(access?.keyIds ?? []), ...(access?.guardIds ?? []), ...(access?.secretKnowledge ?? []), ...(access?.knownBy ?? [])]) inspectWorld(id, source);
+  };
+  for (const object of story.objects) inspectMetadata(object.metadata, `Object ${storyRefKey(object.ref)}`);
+  for (const group of story.groups) inspectMetadata(group.metadata, `Group ${group.id}`);
+  for (const zone of story.zones) { zone.members.forEach(({ ref }) => inspect(ref, `Zone ${zone.id}`)); zone.entryIds?.forEach((id) => inspectWorld(id, `Zone ${zone.id}`)); inspectMetadata(zone.metadata, `Zone ${zone.id}`); }
+  for (const scenario of story.scenarios) { const patches = [...scenario.patches, ...scenario.steps.flatMap(({ patches: values }) => values)]; patches.forEach((patch) => { inspect(patch.target, `Scenario ${scenario.id}`); inspectMetadata(patch.metadata, `Scenario ${scenario.id}`); }); }
   for (const relation of story.relations) for (const actor of [relation.from, relation.to]) if ("kind" in actor) inspect(actor, `Relation ${relation.id}`);
   for (const intention of story.intentions) inspect(intention.subject, `Intention ${intention.id}`);
   for (const item of story.evidence) item.refs.forEach((ref) => inspect(ref, `Evidence ${item.id}`));
