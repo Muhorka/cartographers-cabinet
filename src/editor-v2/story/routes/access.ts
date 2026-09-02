@@ -8,7 +8,7 @@ const refKinds = { place: "place", room: "room", opening: "opening", transition:
 
 /** Uses authored narrative access; editor visibility/lock flags are deliberately ignored. */
 export function createStoryAccessDecisionResolver(project: EditorProject, context: StoryAccessContext) {
-  const story = projectStoryData(project); const resolveObject = createProjectStoryObjectResolver(project, context);
+  const story = projectStoryData(project); const resolveObject = createProjectStoryObjectResolver(project, context, story);
   const identities = context.actorId ? storyActorGroups(story, context.actorId) : new Set<string>();
   const keys = new Set<string>(); const knowledge = new Set<string>();
   for (const membership of story.memberships) if (identities.has(membership.subjectId)) {
