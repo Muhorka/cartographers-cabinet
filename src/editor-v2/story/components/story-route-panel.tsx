@@ -44,11 +44,13 @@ export function StoryRoutePanel({ project, activePlaceId, locale, context, initi
   const [actorId, setActorId] = useState(initialRoute?.query.actorId ?? ""); const [widthOverride, setWidthOverride] = useState<number | undefined>(initialRoute?.query.width);
   const [preferences, setPreferences] = useState<StoryRouteRequest["preferences"]>(initialRoute?.query.preferences ?? {});
   const [result, setResult] = useState<StoryRouteRecord | undefined>(initialRoute); const [error, setError] = useState<string>();
+  const [alternativesExhausted, setAlternativesExhausted] = useState(false);
   const [resultSignature, setResultSignature] = useState<string | undefined>(initialRoute ? routeQuerySignature(initialRoute.query) : undefined);
   const [calculationStatus, setCalculationStatus] = useState<"idle" | "running" | "timeout" | "cancelled" | "error" | "stale">("idle");
   const latest = useRef(0); const projectRef = useRef(project); const contextRef = useRef(context); const previewRef = useRef(onPreview);
   const [calculationKey, setCalculationKey] = useState<CalculationKey | undefined>(undefined);
   const querySignature = JSON.stringify({ from, to, profile, actorId: actorId || undefined, widthOverride, preferences: preferences ?? {}, scenarioId: context.scenarioId, stepId: context.stepId });
+  const priorQuerySignature = useRef(querySignature);
   const baseRevision = projectRevision(project);
   const currentCalculationKey: CalculationKey = { projectId: project.id, revision: baseRevision, query: querySignature, scenarioId: context.scenarioId, stepId: context.stepId, lensId: context.lensId, routeService };
   const keyChanged = (left: CalculationKey, right: CalculationKey) => left.projectId !== right.projectId || left.revision !== right.revision || left.query !== right.query || left.scenarioId !== right.scenarioId || left.stepId !== right.stepId || left.lensId !== right.lensId || left.routeService !== right.routeService;
@@ -56,6 +58,10 @@ export function StoryRoutePanel({ project, activePlaceId, locale, context, initi
     projectRef.current = project; contextRef.current = context;
   }, [project, context, context.scenarioId, context.stepId, context.lensId]);
   useLayoutEffect(() => { previewRef.current = onPreview; }, [onPreview]);
+  useLayoutEffect(() => {
+    if (priorQuerySignature.current === querySignature) return;
+    priorQuerySignature.current = querySignature; setAlternativesExhausted(false); setResult(undefined); setResultSignature(undefined); previewRef.current(undefined);
+  }, [querySignature]);
   useLayoutEffect(() => {
     return () => { latest.current += 1; routeService?.cancel(); setCalculationStatus((previous) => previous === "running" ? "stale" : previous); };
   }, [routeService, baseRevision, querySignature, context.scenarioId, context.stepId, context.lensId]);
@@ -72,7 +78,7 @@ export function StoryRoutePanel({ project, activePlaceId, locale, context, initi
   function updateEndpoint(endpoint: "from" | "to", value: StoryRouteEndpoint, optionId = endpointOptionId(endpointOptions, value), pointConfirmed = true) {
     invalidateCurrentCalculation(); (endpoint === "from" ? setFrom : setTo)(value); (endpoint === "from" ? setFromOptionId : setToOptionId)(optionId); (endpoint === "from" ? setFromPointConfirmed : setToPointConfirmed)(pointConfirmed);
   }
-  async function calculate() {
+  async function calculate(alternativeLimit = 1) {
     const pendingWaterEndpoint = (!fromPointConfirmed && endpointOptions.find(({ id }) => id === fromOptionId)?.requiresPoint ? fromOptionId : undefined)
       ?? (!toPointConfirmed && endpointOptions.find(({ id }) => id === toOptionId)?.requiresPoint ? toOptionId : undefined);
     if (pendingWaterEndpoint) {
@@ -85,13 +91,16 @@ export function StoryRoutePanel({ project, activePlaceId, locale, context, initi
     try {
       const activePreferences = Object.fromEntries(Object.entries(preferences ?? {}).filter(([, value]) => value !== undefined)) as NonNullable<StoryRouteRequest["preferences"]>;
       const query: StoryRouteRequest = { from, to, profile, ...(widthOverride === undefined ? {} : { width: widthOverride }), actorId: actorId || undefined, scenarioId: context.scenarioId, stepId: context.stepId, ...(Object.keys(activePreferences).length ? { preferences: activePreferences } : {}) };
-      setCalculationStatus("running"); setError(undefined); setResult(undefined); setResultSignature(undefined); onPreview(undefined);
-      const outcome = await routeService.calculate(project, query);
+      setCalculationStatus("running"); setError(undefined);
+      if (alternativeLimit === 1) { setAlternativesExhausted(false); setResult(undefined); setResultSignature(undefined); onPreview(undefined); }
+      const outcome = await routeService.calculate(project, { ...query, alternativeLimit });
       if (attempt !== latest.current) return;
       if (outcome.status === "cancelled") { setCalculationStatus("cancelled"); return; }
       if (outcome.status !== "ready") { setCalculationStatus(outcome.status); setError(outcome.error); return; }
       if (isStale(capturedRevision, capturedSignature)) { setCalculationStatus("stale"); onPreview(undefined); return; }
-      const planned = outcome.result!; const route = { id: initialRoute?.id ?? result?.id ?? crypto.randomUUID(), name: name.trim() || (pl ? "Nowa trasa" : "New route"), query, result: planned, sourceRevision: planned.sourceRevision };
+      const planned = outcome.result!;
+      if (alternativeLimit > 1 && planned.routes.length < alternativeLimit) setAlternativesExhausted(true);
+      const route = { id: initialRoute?.id ?? result?.id ?? crypto.randomUUID(), name: name.trim() || (pl ? "Nowa trasa" : "New route"), query, result: planned, sourceRevision: planned.sourceRevision };
       setResult(route); setResultSignature(capturedSignature); onPreview(route); setCalculationStatus("idle");
     } catch (cause) { if (attempt === latest.current) { setCalculationStatus("error"); setError(String(cause)); onPreview(undefined); } }
   }
@@ -137,9 +146,10 @@ export function StoryRoutePanel({ project, activePlaceId, locale, context, initi
     {visibleCalculationStatus === "cancelled" && <p role="status">{pl ? "Obliczanie trasy anulowano." : "Route calculation cancelled."}</p>}
     {visibleCalculationStatus === "stale" && <p role="status">{pl ? "Plan lub zapytanie zmieniły się podczas obliczania. Uruchom obliczanie ponownie." : "The plan or query changed during calculation. Run it again."}</p>}
     {error && <p role="alert">{error}</p>}
-    {result && <div role="status" className={styles.result}><strong>{stale ? pl ? "Plan się zmienił — przelicz trasę." : "The plan changed — recalculate." : result.result.status === "ready" ? pl ? "Znalezione warianty" : "Route alternatives" : result.result.status === "unknown" ? pl ? "Brakuje danych do potwierdzenia trasy" : "Missing facts prevent verification" : pl ? "Nie znaleziono dostępnej trasy" : "No accessible route found"}</strong>
+    {result && <div role="status" className={styles.result}><strong>{stale ? pl ? "Plan się zmienił — przelicz trasę." : "The plan changed — recalculate." : result.result.status === "ready" ? pl ? "Najlepsza znaleziona trasa" : "Best route found" : result.result.status === "unknown" ? pl ? "Brakuje danych do potwierdzenia trasy" : "Missing facts prevent verification" : pl ? "Nie znaleziono dostępnej trasy" : "No accessible route found"}</strong>
       {result.result.routes.map((route, index) => <details key={route.id}><summary>{index + 1}. {route.distance.toFixed(1)} m</summary>{route.conditions.map((condition) => <p key={condition}>{condition}</p>)}{[...new Set(route.segments.map(({ placeId }) => placeId))].map((id) => <button key={id} type="button" onClick={() => onOpenPlace?.(id)}>{project.places.find((place) => place.id === id)?.name ?? id}</button>)}</details>)}
       {[...result.result.missingFacts, ...result.result.reasons].map((reason) => <p key={reason}>{reason}</p>)}
+      {result.result.status === "ready" && !stale && !alternativesExhausted && result.result.routes.length < 3 && <button type="button" disabled={visibleCalculationStatus === "running"} onClick={() => void calculate(result.result.routes.length + 1)}>{pl ? "Wyznacz inną trasę" : "Find another route"}</button>}
       <button type="button" disabled={Boolean(stale)} onClick={() => onSave({ ...result, name: name.trim() || result.name })}>{pl ? "Zachowaj trasę" : "Save route"}</button>
       <button type="button" onClick={() => { setResult(undefined); setResultSignature(undefined); onPreview(undefined); }}>{pl ? "Ukryj podgląd" : "Hide preview"}</button>
     </div>}

@@ -27,8 +27,9 @@ export function alternativeFromGraph(graph: RouteGraphPath, request: StoryRouteR
   return { id: `route-${usedOpeningIds.join("-") || "direct"}-${usedTransitionIds.join("-") || "level"}`, segments, points, distance: graph.distance, conditions: [...conditions], reasons: [], usedOpeningIds: [...new Set(usedOpeningIds)], usedTransitionIds: [...new Set(usedTransitionIds)] } satisfies StoryRouteAlternative;
 }
 
-/** Enumerate up to three shortest portal-distinct routes, including routes with a shared prefix. */
-export function collectRouteAlternatives(evaluate: (blocked: Set<string>, captureDiagnostics: boolean) => StoryRouteAlternative | undefined) {
+/** Enumerate only the requested number of shortest portal-distinct routes. */
+export function collectRouteAlternatives(evaluate: (blocked: Set<string>, captureDiagnostics: boolean) => StoryRouteAlternative | undefined, limit = 1) {
+  const boundedLimit = Math.max(1, Math.min(3, Math.floor(limit)));
   const routes: StoryRouteAlternative[] = []; const frontier: Candidate[] = []; const seenBlocked = new Set<string>();
   const enqueue = (blocked: Set<string>, captureDiagnostics: boolean) => {
     const alternative = evaluate(blocked, captureDiagnostics); if (!alternative) return;
@@ -43,10 +44,11 @@ export function collectRouteAlternatives(evaluate: (blocked: Set<string>, captur
   };
 
   seenBlocked.add(""); enqueue(new Set(), true);
-  while (frontier.length && routes.length < 3) {
+  while (frontier.length && routes.length < boundedLimit) {
     frontier.sort((left, right) => left.alternative.distance - right.alternative.distance || left.alternative.id.localeCompare(right.alternative.id) || left.blockedKey.localeCompare(right.blockedKey));
     const candidate = frontier.shift()!;
     if (!routes.some(({ id }) => id === candidate.alternative.id)) routes.push(candidate.alternative);
+    if (routes.length >= boundedLimit) break;
     enqueueChildren(candidate);
   }
   return routes;

@@ -61,7 +61,7 @@ describe("canonical story access", () => {
     expect(storyAccessDecision(hidden, opening, { actorId: "owner" })).toMatchObject({ allowed: false, unknown: true, reason: "door: hidden." });
     hidden.story.objects[0]!.metadata.access!.knownBy = [];
     expect(storyAccessDecision(hidden, opening, { actorId: "anna" })).toMatchObject({ allowed: false, reason: "door: hidden." });
-    expect(storyAccessDecision(hidden, opening, {})).toBe(true);
+    expect(storyAccessDecision(hidden, opening, {})).toMatchObject({ allowed: true, conditions: [expect.stringContaining("hidden passage")] });
   });
 
   it("keeps legacy secretKnowledge usable only when canonical knownBy is absent", () => {

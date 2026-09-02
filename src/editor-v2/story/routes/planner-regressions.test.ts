@@ -77,6 +77,7 @@ describe("story route planner regressions", () => {
     const result = findStoryRoutes(project, {
       from: { placeId: "level", point: { x: 2, y: 5 } },
       to: { placeId: "level", point: { x: 13, y: 5 } },
+      actorId: "alice",
     });
 
     expect(result.status).toBe("ready");
@@ -88,7 +89,7 @@ describe("story route planner regressions", () => {
   it("keeps alternatives that share their first portal", () => {
     const result = findStoryRoutes(branchingInteriorProject(), {
       from: { placeId: "level", point: { x: 2, y: 5 } },
-      to: { placeId: "level", point: { x: 13, y: 5 } },
+      to: { placeId: "level", point: { x: 13, y: 5 } }, alternativeLimit: 3,
     });
 
     expect(result.status).toBe("ready");

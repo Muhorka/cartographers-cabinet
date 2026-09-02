@@ -11,6 +11,8 @@ export type StoryRouteRequest = {
   actorId?: string;
   scenarioId?: string;
   stepId?: string;
+  /** Requested result count. The UI starts at one and increases this only on demand. */
+  alternativeLimit?: number;
   preferences?: {
     preferRoads?: boolean;
     allowOffroad?: boolean;

@@ -17,6 +17,25 @@ function project() {
 }
 
 describe("story route panel", () => {
+  it("requests one route first and another variant only after the user asks", async () => {
+    const value = project();
+    let attemptId = 0;
+    const calculate: StoryRouteCalculationService["calculate"] = vi.fn(async (_project, request): Promise<RouteCalculationOutcome> => {
+      const first = findStoryRoutes(value, request); const count = request.alternativeLimit ?? 1;
+      const routes = count > 1 && first.route ? [first.route, { ...first.route, id: "second-route", distance: first.route.distance + 1 }] : first.routes;
+      return { status: "ready", result: { ...first, routes }, attemptId: ++attemptId };
+    });
+    const service: StoryRouteCalculationService = { calculate, cancel: vi.fn(), dispose: vi.fn() };
+    const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+    await act(async () => root.render(<StoryRoutePanel project={value} activePlaceId="grounds" locale="en" context={{}} routeService={service} onPreview={vi.fn()} onSave={vi.fn()}/>));
+    const click = async (text: string) => act(async () => { [...host.querySelectorAll("button")].find((button) => button.textContent === text)!.click(); await Promise.resolve(); });
+    await click("Find route");
+    expect(vi.mocked(calculate).mock.calls[0]?.[1].alternativeLimit).toBe(1); expect(host.querySelectorAll('[role="status"] details')).toHaveLength(1);
+    await click("Find another route");
+    expect(vi.mocked(calculate).mock.calls[1]?.[1].alternativeLimit).toBe(2); expect(host.querySelectorAll('[role="status"] details')).toHaveLength(2);
+    act(() => root.unmount()); host.remove();
+  });
+
   it("opens, recalculates and saves an existing route under the same identity", async () => {
     const value = project(); const query = { from: { placeId: "grounds", point: { x: 11, y: 21 } }, to: { placeId: "grounds", point: { x: 13, y: 25 } }, profile: "foot" as const };
     const result = findStoryRoutes(value, query); const initialRoute = { id: "saved-route", name: "Garden route", query, result, sourceRevision: result.sourceRevision };
@@ -28,7 +47,7 @@ describe("story route panel", () => {
     expect(save.mock.calls[0][0]).toMatchObject({ id: "saved-route", name: "Garden route", query });
     const profile = [...host.querySelectorAll("select")].find((select) => [...select.options].some((option) => option.value === "vehicle")) as HTMLSelectElement;
     await act(async () => { profile.value = "vehicle"; profile.dispatchEvent(new Event("change", { bubbles: true })); });
-    expect([...host.querySelectorAll("button")].find((button) => button.textContent === "Save route")).toHaveProperty("disabled", true);
+    expect([...host.querySelectorAll("button")].find((button) => button.textContent === "Save route")).toBeUndefined();
     await click("Delete saved route"); expect(remove).toHaveBeenCalledWith("saved-route");
     act(() => root.unmount()); host.remove();
   });

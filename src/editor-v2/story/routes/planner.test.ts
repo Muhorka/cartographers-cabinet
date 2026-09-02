@@ -57,10 +57,16 @@ describe("story route planner", () => {
     expect(result.status).toBe("unreachable");
   });
 
-  it("reports a locked portal as unknown rather than routing through it", () => {
+  it("keeps an actorless physical route and reports its key condition", () => {
     const project = fixture(); project.story.objects.push({ ref: { kind: "opening", id: "door", scopeId: "construction" }, metadata: { access: { allow: [], deny: [], permission: "open", physicalState: "open", lock: "locked", keyIds: ["brass"], guardIds: [], secretKnowledge: [] } } });
     const result = findStoryRoutes(project, { from: { placeId: "level", point: { x: 2, y: 5 } }, to: { placeId: "level", point: { x: 8, y: 5 } } });
-    expect(result.status).toBe("unknown"); expect(result.missingFacts.join(" ")).toContain("key");
+    expect(result.status).toBe("ready"); expect(result.route?.conditions.join(" ")).toContain("key");
+  });
+
+  it("keeps an actorless route through a Nobody place and reports the authored condition", () => {
+    const project = fixture(); project.story.objects.push({ ref: { kind: "place", id: "level" }, metadata: { access: { allow: [], deny: [], permission: "nobody", physicalState: "open", lock: "none", keyIds: [], guardIds: [], secretKnowledge: [] } } });
+    const result = findStoryRoutes(project, { from: { placeId: "level", point: { x: 2, y: 5 } }, to: { placeId: "level", point: { x: 8, y: 5 } } });
+    expect(result.status).toBe("ready"); expect(result.route?.conditions.join(" ")).toContain("Nobody");
   });
 
   it("keeps a direct route inside a concave face and rejects a hole crossing", () => {
@@ -83,12 +89,12 @@ describe("story route planner", () => {
     expect(result.status).toBe("ready"); expect(result.route?.usedTransitionIds).toContain("stairs"); const reverse = findStoryRoutes(project, { from: { placeId: "upper", point: { x: 8, y: 5 } }, to: { placeId: "level", point: { x: 2, y: 5 } } }); expect(reverse.status).toBe("ready"); expect(reverse.route?.usedTransitionIds).toContain("stairs");
   });
 
-  it("does not use a stair whose source landing is in a denied room", () => {
+  it("keeps an actorless stair route conditional on room access", () => {
     const ground = fixture(); const upper = fixture(); upper.places[0]!.id = "upper"; upper.constructions[0]!.id = "upper-construction"; upper.places[0]!.constructionId = "upper-construction";
     ground.constructions[0]!.transitions = [{ id: "stairs-denied", kind: "stairs", footprint: { kind: "rectangle", x: 6, y: 4, width: 1, height: 2 }, sourceLevelId: "level", targetLevelId: "upper", connectedLevelIds: ["level", "upper"] }];
     const project = { ...ground, places: [...ground.places, ...upper.places], constructions: [...ground.constructions, ...upper.constructions] }; project.story.objects.push({ ref: { kind: "room", id: "room-0", scopeId: "construction" }, metadata: { access: { allow: ["staff"], deny: [], permission: "restricted", physicalState: "open", lock: "none", keyIds: [], guardIds: [], secretKnowledge: [] } } });
     const result = findStoryRoutes(project, { from: { placeId: "level", point: { x: 2, y: 5 } }, to: { placeId: "upper", point: { x: 8, y: 5 } } });
-    expect(result.status).toBe("unknown"); expect(result.route).toBeUndefined();
+    expect(result.status).toBe("ready"); expect(result.route?.conditions.join(" ")).toContain("allowed");
   });
 
   it("does not claim a vehicle can use stairs", () => {
@@ -137,15 +143,15 @@ describe("story route planner", () => {
 
   it("applies inherited room access and scenario context to intermediate faces", () => {
     const project = fixture(); project.story.objects.push({ ref: { kind: "room", id: "room-1", scopeId: "construction" }, metadata: { access: { allow: ["staff"], deny: [], permission: "restricted", physicalState: "open", lock: "none", keyIds: [], guardIds: [], secretKnowledge: [] } } });
-    const blocked = findStoryRoutes(project, { from: { placeId: "level", point: { x: 2, y: 5 } }, to: { placeId: "level", point: { x: 8, y: 5 } } }); expect(blocked.status).toBe("unknown");
+    const blocked = findStoryRoutes(project, { from: { placeId: "level", point: { x: 2, y: 5 } }, to: { placeId: "level", point: { x: 8, y: 5 } } }); expect(blocked.status).toBe("ready"); expect(blocked.route?.conditions.join(" ")).toContain("allowed");
     project.story.memberships.push({ subjectId: "alice", groupId: "staff", kind: "member-of", source: "manual" }); const allowed = findStoryRoutes(project, { from: { placeId: "level", point: { x: 2, y: 5 } }, to: { placeId: "level", point: { x: 8, y: 5 } }, actorId: "alice" }); expect(allowed.status).toBe("ready");
   });
 
-  it("does not let a same-face endpoint bypass a denied room", () => {
+  it("keeps a same-face actorless route conditional on room access", () => {
     const project = fixture(); project.story.objects.push({ ref: { kind: "room", id: "room-1", scopeId: "construction" }, metadata: { access: { allow: ["staff"], deny: [], permission: "restricted", physicalState: "open", lock: "none", keyIds: [], guardIds: [], secretKnowledge: [] } } });
     project.story.objects[0] = { ...project.story.objects[0]!, ref: { kind: "room", id: "room-0", scopeId: "construction" } };
     const result = findStoryRoutes(project, { from: { placeId: "level", point: { x: 7, y: 5 } }, to: { placeId: "level", point: { x: 8, y: 5 } } });
-    expect(result.status).toBe("unknown"); expect(result.route).toBeUndefined(); expect(result.missingFacts.length).toBeGreaterThan(0);
+    expect(result.status).toBe("ready"); expect(result.route?.conditions.join(" ")).toContain("allowed");
   });
 
   it("does not treat a meadow as a barrier and does treat hidden water as one", () => {
