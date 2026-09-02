@@ -101,7 +101,7 @@ export function useWorkbenchStory({ session, snapshot, selections, inspectedPlac
     if ("editTarget" in patch) next.scenarioContext = patch.editTarget === "scenario" ? "active" : "base";
     updateView(next);
   }
-  const liveContext = { selections: rawRefs, mode, view: { ...context, lensIds: mode === "story" ? lensIds : [], previewLens: mode === "story" ? view.previewLens : undefined, routeId: mode === "story" ? view.activeRouteId : undefined, editTarget } };
+  const liveContext = { selections: rawRefs, inspectedPlaceId, mode, view: { ...context, lensIds: mode === "story" ? lensIds : [], previewLens: mode === "story" ? view.previewLens : undefined, routeId: mode === "story" ? view.activeRouteId : undefined, editTarget } };
   const selectedOwnership = project && selected.length === 1
     ? resolveStoryOwnership(project, project.story, selected[0].ref, { scenarioId: inspectorScenarioId, stepId: inspectorStepId })
     : undefined;

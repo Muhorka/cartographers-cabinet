@@ -7,7 +7,13 @@ import type { StoryLens } from "../story/types";
 
 export type EditorStoryView = { scenarioId?: string; stepId?: string; lensId?: string; lensIds?: string[]; previewLens?: StoryLens | null; routeId?: string; editTarget?: "base" | "scenario" };
 export type StoryViewUpdateResult = { status: "applied" } | { status: "deferred"; reason: "draft" | "overlap" };
-export type EditorLiveContext = { selections: AgentObjectRef[]; mode: "drawing" | "story"; view: EditorStoryView };
+/**
+ * The inspected place is the place currently represented by the Inspector.
+ * It is deliberately separate from both the map (activePlaceId) and the
+ * selection: opening a building while its level remains on the sheet must
+ * not manufacture a selection for the building.
+ */
+export type EditorLiveContext = { selections: AgentObjectRef[]; inspectedPlaceId?: string; mode: "drawing" | "story"; view: EditorStoryView };
 export type EditorContextBridge = {
   getSession(): EditorSession;
   getEditorContext?(): EditorLiveContext;
