@@ -6,14 +6,14 @@ import { pointInRegion, shapePolygons } from "../../geometry/region-constraints"
 import type { EditorProject, PlaceNode } from "../../model/project-model";
 import { distance, polylineDistance } from "./geometry";
 import { createRoutePathFinder } from "./shortest-path-cache";
-import { storyAccessDecision } from "./access";
+import { createStoryAccessDecisionResolver, storyAccessDecision } from "./access";
 import { findOutdoorRoute } from "./outdoor";
 import { applyAffinePoint, relativePlaceMatrix } from "../../geometry/affine-transform";
-import type { StoryAccessContext, StoryRouteAlternative, StoryRouteOptions, StoryRouteRequest, StoryRouteResult, StoryRouteSegment } from "./types";
+import type { StoryAccessContext, StoryAccessDecision, StoryRouteAlternative, StoryRouteOptions, StoryRouteRequest, StoryRouteResult, StoryRouteSegment } from "./types";
 import { routeWidth } from "./width";
 import { faceAnchor } from "./portal-geometry";
 import { alternativeFromGraph, collectRouteAlternatives } from "./route-alternatives";
-import { relevantLevelIds } from "./relevant-levels";
+import { relevantLevelIds, routeEndpointLevelId } from "./relevant-levels";
 import { storyRouteRevision } from "./revision";
 export { storyRouteRevision } from "./revision";
 
@@ -114,7 +114,7 @@ function transitionPoint(document: ConstructionDocument, transition: VerticalTra
 
 function routeGraph(project: EditorProject, spaces: LevelSpace[], request: StoryRouteRequest, options: StoryRouteOptions, blocked: Set<string>, missing: Set<string>, reasons: Set<string>, findPath: RoutePathFinder) {
   const graphs = spaces.map((space) => ({ space, ...buildLevelGraph(project, space, request, options, blocked, missing, reasons, findPath) })); const byLevel = new Map(graphs.map((graph) => [graph.space.place.id, graph]));
-  const fromSpace = byLevel.get(request.from.levelId ?? request.from.placeId); const toSpace = byLevel.get(request.to.levelId ?? request.to.placeId);
+  const fromSpace = byLevel.get(routeEndpointLevelId(project, request.from) ?? request.from.placeId); const toSpace = byLevel.get(routeEndpointLevelId(project, request.to) ?? request.to.placeId);
   if (!fromSpace || !toSpace) return undefined;
   const fromFace = faceForPoint(fromSpace.space, request.from.point); const toFace = faceForPoint(toSpace.space, request.to.point); if (!fromFace || !toFace) return undefined;
   if (!faceAccess(project, fromSpace.space, fromFace, request, options, missing, reasons).allowed || !faceAccess(project, toSpace.space, toFace, request, options, missing, reasons).allowed) return undefined;
@@ -195,9 +195,9 @@ function graphAlternatives(project: EditorProject, spaces: LevelSpace[], request
 }
 
 function buildingEntryRoute(project: EditorProject, spaces: LevelSpace[], request: StoryRouteRequest, options: StoryRouteOptions, missing: Set<string>, reasons: Set<string>, findPath: RoutePathFinder) {
-  const endpoint = [request.from, request.to].find(({ placeId }) => spaces.some(({ place }) => place.id === placeId)); const outside = endpoint === request.from ? request.to : endpoint === request.to ? request.from : undefined;
+  const endpoint = [request.from, request.to].find((candidate) => spaces.some(({ place }) => place.id === routeEndpointLevelId(project, candidate))); const outside = endpoint === request.from ? request.to : endpoint === request.to ? request.from : undefined;
   if (!endpoint || !outside) return undefined;
-  const space = spaces.find(({ place }) => place.id === endpoint.placeId); const parentId = space?.place.parentId; const parent = parentId ? project.places.find(({ id }) => id === parentId) : undefined; const outsideOwner = project.places.find(({ id }) => id === outside.placeId); if (!space || !parent || !outsideOwner || !["world", "location"].includes(outsideOwner.kind)) return undefined;
+  const space = spaces.find(({ place }) => place.id === routeEndpointLevelId(project, endpoint)); const parentId = space?.place.parentId; const parent = parentId ? project.places.find(({ id }) => id === parentId) : undefined; const outsideOwner = project.places.find(({ id }) => id === outside.placeId); if (!space || !parent || !outsideOwner || !["world", "location"].includes(outsideOwner.kind)) return undefined;
   const levelPoint = endpoint.point; const face = faceForPoint(space, levelPoint); if (!face) return undefined;
   const roomAccess = faceAccess(project, space, face, request, options, missing, reasons); if (!roomAccess.allowed) return undefined;
   const width = routeWidth(request); const matrix = relativePlaceMatrix(project, parent.id, space.place.id); const candidates: StoryRouteAlternative[] = []; const candidateMissing = new Set<string>(); const candidateReasons = new Set<string>();
@@ -235,11 +235,12 @@ function checkEndpointAccess(project: EditorProject, endpoint: StoryRouteRequest
 
 export function findStoryRoutes(project: EditorProject, request: StoryRouteRequest, options: StoryRouteOptions = {}): StoryRouteResult {
   const findPath = createRoutePathFinder();
-  const accessDecisions = new Map<string, ReturnType<typeof storyAccessDecision>>(); const suppliedAccess = options.access;
+  let resolveAccess: ReturnType<typeof createStoryAccessDecisionResolver> | undefined;
+  const accessDecisions = new Map<string, StoryAccessDecision>(); const suppliedAccess = options.access;
   const routeOptions: StoryRouteOptions = { ...options, access(entity, accessContext) {
     const key = JSON.stringify([entity.kind, entity.id, entity.scopeId, entity.access, entity.locked, accessContext]);
     if (accessDecisions.has(key)) return accessDecisions.get(key)!;
-    const value = suppliedAccess?.(entity, accessContext) ?? storyAccessDecision(project, entity, accessContext); accessDecisions.set(key, value); return value;
+    const value = suppliedAccess?.(entity, accessContext) ?? (resolveAccess ??= createStoryAccessDecisionResolver(project, accessContext))(entity); accessDecisions.set(key, value); return value;
   } };
   const revision = Math.max(0, ...project.constructions.map(({ revision }) => revision)); const sourceRevision = storyRouteRevision(project); const missing = new Set<string>(); const reasons = new Set<string>(); const endpointConditions = new Set<string>(); let routes: StoryRouteAlternative[] = [];
   if (!checkEndpointAccess(project, request.from, request, routeOptions, missing, reasons, endpointConditions) || !checkEndpointAccess(project, request.to, request, routeOptions, missing, reasons, endpointConditions)) return { status: missing.size ? "unknown" : "unreachable", revision, sourceRevision, routes, missingFacts: [...missing].toSorted(), reasons: [...reasons].toSorted() };
