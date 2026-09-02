@@ -103,7 +103,7 @@ export function createSceneLabelPlan(project: EditorProject, activePlaceId: stri
 
   function addPlace(place: SceneGroups["children"][number], showLabel: boolean) {
     if (!showLabel || !place.boundary || place.visible === false) return;
-    const matrix = translatedMatrix(relativePlaceMatrix(project, activePlaceId, place.id), movingIds.has(place.id) ? moveDelta : undefined);
+    const matrix = movingIds.has(place.id) ? previewPlaceMatrix(project, activePlaceId, place.id, moveDelta) : relativePlaceMatrix(project, activePlaceId, place.id);
     addRegion(`place:${activePlaceId}:${place.id}`, place.name, place.boundary, matrix, place.kind === "location" || place.kind === "custom");
   }
 
