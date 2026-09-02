@@ -1,5 +1,5 @@
 import type { EditorProject } from "../model/project-model";
-import { createStarterProject } from "../model/starter-project";
+import { loadExampleProject } from "../persistence/example-project";
 import { getPreference, scanProjectLibrary, saveProject } from "../persistence/project-library";
 import { makeSession, viewportFor } from "./workbench-helpers";
 
@@ -20,7 +20,7 @@ export async function loadInitialWorkbenchProject() {
   const locale: "pl" | "en" = stored === "en" ? "en" : "pl";
   const scan = await scanProjectLibrary();
   let projects = scan.projects;
-  if (!projects.length && !scan.recoveryRecords.length) projects = [await saveProject(createStarterProject(crypto.randomUUID(), locale === "pl" ? "Nowy projekt" : "New project", locale))];
+  if (!projects.length && !scan.recoveryRecords.length) projects = [await saveProject(await loadExampleProject(crypto.randomUUID()))];
   const activeId = await getPreference("activeProjectId");
   const activeProject = projects.find(({ id }) => id === activeId) ?? projects[0];
   return { locale, projects, recoveryRecords: scan.recoveryRecords, loaded: activeProject ? await restoreWorkbenchProject(activeProject, locale) : undefined };
