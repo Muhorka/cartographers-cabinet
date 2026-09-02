@@ -1,8 +1,8 @@
 import type { StoryLocale } from "../components/story-types";
 
 const relationCopy = {
-  en: { relationSubject: "Who or what?", relationTarget: "In relation to whom or what?", relationPreview: "Select both sides to preview the relation.", relationLabel: "Name or label (optional)", relationDescription: "Description (optional)", descriptionAndKnowledge: "Description and knowledge", relation: "Relation" },
-  pl: { relationSubject: "Kto lub co?", relationTarget: "Wobec kogo lub czego?", relationPreview: "Wybierz obie strony, aby zobaczyć podgląd relacji.", relationLabel: "Nazwa lub etykieta (opcjonalnie)", relationDescription: "Opis (opcjonalny)", descriptionAndKnowledge: "Opis i wiedza", relation: "Relacja" },
+  en: { relationSubject: "Who or what?", relationTarget: "In relation to whom or what?", relationPreview: "Select both sides to preview the relation.", relationLabel: "Name or label (optional)", relationDescription: "Description (optional)", descriptionAndKnowledge: "Description", relation: "Relation" },
+  pl: { relationSubject: "Kto lub co?", relationTarget: "Wobec kogo lub czego?", relationPreview: "Wybierz obie strony, aby zobaczyć podgląd relacji.", relationLabel: "Nazwa lub etykieta (opcjonalnie)", relationDescription: "Opis (opcjonalny)", descriptionAndKnowledge: "Opis", relation: "Relacja" },
 } as const;
 
 export const storyCopy = {

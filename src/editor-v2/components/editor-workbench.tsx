@@ -50,7 +50,7 @@ import { requestStoryViewTransition } from "./story-view-transition";
 import { canContinueSemanticDraft } from "./toolbox-change-policy";
 import { TransitionCreationDialog } from "./transition-creation-dialog"; import { WorkbenchMasthead } from "./workbench-masthead"; import { initialExpandedPlaceIds, useWorkbenchSessionRefresh } from "./use-workbench-session-refresh"; import { ProjectLibraryRecovery } from "./project-library-recovery";
 import { useEditorTransaction } from "./use-editor-transaction";
-import { inspectorFocus, resolvedInspectedPlaceId, type InspectorFocus } from "./workbench-inspector-focus"; import { openWorkbenchPlace } from "./workbench-place-navigation";
+import { inspectorFocus, resolvedInspectedPlaceId, type InspectorFocus } from "./workbench-inspector-focus"; import { openWorkbenchPlace } from "./workbench-place-navigation"; import { usePersistedTextareaSizes } from "./use-persisted-textarea-sizes";
 const ProjectLibraryDialog = lazy(() => import("./project-library-dialog").then((module) => ({ default: module.ProjectLibraryDialog }))); type Mode = "drawing" | "story";
 export function EditorWorkbench() {
   const [locale, setLocale] = useState<EditorLocale>("en"); const copy = workbenchCopy[locale];
@@ -60,7 +60,7 @@ export function EditorWorkbench() {
   const [inspectorTarget, setInspectorTarget] = useState<InspectorFocus>();
   const [leftOpen, setLeftOpen] = useState(true); const [rightOpen, setRightOpen] = useState(true);
   const [pendingLegalSection, setPendingLegalSection] = useState<LegalMarginaliaSection>();
-  const legalMarginaliaRef = useRef<LegalMarginaliaHandle>(null);
+  const legalMarginaliaRef = useRef<LegalMarginaliaHandle>(null); const workshopRef = useRef<HTMLElement>(null);
   const [pendingPlaceDeleteId, setPendingPlaceDeleteId] = useState<string>(); const [pendingClearLayer, setPendingClearLayer] = useState(false); const [pendingClearCategory, setPendingClearCategory] = useState<ReturnType<typeof constructionClearCategoryForToolbox>>("all");
   const [sketchVisible, setSketchVisible] = useState(true); const [sketchOpacity, setSketchOpacity] = useState(.75);
   const [eraserSize, setEraserSize] = useState(10);
@@ -209,13 +209,13 @@ export function EditorWorkbench() {
   const hasOverlapNotice = workbenchNoticeKind({ roadNotice, overlapNotice: overlapGroups.length > 0 && (pendingOverlapDeparture || dismissedOverlapSignature !== overlapSignature), pendingOverlapDeparture, otherNotice: secondaryNotice }) === "overlap";
   const tree = useMemo(() => currentProject?.places ?? [], [currentProject]);
   const availableLayerIds = useMemo(() => new Set(workLayers.filter(({ id }) => currentProject && activePlaceId && workLayerAvailability(currentProject, activePlaceId, id).available).map(({ id }) => id)), [activePlaceId, currentProject]);
-  const availableSubjectIds = useMemo(() => currentProject && activePlaceId ? new Set(availableWorkSubjects(currentProject, activePlaceId, "equipment").map(({ id }) => id)) : undefined, [activePlaceId, currentProject]);
+  const availableSubjectIds = useMemo(() => currentProject && activePlaceId ? new Set(availableWorkSubjects(currentProject, activePlaceId, "equipment").map(({ id }) => id)) : undefined, [activePlaceId, currentProject]); usePersistedTextareaSizes(workshopRef, currentProject?.id);
   if (!session || !snapshot || !currentProject || !activePlaceId) return <main className={styles.loading}>{bootError ? <section role="alert"><h1>Nie udało się wczytać projektu</h1><p>Zapisane projekty nie zostały usunięte ani zastąpione.</p><pre>{bootError}</pre><button type="button" onClick={() => window.location.reload()}>Spróbuj ponownie</button></section> : recoveryRecords.length ? <ProjectLibraryRecovery records={recoveryRecords} copy={projectLibraryCopy[locale]} blocking onExport={exportProjectRecoveryFile} onCreate={() => void createProject({ name: locale === "pl" ? "Nowy projekt" : "New project", scale: "world" })}/> : "✦"}</main>;
   const selectionInstrument = cutoutActive || addOutlineActive ? outlineInstrument ?? outlineInstrumentFor(snapshot.toolbox) : snapshot.toolbox.byLayer[snapshot.toolbox.activeLayerId].instrumentId;
   const selecting = mode === "drawing" && (selectionInstrument === "select" || selectionInstrument === "marquee");
   const canClearLayer = !currentProject.places.find(({ id }) => id === activePlaceId)?.locked;
   const deleteListedSelection = (selection: MapSelection) => drawing.requestAfterDraft(() => selection.kind === "place" ? requestDeletePlace(selection.id) : editing.remove(selection));
-  return <main className={styles.workshop}>
+  return <main ref={workshopRef} className={styles.workshop}>
     <WorkbenchMasthead locale={locale} copy={copy} mode={mode} onLanguage={changeLocale} onModeToggle={() => mode === "story" ? setMode("drawing") : drawing.requestAfterDraft(() => requestAfterOverlap(enterStory))}/>
     <section className={styles.projectBar}><button type="button" className={styles.libraryButton} onClick={() => drawing.requestAfterDraft(() => setLibraryOpen(true))}><span>✦</span><small>{copy.project}</small><strong><b>{headerName}</b><i>{copy.projects}</i></strong></button><div className={styles.modes}><button type="button" className={mode === "drawing" ? styles.activeMode : undefined} onClick={() => setMode("drawing")}>{copy.drawing}</button><button type="button" className={mode === "story" ? styles.activeMode : undefined} onClick={() => drawing.requestAfterDraft(() => requestAfterOverlap(enterStory))}>{copy.story}</button><em role={autosave.saveFailed ? "alert" : undefined}>{autosave.saveFailed ? copy.saveFailed : autosave.saving ? copy.saving : copy.saved}</em>{autosave.saveFailed && <button type="button" onClick={() => void autosave.flushSession(session)}>{copy.retrySave}</button>}</div></section>
     <ProjectLibraryRecovery records={recoveryRecords} copy={projectLibraryCopy[locale]} onExport={exportProjectRecoveryFile}/>

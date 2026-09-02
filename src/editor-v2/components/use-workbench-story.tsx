@@ -40,7 +40,7 @@ export function useWorkbenchStory({ session, snapshot, selections, inspectedPlac
   const project = snapshot?.project; const copy = storyCopy[locale];
   const [error, setError] = useState<string>();
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [bookOpen, setBookOpen] = useState<Partial<Record<StoryDisclosureSection, boolean>>>({ tree: true, zones: true });
+  const [bookOpen, setBookOpen] = useState<Partial<Record<StoryDisclosureSection, boolean>>>({ tree: true, zones: false });
   const showWorldbook = () => { setBookOpen((current) => ({ ...current, worldbook: true })); onOpenWorldbook(); };
   const showRoutes = () => { setBookOpen((current) => ({ ...current, routes: true, worldbook: false })); };
   function commit(transaction: ProjectTransaction) {
@@ -153,8 +153,8 @@ export function useWorkbenchStory({ session, snapshot, selections, inspectedPlac
       labels: { tree: workbenchCopy[locale].projectTree, worldbook: copy.worldbook, zones: copy.zones, lenses: copy.lenses, routes: copy.routes, properties: copy.propertyDictionary },
       zones: zones.list,
       visibleSections: mode === "drawing" ? ["tree", "zones"] as const : undefined,
-      openSections: bookOpen,
-      onOpenSectionsChange: setBookOpen,
+      openSections: mode === "story" ? bookOpen : undefined,
+      onOpenSectionsChange: mode === "story" ? setBookOpen : undefined,
       worldbook: !project ? undefined : <div className={styles.book}>
         {worldDescription}
         {workspace.reviewOpen ? workspace.reviewPanel : <StoryWorldbook story={project.story} copy={copy} controller={controller} resolvedObjects={resolvedObjects} renderEntry={workspace.renderEntry} excludedCollections={["zones", "propertyDefinitions", "routes"]}/>}

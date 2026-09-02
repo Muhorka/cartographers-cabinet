@@ -13,6 +13,13 @@ describe("story view typed collection adapter", () => {
     expect(next.memberships[0]).toMatchObject({ source: "imported", note: "archive" });
   });
 
+  it("preserves hidden legacy knowledge data when the visible profile description changes", () => {
+    const story = { ...emptyStoryData(), world: [{ id: "keeper", kind: "character" as const, name: "Keeper", tags: [], properties: {} }, { id: "staff", kind: "access-group" as const, name: "Staff", tags: [], properties: {} }], memberships: [{ subjectId: "keeper", groupId: "staff", kind: "knows" as const, source: "legacy" as const }] };
+    const item = collectionItems(story, "characters")[0]!;
+    const next = replaceStoryCollection(story, "characters", [{ ...item, description: "Knows every important detail." }]);
+    expect(next.memberships).toContainEqual({ subjectId: "keeper", groupId: "staff", kind: "knows", source: "legacy" });
+  });
+
   it("preserves group metadata and scenario patches on ordinary edits", () => {
     const target = { kind: "room" as const, id: "room-1", scopeId: "level-1" };
     const story = { ...emptyStoryData(), objects: [{ ref: target, metadata: {} }], groups: [{ id: "group", name: "Wardens", memberRefs: [target], entryIds: [], metadata: { tags: ["trusted"], properties: { priority: 1 } } }], scenarios: [{ id: "night", name: "Night", patches: [{ id: "patch", target, description: "Lights out" }], steps: [{ id: "step", name: "Lock", patches: [{ id: "step-patch", target, description: "Close door" }] }] }] };
