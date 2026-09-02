@@ -5,7 +5,7 @@ import type { RegionLabelLayout } from "./region-label-layout";
 
 const identity: AffineMatrix = [1, 0, 0, 1, 0, 0];
 
-export type PlannedLabelLayout = RoomLabelLayout | RegionLabelLayout;
+type PlannedLabelLayout = RoomLabelLayout | RegionLabelLayout;
 
 export type LabelCollisionEntry = {
   key: string;
