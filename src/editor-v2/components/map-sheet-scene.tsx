@@ -26,6 +26,7 @@ type MapSheetSceneProps = {
   prefix: string;
   copy: MapSheetCopy;
   layoutZoom: number;
+  labelLayoutZoom: number;
   selected: Set<string>;
   movingIds: Set<string>;
   movingTransform?: string;
@@ -47,10 +48,10 @@ type MapSheetSceneProps = {
 /**
  * The project drawing is deliberately isolated from the live viewport transform.
  * Pan and rotation can then update the outer SVG group without rebuilding every
- * room, label and object. Zoom supplies a deferred layoutZoom, so labels and
- * fixed-size handles settle at the exact final scale after the visual transform.
+ * room, label and object. Fixed-size controls follow a deferred exact zoom,
+ * while expensive label placement advances through stable scale intervals.
  */
-export const MapSheetScene = memo(function MapSheetScene({ project, activePlaceId, prefix, copy, layoutZoom, selected, movingIds, movingTransform, movePreview, openingWidthPreview, selectionEditing, selectionOnly, outlineEditing, selectionLayerId, sketchVisible, sketchOpacity, activeGesture, noteEditing, onSelect, onOpenPlace, onNoteTextChange }: MapSheetSceneProps) {
+export const MapSheetScene = memo(function MapSheetScene({ project, activePlaceId, prefix, copy, layoutZoom, labelLayoutZoom, selected, movingIds, movingTransform, movePreview, openingWidthPreview, selectionEditing, selectionOnly, outlineEditing, selectionLayerId, sketchVisible, sketchOpacity, activeGesture, noteEditing, onSelect, onOpenPlace, onNoteTextChange }: MapSheetSceneProps) {
   const groups = useMemo(() => visiblePlaceGroups(project, activePlaceId), [project, activePlaceId]);
   const constructionOwner = constructionPlaceForView(project, activePlaceId);
   const roomView = groups.active?.kind === "room";
@@ -60,7 +61,7 @@ export const MapSheetScene = memo(function MapSheetScene({ project, activePlaceI
   const roomScope = useMemo(() => roomView ? roomEditingScope(groups.active, activeConstruction, network) : {}, [activeConstruction, groups.active, network, roomView]);
   const showArea = project.measureSettings.showRoomAreas;
   const units = project.measureSettings.units;
-  const labelPlan = useMemo(() => createSceneLabelPlan(project, activePlaceId, groups, activeConstruction, network, constructionOwner, layoutZoom, showArea, units, sketchVisible, movingIds, movePreview?.delta), [activeConstruction, activePlaceId, constructionOwner, groups, layoutZoom, movingIds, movePreview?.delta, network, project, showArea, sketchVisible, units]);
+  const labelPlan = useMemo(() => createSceneLabelPlan(project, activePlaceId, groups, activeConstruction, network, constructionOwner, labelLayoutZoom, showArea, units, sketchVisible, movingIds, movePreview?.delta), [activeConstruction, activePlaceId, constructionOwner, groups, labelLayoutZoom, movingIds, movePreview?.delta, network, project, showArea, sketchVisible, units]);
   const placeTransform = (placeId: string) => matrixAttribute(previewPlaceMatrix(project, activePlaceId, placeId, movingIds.has(placeId) ? movePreview?.delta : undefined));
 
   return <>

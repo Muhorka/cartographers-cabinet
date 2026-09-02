@@ -15,6 +15,7 @@ import { SelectionRotationHandle } from "./selection-rotation-handle";
 import { captureMapPoint, capturePointPointer } from "./map-point-picker";
 import { fallbackMeasurementCopy, ViewMeasureControls } from "./view-measure-controls";
 import { MapSheetScene } from "./map-sheet-scene";
+import { quantizedLabelLayoutZoom } from "../geometry/label-layout-zoom";
 export type { MapSelection, MapSheetCopy } from "./map-sheet-types";
 const emptySelectedIds: string[] = []; const emptyDraftStrokes: KernelPoint[][] = [];
 export function MapSheet({ pointPicker, storyOverlay, rotationControl, project, activePlaceId, viewport, copy, selectedIds = emptySelectedIds, draftStrokes = emptyDraftStrokes, gestureDraft, sheetSize = { width: 1000, height: 700 }, interaction, selectionEditing = false, selectionOnly = false, outlineEditing = false, selectionMode = "direct", selectionLayerId, sketchVisible = true, sketchOpacity = .75, eraserSize = 10, gapClosingEnabled = false, gapClosingTolerance = 14, tracingProject, tracingOpacity = .4, onSelect, onSelectMany, onOpenPlace, onClearSelection, onDeleteSelected, onCancelDrawing, onViewportChange, onGesture, onGestureDraftChange, onMeasureSettingsChange, onNoteTextChange, onMoveSelection, onMoveWallEndpoint, onResizeOpening, onResizeTransition, onResizeElement, onResizeSurface, onResizePlace, onMoveElementVertex, onMoveSurfaceVertex, onMovePlaceVertex, nodeInsertion }: MapSheetProps) {
@@ -35,6 +36,7 @@ export function MapSheet({ pointPicker, storyOverlay, rotationControl, project, 
   const broaderPlaceId = placeToOpenAbove(project, activePlaceId);
   const mapTransform = `translate(${sheetSize.width / 2} ${sheetSize.height / 2}) rotate(${viewport.rotation}) scale(${viewport.zoom}) translate(${-viewport.center.x} ${-viewport.center.y})`;
   const layoutZoom = useDeferredValue(viewport.zoom);
+  const labelLayoutZoom = useDeferredValue(quantizedLabelLayoutZoom(viewport.zoom));
   const stableOnSelect = useStableEvent(onSelect); const stableOnOpenPlace = useStableEvent(onOpenPlace); const stableOnNoteTextChange = useStableEvent(onNoteTextChange); const stableOnViewportChange = useStableEvent(onViewportChange);
   const viewportNavigationEnabled = Boolean(onViewportChange);
   const viewportRef = useRef(viewport);
@@ -201,9 +203,9 @@ export function MapSheet({ pointPicker, storyOverlay, rotationControl, project, 
       <defs><filter id={`${prefix}-ink`}><feTurbulence baseFrequency="0.025" numOctaves="2" seed="17" result="noise"/><feDisplacementMap in="SourceGraphic" in2="noise" scale="0.7"/></filter></defs>
       <g transform={mapTransform}>
         <MapGrid prefix={prefix} settings={project.measureSettings} viewport={viewport} sheetSize={sheetSize}/>
-        <MapSheetScene project={displayedProject} activePlaceId={activePlaceId} prefix={prefix} copy={copy} layoutZoom={layoutZoom} selected={selected} movingIds={movingIds} movingTransform={movingTransform} movePreview={movePreview} openingWidthPreview={openingWidthPreview} selectionEditing={selectionEditing} selectionOnly={selectionOnly} outlineEditing={outlineEditing} selectionLayerId={selectionLayerId} sketchVisible={sketchVisible} sketchOpacity={sketchOpacity} activeGesture={Boolean(activeGesture)} noteEditing={activeGesture === "note"} onSelect={onSelect ? stableOnSelect : undefined} onOpenPlace={onOpenPlace ? stableOnOpenPlace : undefined} onNoteTextChange={onNoteTextChange ? stableOnNoteTextChange : undefined}/>
+        <MapSheetScene project={displayedProject} activePlaceId={activePlaceId} prefix={prefix} copy={copy} layoutZoom={layoutZoom} labelLayoutZoom={labelLayoutZoom} selected={selected} movingIds={movingIds} movingTransform={movingTransform} movePreview={movePreview} openingWidthPreview={openingWidthPreview} selectionEditing={selectionEditing} selectionOnly={selectionOnly} outlineEditing={outlineEditing} selectionLayerId={selectionLayerId} sketchVisible={sketchVisible} sketchOpacity={sketchOpacity} activeGesture={Boolean(activeGesture)} noteEditing={activeGesture === "note"} onSelect={onSelect ? stableOnSelect : undefined} onOpenPlace={onOpenPlace ? stableOnOpenPlace : undefined} onNoteTextChange={onNoteTextChange ? stableOnNoteTextChange : undefined}/>
         {storyOverlay}
-        {tracingProject && <MapSheetTracing project={tracingProject} activePlaceId={activePlaceId} prefix={`${prefix}-tracing`} copy={copy} viewportZoom={layoutZoom} opacity={tracingOpacity}/>}
+        {tracingProject && <MapSheetTracing project={tracingProject} activePlaceId={activePlaceId} prefix={`${prefix}-tracing`} copy={copy} viewportZoom={layoutZoom} labelLayoutZoom={labelLayoutZoom} opacity={tracingOpacity}/>}
         {draftStrokes.length > 0 && <g className={styles.pendingDraft} aria-hidden="true">{draftStrokes.map((points, index) => <path key={index} d={pointsPath(points, false)}/>)}</g>}
         <MapGesturePreview draft={visibleGestureDraft?.instrumentId === activeGesture ? visibleGestureDraft : undefined} viewportZoom={viewport.zoom} eraserSize={eraserSize} pencilSmoothing={displayedProject.measureSettings.pencilSmoothing} unit={displayedProject.measureSettings.units} measurementCopy={copy.measurements?.metric === "metry" ? { width: "Szer.", height: "Wys.", length: "Długość", angle: "Kąt" } : undefined}/>
         {insertion.marker}{selectionEditing && rotationControl && <SelectionRotationHandle control={rotationControl} viewport={viewport} sheetSize={sheetSize}/>}
