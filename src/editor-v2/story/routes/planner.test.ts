@@ -117,6 +117,26 @@ describe("story route planner", () => {
     expect(result.status).toBe("ready"); expect(result.route?.usedOpeningIds).toContain("entry"); expect(result.route?.points.some(({ x, y }) => x > 9 && y > 10)).toBe(true);
   });
 
+  it("joins an outdoor place directly to a room endpoint", () => {
+    const project = fixture(); const room = project.constructions[0]!.rooms[0]!;
+    project.places[0]!.parentId = "building"; project.places[0]!.transform = { x: 1, y: 2, rotation: 0 };
+    project.places.unshift(
+      { id: "grounds", name: "Grounds", kind: "world", transform: { x: 100, y: 50, rotation: 0 }, boundary: { kind: "rectangle", x: -10, y: -5, width: 30, height: 30 }, tags: [], access: [], properties: {} },
+      { id: "building", parentId: "grounds", name: "House", kind: "building", transform: { x: 10, y: 5, rotation: 0 }, boundary: { kind: "rectangle", x: 1, y: 2, width: 10, height: 10 }, tags: [], access: [], properties: {} },
+    );
+    project.places.push({ id: room.id, parentId: "level", name: room.name, kind: "room", transform: { x: 0, y: 0, rotation: 0 }, tags: [], access: [], properties: {} });
+    project.constructions[0]!.openings = [{ id: "entry", kind: "door", wallId: "west", position: .2, width: 1 }];
+    const result = findStoryRoutes(project, { from: { placeId: "grounds", point: { x: 0, y: 12 } }, to: { placeId: room.id, point: { x: 2, y: 5 } } });
+    expect(result.status).toBe("ready"); expect(result.route?.usedOpeningIds).toContain("entry");
+  });
+
+  it("lets an explicitly supplied access resolver override authored access", () => {
+    const project = fixture();
+    const request = { from: { placeId: "level", point: { x: 2, y: 5 } }, to: { placeId: "level", point: { x: 8, y: 5 } } };
+    expect(findStoryRoutes(project, request).status).toBe("ready");
+    expect(findStoryRoutes(project, request, { access: () => false }).status).toBe("unreachable");
+  });
+
   it("joins an explicit boundary door to the outdoor parent", () => {
     const project = fixture(); project.places[0]!.parentId = "building"; project.places[0]!.transform = { x: 1, y: 2, rotation: 0 }; project.places.unshift({ id: "grounds", name: "Grounds", kind: "world", transform: { x: 100, y: 50, rotation: 0 }, boundary: { kind: "rectangle", x: -10, y: -5, width: 30, height: 20 }, tags: [], access: [], properties: {} }, { id: "building", parentId: "grounds", name: "House", kind: "building", transform: { x: 10, y: 5, rotation: 0 }, boundary: { kind: "rectangle", x: 1, y: 2, width: 10, height: 10 }, tags: [], access: [], properties: {} }); project.constructions[0]!.openings = [{ id: "entry", kind: "door", wallId: "west", position: .5, width: 1 }];
     const result = findStoryRoutes(project, { from: { placeId: "grounds", point: { x: 0, y: 12 } }, to: { placeId: "level", point: { x: 2, y: 5 } } });
