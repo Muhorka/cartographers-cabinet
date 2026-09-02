@@ -42,15 +42,15 @@ export function sheetObjectGroups(project: EditorProject, activePlaceId: string,
     { id: "places", label: copy.places, open: false, items: places.map((place) => ({ selection: { kind: "place" as const, id: place.id }, label: place.name, description: place.description, tags: place.tags, visible: place.visible ?? true, locked: place.locked ?? false })) },
     { id: "terrain", label: copy.terrain, open: false, items: elementItems("terrain") },
     { id: "roads", label: copy.roads ?? copy.terrain, open: false, items: elementItems("roads") },
-    { id: "equipment", label: copy.equipment, open: false, items: elementItems("equipment") },
-    { id: "sketch", label: copy.sketch, open: false, items: elementItems("sketch") },
     { id: "rooms", label: copy.rooms, open: false, items: rooms.map((room) => ({ selection: { kind: "room" as const, id: room.id }, label: room.name, description: room.description, tags: room.tags, visible: room.visible ?? true, locked: room.locked ?? false })) },
     { id: "surfaces", label: copy.surfaces ?? copy.features, open: false, items: surfaces.map((surface) => ({ selection: { kind: "surface" as const, id: surface.id }, label: surface.name, description: surface.description, tags: surface.tags, visible: surface.visible, locked: surface.locked })) },
+    { id: "equipment", label: copy.equipment, open: false, items: elementItems("equipment") },
     { id: "features", label: copy.features, open: false, items: [
       ...openings.map((opening, index) => ({ selection: { kind: "opening" as const, id: opening.id }, label: structuralLabel("opening", opening.id, copy.openingName(opening.kind, index + 1)), visible: opening.visible ?? true, locked: opening.locked ?? false })),
       ...transitions.map((transition, index) => { const fallback = transition.kind === "elevator" ? copy.elevatorName?.(index + 1) ?? copy.stairsName(index + 1) : copy.stairsName(index + 1); return { selection: { kind: "transition" as const, id: transition.id }, label: structuralLabel("transition", transition.id, fallback), visible: transition.visible ?? true, locked: transition.locked ?? false }; }),
     ] },
     { id: "walls", label: copy.walls, open: false, items: walls.map((wall, index) => ({ selection: { kind: "wall" as const, id: wall.id }, label: structuralLabel("wall", wall.id, copy.wallName(index + 1)), visible: wall.visible ?? true, locked: wall.locked ?? false })) },
+    { id: "sketch", label: copy.sketch, open: false, items: elementItems("sketch") },
   ].filter(({ items }) => items.length);
 }
 

@@ -83,6 +83,6 @@ describe("sheet object catalogue", () => {
       surfaces: [{ id: "balcony", belongsToId: level.id, name: "Balcony", kind: "terrace" as const, shape: { kind: "rectangle" as const, x: 0, y: 0, width: 4, height: 2 }, attachment: "free" as const, elevation: 0, visible: true, locked: false, tags: [], access: [], properties: {} }],
       constructions: base.constructions.map((item) => item.id === construction.id ? { ...item, openings: [{ id: "door", kind: "door" as const, wallId: item.walls[0]!.id, position: .5, width: 1 }] } : item),
     };
-    expect(sheetObjectGroups(project, level.id, copy).map(({ id }) => id)).toEqual(["terrain", "roads", "equipment", "sketch", "rooms", "surfaces", "features", "walls"]);
+    expect(sheetObjectGroups(project, level.id, copy).map(({ id }) => id)).toEqual(["terrain", "roads", "rooms", "surfaces", "equipment", "features", "walls", "sketch"]);
   });
 });

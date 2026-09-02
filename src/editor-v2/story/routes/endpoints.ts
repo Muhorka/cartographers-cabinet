@@ -62,6 +62,43 @@ function samePoint(left: KernelPoint, right: KernelPoint) {
   return Math.abs(left.x - right.x) <= 1e-7 && Math.abs(left.y - right.y) <= 1e-7;
 }
 
+function endpointOwnerPath(project: EditorProject, option: StoryRouteEndpointOption) {
+  const path: string[] = [];
+  const seen = new Set<string>();
+  let ownerId = option.kind === "place" ? project.places.find(({ id }) => id === option.placeId)?.parentId : option.placeId;
+  while (ownerId && !seen.has(ownerId)) {
+    seen.add(ownerId);
+    const owner = project.places.find(({ id }) => id === ownerId);
+    if (!owner) break;
+    path.push(owner.name);
+    ownerId = owner.parentId;
+  }
+  return path;
+}
+
+function disambiguateEndpointNames(project: EditorProject, options: StoryRouteEndpointOption[]) {
+  const repeated = new Map<string, StoryRouteEndpointOption[]>();
+  for (const option of options) repeated.set(option.name, [...(repeated.get(option.name) ?? []), option]);
+  for (const group of repeated.values()) {
+    if (group.length < 2) continue;
+    const paths = group.map((option) => endpointOwnerPath(project, option));
+    const maxDepth = Math.max(...paths.map((path) => path.length), 0);
+    let depth = 1;
+    for (; depth <= maxDepth; depth += 1) {
+      const suffixes = paths.map((path) => path.slice(0, depth).join(" — "));
+      if (suffixes.every(Boolean) && new Set(suffixes).size === group.length) break;
+    }
+    if (depth <= maxDepth) {
+      group.forEach((option, index) => { option.name = `${option.name} — ${paths[index]!.slice(0, depth).join(" — ")}`; });
+    } else {
+      group.forEach((option, index) => {
+        const context = paths[index]!.join(" — ");
+        option.name = `${option.name}${context ? ` — ${context}` : ""} · ${index + 1}`;
+      });
+    }
+  }
+}
+
 /**
  * Lists ordinary places and authored terrain objects as route endpoint choices.
  * Terrain remains owned by its existing place; the route model consequently
@@ -81,7 +118,9 @@ export function storyRouteEndpointOptions(project: EditorProject): StoryRouteEnd
     if (!owner || !point) return [];
     return [{ id: `terrain:${element.id}`, kind: "terrain" as const, name: element.name, placeId: owner.id, point, elementId: element.id, ...(isWaterTerrainElement(element) ? { requiresPoint: true } : {}) }];
   });
-  return [...places, ...terrain];
+  const options = [...places, ...terrain];
+  disambiguateEndpointNames(project, options);
+  return options;
 }
 
 export function endpointForOption(option: StoryRouteEndpointOption): StoryRouteEndpoint {

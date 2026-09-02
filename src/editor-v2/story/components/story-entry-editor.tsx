@@ -30,10 +30,11 @@ function GroupMetadataEditor({ entry, story, copy, resolvedObjects, onChange }: 
 function StoryDescriptionAndKnowledge({ entry, story, copy, onChange }: { entry: StoryRecord; story: StoryDocumentLike; copy: StoryCopy; onChange(next: StoryRecord): void }) {
   const help = worldbookHelp(copy);
   const known = Array.isArray(entry.knownEntryIds) ? entry.knownEntryIds.map(String) : [];
-  return <details className={styles.subsection} open>
+  const knowledgeOptions = story.world.filter(({ id }) => id !== entry.id).toSorted((left, right) => left.name.localeCompare(right.name, copy.locale, { sensitivity: "base", numeric: true }));
+  return <details className={`${styles.subsection} ${flow.descriptionAndKnowledge}`} open>
     <summary>{copy.descriptionAndKnowledge}</summary>
     <label className={styles.field}><span>{help.optionalDescription}</span><textarea value={String(entry.description ?? "")} placeholder={help.descriptionPlaceholder} onChange={(event) => onChange({ ...entry, description: event.currentTarget.value })} rows={4}/></label>
-    <StoryReferenceChoices label={help.knowledge.replace("{name}", entry.name)} hint={help.knowledgeHint} empty={help.noKnowledge} values={known} options={story.world.filter(({ id }) => id !== entry.id)} onChange={(next) => onChange({ ...entry, knownEntryIds: next })}/>
+    <div className={flow.knowledgeBlock}><StoryReferenceChoices label={help.knowledge.replace("{name}", entry.name)} hint={help.knowledgeHint} empty={help.noKnowledge} values={known} options={knowledgeOptions} onChange={(next) => onChange({ ...entry, knownEntryIds: next })}/></div>
   </details>;
 }
 

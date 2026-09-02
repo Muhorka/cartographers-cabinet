@@ -33,4 +33,20 @@ describe("story route endpoint options", () => {
     expect(endpointOptionId(options, { placeId: "world", point: { x: 8, y: 8 } })).toBe("terrain:forest");
     expect(endpointOptionId(options, { placeId: "world", point: { x: 15, y: 10 } })).toBe("world");
   });
+
+  it("adds the shortest useful parent path only to repeated endpoint names", () => {
+    const project = fixture();
+    const place = (id: string, name: string, kind: "building" | "level" | "room", parentId: string) => ({ id, name, kind, parentId, transform: { x: 0, y: 0, rotation: 0 }, boundary: { kind: "rectangle" as const, x: 0, y: 0, width: 10, height: 10 }, tags: [], access: [], properties: {} });
+    project.places.push(
+      place("house", "House", "building", "world"),
+      place("ground", "Ground Floor", "level", "house"),
+      place("upper", "First Floor", "level", "house"),
+      place("ground-stairs", "Service Staircase", "room", "ground"),
+      place("upper-stairs", "Service Staircase", "room", "upper"),
+      place("library", "Library", "room", "ground"),
+    );
+    expect(storyRouteEndpointOptions(project).map(({ name }) => name)).toEqual([
+      "World", "Ground Floor", "First Floor", "Service Staircase — Ground Floor", "Service Staircase — First Floor", "Library",
+    ]);
+  });
 });
