@@ -7,6 +7,15 @@ function duplicateValues(values: readonly string[]) {
   return [...duplicates];
 }
 
+function duplicateIndices(values: readonly string[]) {
+  const firstIndex = new Map<string, number>();
+  return values.flatMap((value, index) => {
+    const first = firstIndex.get(value);
+    if (first === undefined) { firstIndex.set(value, index); return []; }
+    return [{ value, first, index }];
+  });
+}
+
 export function validateProjectRelations(project: EditorProject, context: z.RefinementCtx) {
   const placeIds = new Set(project.places.map(({ id }) => id));
   const placesById = new Map(project.places.map((candidate) => [candidate.id, candidate]));
@@ -33,6 +42,9 @@ export function validateProjectRelations(project: EditorProject, context: z.Refi
   for (const [index, document] of project.constructions.entries()) {
     const wallIds = new Set(document.walls.map(({ id }) => id));
     for (const id of duplicateValues(document.walls.map(({ id }) => id))) context.addIssue({ code: "custom", message: `Duplicate wall id: ${id}`, path: ["constructions", index, "walls"] });
+    for (const duplicate of duplicateIndices(document.rooms.map(({ id }) => id))) context.addIssue({ code: "custom", message: `Duplicate room id in construction ${document.id}: ${duplicate.value} (also at index ${duplicate.first}).`, path: ["constructions", index, "rooms", duplicate.index, "id"] });
+    for (const duplicate of duplicateIndices(document.openings.map(({ id }) => id))) context.addIssue({ code: "custom", message: `Duplicate opening id in construction ${document.id}: ${duplicate.value} (also at index ${duplicate.first}).`, path: ["constructions", index, "openings", duplicate.index, "id"] });
+    for (const duplicate of duplicateIndices(document.transitions.map(({ id }) => id))) context.addIssue({ code: "custom", message: `Duplicate transition id in construction ${document.id}: ${duplicate.value} (also at index ${duplicate.first}).`, path: ["constructions", index, "transitions", duplicate.index, "id"] });
     for (const openingValue of document.openings) if (!wallIds.has(openingValue.wallId)) context.addIssue({ code: "custom", message: `Opening references a missing wall: ${openingValue.wallId}`, path: ["constructions", index, "openings"] });
     for (const transitionValue of document.transitions) {
       const referenced = [...(transitionValue.sourceLevelId ? [transitionValue.sourceLevelId] : []), ...(transitionValue.targetLevelId ? [transitionValue.targetLevelId] : []), ...(transitionValue.connectedLevelIds ?? [])];

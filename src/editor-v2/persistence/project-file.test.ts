@@ -52,6 +52,37 @@ describe("editor v2 project files", () => {
     expect(() => parseProjectFile({ format: PROJECT_FILE_FORMAT, fileVersion: PROJECT_FILE_VERSION, exportedAt: project.updatedAt, project: cycle })).toThrow(/Hierarchy cycle/);
   });
 
+  it("rejects duplicate room ids within one construction", () => {
+    const broken = structuredClone(project);
+    const construction = broken.constructions[0]!;
+    const value = construction.rooms[0]!;
+    construction.rooms.push(structuredClone(value));
+    expect(() => parseProjectFile(envelope(broken))).toThrow(/Duplicate room id.*project-original:plan/);
+  });
+
+  it("rejects duplicate opening ids within one construction", () => {
+    const broken = structuredClone(project);
+    const construction = broken.constructions[0]!;
+    const value = { id: "opening-duplicate", kind: "door" as const, wallId: construction.walls[0]!.id, position: .5, width: 2 };
+    construction.openings.push(value, structuredClone(value));
+    expect(() => parseProjectFile(envelope(broken))).toThrow(/Duplicate opening id.*opening-duplicate/);
+  });
+
+  it("rejects duplicate transition ids within one construction", () => {
+    const broken = structuredClone(project);
+    const construction = broken.constructions[0]!;
+    const value = { id: "transition-duplicate", kind: "stairs" as const, footprint: { kind: "rectangle" as const, x: 0, y: 0, width: 2, height: 2 } };
+    construction.transitions.push(value, structuredClone(value));
+    expect(() => parseProjectFile(envelope(broken))).toThrow(/Duplicate transition id.*transition-duplicate/);
+  });
+
+  it("allows the same local construction ids in separate constructions", () => {
+    const broken = structuredClone(project);
+    const first = broken.constructions[0]!;
+    broken.constructions.push({ ...structuredClone(first), id: "second-plan" });
+    expect(() => parseProjectFile(envelope(broken))).not.toThrow();
+  });
+
   it.each([
     ["sourceLevelId", "room", project.places.find(({ kind }) => kind === "room")!.id],
     ["targetLevelId", "location", project.places.find(({ kind }) => kind === "location")!.id],
