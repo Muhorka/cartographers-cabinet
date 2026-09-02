@@ -3,7 +3,7 @@ import type { StoryData } from "./types";
 type StoryMembership = StoryData["memberships"][number];
 
 /** Factions and people groups are the only containers in the membership graph. */
-export function isPeopleGroup(story: StoryData, id: string) {
+function isPeopleGroup(story: StoryData, id: string) {
   const entry = story.world.find((candidate) => candidate.id === id);
   return entry?.kind === "faction" || entry?.kind === "access-group";
 }
