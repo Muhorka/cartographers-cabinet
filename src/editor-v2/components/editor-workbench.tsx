@@ -84,7 +84,7 @@ export function EditorWorkbench() {
   const workbenchTransaction = useEditorTransaction(session, () => refresh(), (failure) => setOperationError(failure === "transaction-failed" ? copy.editingStatus.blocked["transaction-failed"] : undefined));
   useEffect(() => { let cancelled = false;
     void loadInitialWorkbenchProject().then(({ locale, projects, recoveryRecords, loaded }) => {
-      if (!cancelled) { setLocale(locale); setProjects(projects); setRecoveryRecords(recoveryRecords); if (loaded) installLoadedProject(loaded); }
+      if (!cancelled) { setLocale(locale); document.documentElement.lang = locale; setProjects(projects); setRecoveryRecords(recoveryRecords); if (loaded) installLoadedProject(loaded); }
     }).catch((error: unknown) => { if (!cancelled) setBootError(error instanceof Error ? error.message : String(error)); });
     return () => { cancelled = true; };
   }, []);
