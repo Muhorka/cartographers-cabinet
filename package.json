@@ -55,5 +55,9 @@
       "src/**/*.{ts,tsx}"
     ]
   },
+  "engines": {
+    "node": ">=24.18.0 <25",
+    "pnpm": "11.7.0"
+  },
   "packageManager": "pnpm@11.7.0"
 }

@@ -24,6 +24,8 @@ tmp/
 *.tsbuildinfo
 .DS_Store
 Thumbs.db
+AGENTS.md
+CLAUDE.md
 
 # Exported user projects and generated media
 private-projects/

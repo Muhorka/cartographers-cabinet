@@ -6,6 +6,20 @@ A browser-based spatial worldbuilding workbench for people and WebMCP agents. Bu
 
 Open `/` for the current editor. `/editor-v2/` remains an equivalent direct route for compatibility. This is a work in progress, not a claim that every workflow is finished or independently verified.
 
+## Why WebMCP
+
+Worldbuilding maps are more than pictures: their hierarchy, geometry, doors, access rules, characters and story state all affect one another. A general-purpose agent looking only at pixels cannot reliably understand or edit that system. The Cabinet exposes the same structured model and guarded operations used by the human editor through WebMCP. A person can therefore sketch and review visually while an agent reads context, checks consistency, proposes a multi-step change and applies it as one undoable transaction.
+
+## Judge quickstart
+
+1. Open the [live application](https://cabinet.varera.studio/) in a compatible WebMCP browser and agent host. No account or API key is required.
+2. A fresh browser library opens **Residence of the Silver Lindens**, a synthetic estate with multiple levels, rooms, transitions, story entities, access rules and routes. The same fixture can be [downloaded directly](https://cabinet.varera.studio/examples/residence-of-the-silver-lindens.cartographer.json) and imported as a copy.
+3. Ask the agent to call `inspect_editor_context`, `inspect_open_map` and `check_project_consistency` before changing anything.
+4. Ask it to make one coherent spatial or story edit. Individual `prepare_*` tools return a preview token; `execute_editor_batch` can prepare or apply a group of supported edits atomically.
+5. Review the visible change notice and result on the map. Undo the complete agent edit in one step, or redo it.
+
+Human editing works without WebMCP. The agent steps require a host that exposes `document.modelContext`; the registration status in the page confirms browser registration, not that a particular host can call the tools.
+
 ## Run locally
 
 Use Node.js **24.18.0** and pnpm **11.7.0**, recorded in `.node-version` and `package.json`.
@@ -33,8 +47,6 @@ on first use. Cloudflare Pages does not run this command. Alternatively, with Py
 python -m http.server 3107 --bind 127.0.0.1 --directory out
 ```
 
-Human editing works without WebMCP. Agent tools additionally require a compatible browser and agent host that exposes `document.modelContext`. Seeing registration status does not prove that the host can call tools.
-
 The current editor registers its real tools through the browser API required by the challenge. The implementation builds a typed catalogue and calls the following API for every tool:
 
 ```ts
@@ -46,16 +58,7 @@ document.modelContext.registerTool({
 
 See `src/editor-v2/webmcp/register-editor-tools.ts` and the related tool modules for the complete schemas, executors and safety flow.
 
-For discoverability, the repository also preserves the illustrative snippet shown in the official challenge requirements. It documents the browser API shape; `search_products` is not a tool registered by this application:
-
-```ts
-document.modelContext.registerTool({
-  name: "search_products",
-  description: "Search the product catalog",
-  inputSchema: { /* ... */ },
-  execute: async (input) => { /* ... */ },
-});
-```
+The catalogue includes read-only inspection and consistency tools, guarded `prepare_*` commands for drawing and Story data, atomic batches, routes, checkpoints and project-library operations. The illustrative organizer snippet is kept separately in [the compliance notes](docs/hackathon-compliance.md); `search_products` is not a tool registered by this application.
 
 ## Data and privacy
 
@@ -71,6 +74,15 @@ All included fixtures are synthetic. Private projects, user exports, local recor
 - `docs/deployment.md`: Cloudflare Pages setup, domains and production acceptance checks.
 - `docs/hackathon-compliance.md`: required registration, evidence and release obligations.
 
+The application is a static Next.js export served by Cloudflare Pages. The React editor and WebMCP tools share one typed domain model and transaction layer; projects persist locally in IndexedDB and move between browsers through explicit JSON export/import. No backend receives project content.
+
+## Known limitations
+
+- Projects are local to one browser profile and origin; there is no account sync or collaborative server.
+- WebMCP use depends on compatible experimental browser and agent-host support.
+- A successful build verifies contracts and fixtures, but cannot certify every possible user-drawn geometry or external host integration.
+- The static deployment has no server-side API, authentication or cloud project storage.
+
 ## Licensing
 
-Original project code is released under the MIT License; see `LICENSE`. Dependencies and fonts retain their own licenses: see `THIRD_PARTY_NOTICES.md` and `public/fonts/gelasio/OFL.txt`.
+Original project code and visual assets are released under the MIT License; see `LICENSE` and `design-assets/README.md`. Dependencies and fonts retain their own licenses: see `THIRD_PARTY_NOTICES.md` and the license files beside each bundled font.
