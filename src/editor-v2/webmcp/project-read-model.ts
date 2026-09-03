@@ -2,7 +2,10 @@ import { constructionNetwork } from "../construction/construction-network";
 import { validateVerticalTransitions, wallFeatureIssues } from "../construction/wall-features";
 
 import type { EditorProject } from "../model/project-model";
+import { projectIntegrityIssues } from "../model/project-integrity";
 import { editorProjectSchema } from "../persistence/project-file";
+import { allStoryObjectRefs, canonicalProjectStoryRef } from "../story/project-adapter";
+import { storyRefKey } from "../story/types";
 import { constructionPlaceForView, elementContextDepth, surfaceContextDepth, visiblePlaceGroups } from "../components/map-sheet-geometry";
 import { availableWorkSubjects } from "../model/work-context";
 import { validContainingPlaces, validElementOwners } from "../model/hierarchy-operations";
@@ -16,6 +19,8 @@ export type ProjectObjectRecord = {
   kind: string;
   ownerId?: string;
   description?: string;
+  narrativeLabel?: string;
+  narrativeDescription?: string;
   tags: string[];
   layerId?: string;
   subjectId?: string;
@@ -27,6 +32,17 @@ function constructionOwner(project: EditorProject, constructionId: string) {
 }
 
 function projectObjectRecords(project: EditorProject): ProjectObjectRecord[] {
+  const storyRefs = allStoryObjectRefs(project);
+  const storyMetadata = new Map<string, { narrativeLabel?: string; narrativeDescription?: string }>();
+  for (const object of project.story.objects) {
+    const canonical = canonicalProjectStoryRef(project, object.ref, storyRefs);
+    storyMetadata.set(storyRefKey(canonical), object.metadata);
+  }
+  const withNarrative = (record: ProjectObjectRecord): ProjectObjectRecord => {
+    const canonical = canonicalProjectStoryRef(project, { kind: record.ref.type, id: record.ref.id, ...(record.ref.scopeId ? { scopeId: record.ref.scopeId } : {}) }, storyRefs);
+    const metadata = storyMetadata.get(storyRefKey(canonical));
+    return metadata ? { ...record, narrativeLabel: metadata.narrativeLabel, narrativeDescription: metadata.narrativeDescription } : record;
+  };
   const records: ProjectObjectRecord[] = project.places.filter(({ kind }) => kind !== "room").map((place) => ({
     ref: { type: "place", id: place.id }, name: place.name, kind: place.kind, ownerId: place.parentId,
     description: place.description, tags: place.tags, properties: place.properties,
@@ -54,7 +70,7 @@ function projectObjectRecords(project: EditorProject): ProjectObjectRecord[] {
     records.push(...construction.transitions.map((transition, index) => ({ ref: { type: "transition" as const, id: transition.id, scopeId }, name: `${transition.kind} ${index + 1}`, kind: transition.kind, ownerId: owner?.id, tags: [] })));
   }
   for (const place of project.places.filter(({ kind, id }) => kind === "room" && !representedRooms.has(id))) records.push({ ref: { type: "room", id: place.id, scopeId: place.parentId }, name: place.name, kind: "room", ownerId: place.parentId, description: place.description, tags: place.tags, properties: place.properties });
-  return records;
+  return records.map(withNarrative);
 }
 
 function normalized(value: unknown) {
@@ -66,7 +82,7 @@ export function searchProjectObjects(project: EditorProject, query: string, opti
   const names = new Map(project.places.map(({ id, name }) => [id, name]));
   return projectObjectRecords(project).filter((record) => {
     if (allowed && !allowed.has(record.ref.type)) return false;
-    const text = normalized([record.name, record.kind, record.description, record.layerId, record.subjectId, record.ownerId ? names.get(record.ownerId) : undefined, ...record.tags, JSON.stringify(record.properties ?? {})].filter(Boolean).join(" "));
+    const text = normalized([record.name, record.kind, record.description, record.narrativeLabel, record.narrativeDescription, record.layerId, record.subjectId, record.ownerId ? names.get(record.ownerId) : undefined, ...record.tags, JSON.stringify(record.properties ?? {})].filter(Boolean).join(" "));
     return words.every((word) => text.includes(word));
   }).slice(0, Math.min(100, Math.max(1, options.limit ?? 50)));
 }
@@ -144,10 +160,23 @@ export function inspectProjectObject(project: EditorProject, ref: { type?: Proje
 
 export function projectConsistencyReport(project: EditorProject) {
   const issues: Array<{ severity: "error" | "warning"; code: string; message: string; refs: string[] }> = [];
-  const parsed = editorProjectSchema.safeParse(project);
-  if (!parsed.success) for (const issue of parsed.error.issues) issues.push({ severity: "error", code: "schema", message: issue.message, refs: [issue.path.join(".")] });
-  const placeKinds = new Map(project.places.map(({ id, kind }) => [id, kind]));
   const knownMessages = new Set(issues.map(({ message }) => message));
+  try {
+    for (const issue of projectIntegrityIssues(project, { includeStoryReferences: true })) if (!knownMessages.has(issue.message)) {
+      knownMessages.add(issue.message);
+      issues.push({ severity: issue.severity ?? "error", code: issue.severity === "warning" ? "story-reference" : "project-integrity", message: issue.message, refs: issue.path.map(String) });
+    }
+  } catch {
+    // The schema pass below remains the source of field-shape diagnostics for
+    // partially malformed input; this cross-record pass handles typed editor
+    // projects only.
+  }
+  const parsed = editorProjectSchema.safeParse(project);
+  if (!parsed.success) for (const issue of parsed.error.issues) if (!knownMessages.has(issue.message)) {
+    knownMessages.add(issue.message);
+    issues.push({ severity: "error", code: "schema", message: issue.message, refs: [issue.path.join(".")] });
+  }
+  const placeKinds = new Map(project.places.map(({ id, kind }) => [id, kind]));
   for (const construction of project.constructions) {
     try {
       const network = constructionNetwork(construction.walls, construction.enclosure); const faceIds = new Set(network.faces.map(({ id }) => id));

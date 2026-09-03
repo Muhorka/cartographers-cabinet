@@ -12,6 +12,7 @@ import { matrixAttribute } from "./map-sheet-geometry";
 import { stairGlyphPrimitives } from "../geometry/stair-glyph";
 import type { StoryObjectRef } from "../story/types";
 import { selectionKey } from "../drawing/selection-reference";
+import { svgId } from "../geometry/svg-id";
 
 type FeatureSelection = { kind: "opening" | "transition"; id: string; scopeId: string };
 type FeatureCopy = {
@@ -54,7 +55,7 @@ export function MapSheetFeatures({ document, prefix, selectedIds, copy, storyLab
     })}
     {transitionEntries.map(({ transition, scopeId, index, transform }) => {
       if (transition.visible === false) return null;
-      const patternId = `${prefix}-${safeId(scopeId)}-${transition.kind}-${safeId(transition.id)}`; const clipId = `${patternId}-clip`; const fallback = copy.transitionLabel?.(transition.id, transition.kind, index + 1) ?? transition.id; const label = storyLabel?.({ kind: "transition", id: transition.id, scopeId }, fallback) ?? fallback; const inScope = !selectableTransitionIds || selectableTransitionIds.has(transition.id); const selectable = selectionEnabled && inScope && !transform && (selectionOnly || !transition.locked); const selected = selectedIds.has(selectionKey({ kind: "transition", id: transition.id, scopeId })); const bounds = regionBounds(transition.footprint);
+      const patternId = `${svgId(prefix)}-${svgId(scopeId)}-${transition.kind}-${svgId(transition.id)}`; const clipId = `${patternId}-clip`; const fallback = copy.transitionLabel?.(transition.id, transition.kind, index + 1) ?? transition.id; const label = storyLabel?.({ kind: "transition", id: transition.id, scopeId }, fallback) ?? fallback; const inScope = !selectableTransitionIds || selectableTransitionIds.has(transition.id); const selectable = selectionEnabled && inScope && !transform && (selectionOnly || !transition.locked); const selected = selectedIds.has(selectionKey({ kind: "transition", id: transition.id, scopeId })); const bounds = regionBounds(transition.footprint);
       const transforms = [transform && matrixAttribute(transform), moveDelta && movingIds.has(transition.id) ? `translate(${moveDelta.x} ${moveDelta.y})` : undefined].filter(Boolean).join(" ") || undefined;
       return <g key={JSON.stringify([scopeId, transition.id, transform ? "context" : "local"])} transform={transforms} className={`${styles.transition}${selected ? ` ${styles.selected}` : ""}${selectable ? "" : ` ${styles.context}`}`} data-selectable={selectable ? "true" : undefined} data-selection-layer={selectable ? "construction" : undefined} data-selection-kind={selectable ? "transition" : undefined} data-selection-id={selectable ? transition.id : undefined} data-selection-scope={selectable ? scopeId : undefined} data-feature-id={transition.id} role={selectable ? "button" : undefined} tabIndex={selectable ? 0 : undefined} aria-label={selectable ? label : undefined} onClick={selectable ? (event) => { event.stopPropagation(); select(onSelect, { kind: "transition", id: transition.id, scopeId }, event.ctrlKey || event.metaKey || event.shiftKey); } : undefined} onKeyDown={selectable ? (event) => activate(event, () => onSelect?.({ kind: "transition", id: transition.id, scopeId })) : undefined}>
         <defs><pattern id={patternId} width="6" height="6" patternUnits="userSpaceOnUse"><path className={styles.tread} d="M0 0 6 6M6 0 0 6"/></pattern><clipPath id={clipId}><path d={regionPath(transition.footprint)}/></clipPath></defs>
@@ -78,7 +79,6 @@ function activate(event: KeyboardEvent<SVGGElement>, action: () => void) {
   event.preventDefault(); event.stopPropagation(); action();
 }
 
-function safeId(id: string) { return id.replaceAll(/[^a-zA-Z0-9_-]/g, "-"); }
 function select(callback: ((selection: FeatureSelection, additive?: boolean) => void) | undefined, selection: FeatureSelection, additive: boolean) { if (additive) callback?.(selection, true); else callback?.(selection); }
 
 function StairDiagram({ style, bounds }: { style: NonNullable<VerticalTransition["style"]>; bounds: ReturnType<typeof regionBounds> }) {

@@ -62,20 +62,29 @@ export function prepareProjectTransaction(
     next = routed;
     if (next.id !== before.id) throw new Error("Project identity cannot change inside a transaction.");
     if (before.places.length > 0 && next.places.length === 0) throw new Error("A project must keep at least one map.");
-    if (transaction.isolation !== "structural" && next.places.length > 0) {
-      // External and compatibility transactions cross the complete file
-      // schema. Publish the original value after validation so Zod's parsed
-      // clone does not discard structural sharing.
-      const validation = editorProjectSchema.safeParse(next);
+    if (next === before) return { status: "no-change", transactionId: transaction.id, before };
+    if (next.schemaVersion !== 9 || !Array.isArray(next.surfaces) || !next.measureSettings || !next.story) {
+      throw new Error("A transaction must return a complete canonical project.");
+    }
+    // Keep the established cross-record error contract (for example,
+    // "Missing parent place") before reporting parser paths below.
+    assertProjectIntegrity(next);
+    if (next.places.length > 0) {
+      // Every transaction crosses the complete file schema before it can be
+      // published. The input side validates the same raw document shape but
+      // skips the import-only normalization transform (structural transactions
+      // are already canonical), so this does not clone the whole project.
+      const validation = editorProjectSchema.in.safeParse(next);
       if (!validation.success) {
         const issue = validation.error.issues[0];
         const path = issue?.path.length ? issue.path.join(".") : "project";
         throw new Error(`Invalid project at ${path}: ${issue?.message ?? "schema validation failed"}`);
       }
     }
-    assertProjectIntegrity(next);
-    if (projectRevision(next) === projectRevision(before)) return { status: "no-change", transactionId: transaction.id, before };
-    return { status: "ready", transactionId: transaction.id, before, project: immutableSnapshot(next, before) };
+    if (transaction.isolation !== "structural" && projectRevision(next) === projectRevision(before)) return { status: "no-change", transactionId: transaction.id, before };
+    const project = immutableSnapshot(next, before);
+    if (project === before) return { status: "no-change", transactionId: transaction.id, before };
+    return { status: "ready", transactionId: transaction.id, before, project };
   } catch (error) {
     return {
       status: "blocked",

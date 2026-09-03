@@ -46,4 +46,20 @@ describe("map feature editing handles", () => {
     expect(html).toContain('clip-path="url(#test-upper-plan-stairs-stairs-clip)"');
     expect([...html.matchAll(/<clipPath id="([^"]+)"/g)].map((match) => match[1])).toHaveLength(2);
   });
+
+  it("keeps SVG definitions distinct when authored ids sanitise to the same value", () => {
+    const first = { ...document.transitions[0]!, id: "a:b" };
+    const second = { ...document.transitions[0]!, id: "a?b", footprint: { kind: "rectangle" as const, x: 7, y: 2, width: 4, height: 3 } };
+    const html = renderToStaticMarkup(<svg><MapSheetFeatures
+      document={{ ...document, transitions: [first, second] }}
+      prefix="test"
+      selectedIds={new Set()}
+      copy={{}}
+      viewportZoom={2}
+    /></svg>);
+    const definitionIds = [...html.matchAll(/<(?:pattern|clipPath) id="([^"]+)"/g)].map((match) => match[1]!);
+
+    expect(definitionIds).toHaveLength(4);
+    expect(new Set(definitionIds).size).toBe(definitionIds.length);
+  });
 });

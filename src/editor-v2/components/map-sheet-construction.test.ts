@@ -6,6 +6,7 @@ import { buildWallNetwork } from "../geometry/wall-network-kernel";
 import { workbenchCopy } from "../i18n/workbench-copy";
 import { createStarterProject } from "../model/starter-project";
 import { MapSheetConstruction } from "./map-sheet-construction";
+import { svgId } from "../geometry/svg-id";
 
 const copy = { ariaLabel: "Map", empty: "Empty", compass: "Compass", zoomIn: "Zoom in", zoomOut: "Zoom out", resetView: "Reset", back: "Back" };
 
@@ -43,7 +44,7 @@ describe("room labels", () => {
     const transition = { id: "stairs-test", kind: "stairs" as const, footprint: { kind: "rectangle" as const, x: 1, y: 1, width: 5, height: 4 }, style: "u" as const, direction: 90, sourceLevelId: level.id, connectedLevelIds: [level.id] };
     const markup = renderToStaticMarkup(createElement(MapSheetConstruction, { project, document: { ...document, transitions: [transition] }, network, owner: level, prefix: "test", copy: { ...copy, transitionLabel: (_id: string, kind?: "stairs" | "elevator") => kind === "elevator" ? "Lift" : "Stairs" }, selectedIds: new Set<string>(), viewportZoom: 8, roomView: false, roomScope: {}, activeGesture: false, selectionEditing: true, selectionLayerId: "construction", movingIds: new Set<string>() }));
     expect(markup).toContain('data-selection-layer="construction"');
-    expect(markup).toContain(`test-${document.id.replaceAll(/[^a-zA-Z0-9_-]/g, "-")}-stairs-stairs-test`);
+    expect(markup).toContain(`test-${svgId(document.id)}-stairs-${svgId(transition.id)}`);
     expect(markup.match(/class="[^"]*_tread_/g)?.length).toBeGreaterThan(10);
     expect(markup).toMatch(/class="[^"]*_flightEdge_/);
   });

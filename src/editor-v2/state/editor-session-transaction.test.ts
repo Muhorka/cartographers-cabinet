@@ -52,6 +52,61 @@ describe("editor session transaction failures", () => {
     expect(session.getHistoryState()).toEqual({ canUndo: false, canRedo: false });
   });
 
+  it("rejects malformed structural output at the same schema boundary", () => {
+    const project = createPlace(emptyProject("project", "Project"), { id: "world", name: "World", kind: "world" });
+    const session = new EditorSession(project);
+    const before = session.getViewState().project;
+    const result = session.executeTransaction({
+      id: "invalid-structural-measure-settings",
+      isolation: "structural",
+      apply: (current) => ({ ...current, measureSettings: { ...current.measureSettings, gridSpacingMeters: -1 } }),
+    });
+    expect(result).toMatchObject({ code: "transaction-failed", changed: false, reason: expect.stringContaining("measureSettings.gridSpacingMeters") });
+    expect(session.getViewState().project).toBe(before);
+    expect(session.getHistoryState()).toEqual({ canUndo: false, canRedo: false });
+  });
+
+  it("rejects a structural result that drops a canonical project branch", () => {
+    const project = createPlace(emptyProject("project", "Project"), { id: "world", name: "World", kind: "world" });
+    const session = new EditorSession(project);
+    const before = session.getViewState().project;
+    const result = session.executeTransaction({
+      id: "missing-story",
+      isolation: "structural",
+      apply: (current) => {
+        const malformed = { ...current } as Partial<typeof current>;
+        delete malformed.story;
+        return malformed as typeof current;
+      },
+    });
+    expect(result).toMatchObject({ code: "transaction-failed", changed: false, reason: "A transaction must return a complete canonical project." });
+    expect(session.getViewState().project).toBe(before);
+    expect(session.getHistoryState()).toEqual({ canUndo: false, canRedo: false });
+  });
+
+  it("treats an unchanged structural draft as a no-op", () => {
+    const project = createPlace(emptyProject("project", "Project"), { id: "world", name: "World", kind: "world" });
+    const session = new EditorSession(project);
+    const before = session.getViewState().project;
+    expect(session.executeTransaction({ id: "structural-no-op", isolation: "structural", apply: (draft) => draft })).toEqual({ code: "no-change", changed: false });
+    expect(session.getViewState().project).toBe(before);
+    expect(session.getHistoryState()).toEqual({ canUndo: false, canRedo: false });
+  });
+
+  it("does not publish an equal structural clone", () => {
+    const project = createPlace(emptyProject("project", "Project"), { id: "world", name: "World", kind: "world" });
+    const session = new EditorSession(project);
+    const before = session.getViewState().project;
+    const result = session.executeTransaction({
+      id: "structural-equal-clone",
+      isolation: "structural",
+      apply: (draft) => ({ ...draft, measureSettings: { ...draft.measureSettings } }),
+    });
+    expect(result).toEqual({ code: "no-change", changed: false });
+    expect(session.getViewState().project).toBe(before);
+    expect(session.getHistoryState()).toEqual({ canUndo: false, canRedo: false });
+  });
+
   it("prepares the canonical snapshot without publishing it and commits that exact snapshot once", () => {
     const session = new EditorSession(emptyProject("project", "Before"));
     const before = session.getViewState().project;

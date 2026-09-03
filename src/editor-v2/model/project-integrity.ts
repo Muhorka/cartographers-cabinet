@@ -1,10 +1,17 @@
 import type { EditorProject } from "./project-model";
 import { isRibbonSubject } from "../geometry/ribbon-geometry";
 import { validateVerticalTransitions } from "../construction/wall-features";
+import { projectStoryIntegrityIssues } from "../story/project-story-integrity";
 
 export type ProjectIntegrityIssue = {
   message: string;
   path: (string | number)[];
+  severity?: "error" | "warning";
+};
+
+export type ProjectIntegrityOptions = {
+  /** Story links may intentionally outlive deleted editor objects in history. */
+  includeStoryReferences?: boolean;
 };
 
 function duplicateValues(values: readonly string[]) {
@@ -27,16 +34,15 @@ function duplicateIndices(values: readonly string[]) {
 }
 
 /** Checks cross-record invariants without cloning or reparsing the project. */
-export function projectIntegrityIssues(project: EditorProject): ProjectIntegrityIssue[] {
+export function projectIntegrityIssues(project: EditorProject, options: ProjectIntegrityOptions = {}): ProjectIntegrityIssue[] {
   const issues: ProjectIntegrityIssue[] = [];
-  const add = (message: string, path: (string | number)[]) => issues.push({ message, path });
+  const add = (message: string, path: (string | number)[], severity: ProjectIntegrityIssue["severity"] = "error") => issues.push({ message, path, ...(severity === "error" ? {} : { severity }) });
   const placeIds = new Set(project.places.map(({ id }) => id));
   const placesById = new Map(project.places.map((candidate) => [candidate.id, candidate]));
   const placeIndexById = new Map(project.places.map((candidate, index) => [candidate.id, index]));
   const constructionIds = new Set(project.constructions.map(({ id }) => id));
   const levelIds = new Set(project.places.filter(({ kind }) => kind === "level").map(({ id }) => id));
   const placeKinds = new Map(project.places.map(({ id, kind }) => [id, kind]));
-
   for (const id of duplicateValues(project.places.map(({ id }) => id))) add(`Duplicate place id: ${id}`, ["places"]);
   for (const id of duplicateValues(project.elements.map(({ id }) => id))) add(`Duplicate element id: ${id}`, ["elements"]);
   for (const id of duplicateValues(project.surfaces.map(({ id }) => id))) add(`Duplicate construction surface id: ${id}`, ["surfaces"]);
@@ -118,6 +124,8 @@ export function projectIntegrityIssues(project: EditorProject): ProjectIntegrity
       add(issue.message, ["constructions", index, "transitions", ...(transitionPath === undefined ? [] : [transitionPath])]);
     }
   });
+
+  if (options.includeStoryReferences) issues.push(...projectStoryIntegrityIssues(project));
 
   return issues;
 }

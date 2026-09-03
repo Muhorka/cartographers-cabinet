@@ -3,12 +3,7 @@ import { createStarterProject } from "../model/starter-project";
 import { emptyProject, type DrawingElement } from "../model/project-model";
 import { createPlace } from "../model/hierarchy-operations";
 import { projectThumbnailSvg, renderProjectViewSvg } from "./project-renderer";
-import { stableHash } from "../geometry/geometry-normalization";
-
-const svgId = (value: string) => {
-  const sanitized = value.replaceAll(/[^a-zA-Z0-9_-]/g, "-");
-  return value.length <= 80 && sanitized === value ? value : `${sanitized.slice(0, 64) || "id"}-${stableHash(value)}`;
-};
+import { svgId } from "../geometry/svg-id";
 
 describe("editor v2 export renderer", () => {
   it("keeps the exported narrow region clip outside rotated lettering", () => {

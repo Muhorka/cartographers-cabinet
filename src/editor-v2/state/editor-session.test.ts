@@ -65,6 +65,7 @@ describe("editor v2 session", () => {
     const session = new EditorSession(project, { initialPlaceId: "stale-room" });
 
     expect(session.getState().activePlaceId).toBe("level");
+    expect(session.getState().project.places.some(({ id }) => id === session.getState().activePlaceId)).toBe(true);
     expect(session.getState().project.places.map(({ id }) => id)).toEqual(["level"]);
   });
 

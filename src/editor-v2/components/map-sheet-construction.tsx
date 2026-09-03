@@ -14,6 +14,7 @@ import styles from "./map-sheet.module.css";
 import type { LabelLayoutPlan } from "../geometry/label-collision";
 import { createProjectStoryLabelResolver } from "../story/object-display-name";
 import { selectionKey } from "../drawing/selection-reference";
+import { svgId } from "../geometry/svg-id";
 
 type RoomScope = { wallIds?: ReadonlySet<string>; transitionIds?: ReadonlySet<string> };
 
@@ -51,7 +52,7 @@ export function MapSheetConstruction({ project, document, network, owner, prefix
     {!roomView && network.faces.map((face) => {
       const room = document.rooms.find(({ faceId }) => faceId === face.id); if (!room) return null;
       const roomPlace = project.places.find(({ id }) => id === room.id); if (room.visible === false || roomPlace?.visible === false) return null; const appearance = roomPlace?.appearance ?? owner?.appearance;
-      const clipId = `${prefix}-room-${safeId(room.id)}`; const canOpen = project.places.some(({ id }) => id === room.id);
+      const clipId = `${svgId(prefix)}-room-${svgId(room.id)}`; const canOpen = project.places.some(({ id }) => id === room.id);
       const selectable = !activeGesture && (selectionOnly || selectionEditing) && (selectionOnly || room.locked !== true && roomPlace?.locked !== true); const editable = selectionEditing && !activeGesture && room.locked !== true && roomPlace?.locked !== true; const interactive = !activeGesture && (!selectionEditing || editable || selectionOnly); const displayName = mapLabelWithArea(room.name, mapRoomArea(face), project.measureSettings.units, project.measureSettings.showRoomAreas); const label = (labelPlan?.get(`room:${owner?.id ?? ""}:${room.id}`) as ReturnType<typeof roomLabelLayout> | undefined) ?? roomLabelLayout(displayName, face, viewportZoom);
       const canNavigate = canOpen && !selectionEditing;
       const roomSelected = selectedIds.has(selectionKey({ kind: "room", id: room.id, scopeId: document.id }));
@@ -76,5 +77,4 @@ export function MapSheetConstruction({ project, document, network, owner, prefix
 }
 
 function activateByKeyboard(event: KeyboardEvent<SVGGElement | SVGLineElement>, action?: () => void) { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); action?.(); } }
-function safeId(id: string) { return id.replaceAll(/[^a-zA-Z0-9_-]/g, "-"); }
 function additiveSelection(event: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) { return event.ctrlKey || event.metaKey || event.shiftKey; }

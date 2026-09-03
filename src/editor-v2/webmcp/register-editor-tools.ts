@@ -1,5 +1,5 @@
 import type { EditorProject } from "../model/project-model";
-import { recordWebMcpCall, reportWebMcpDiagnostics } from "./diagnostics";
+import { isSuccessfulWebMcpResult, recordWebMcpCall, reportWebMcpDiagnostics } from "./diagnostics";
 import { constructionSnapshot, currentMapSnapshot, drawingCatalogSnapshot, hierarchySnapshot, inspectProjectObject, projectConsistencyReport, projectOverview, searchProjectObjects, validContainerSnapshot, type ProjectObjectType } from "./project-read-model";
 import type { EditorAgentBridge } from "./register-agent-tools";
 import { createEditorCommandTools } from "./create-editor-command-tools";
@@ -69,7 +69,7 @@ export async function registerEditorV2Tools(bridge: EditorToolBridge) {
       };
     }),
   ];
-  const registrations = await Promise.allSettled(tools.map((tool) => document.modelContext!.registerTool({ ...tool, execute: async (input) => { const result = await tool.execute(input); recordWebMcpCall(tool.name); return result; } }, { signal: controller.signal })));
+  const registrations = await Promise.allSettled(tools.map((tool) => document.modelContext!.registerTool({ ...tool, execute: async (input) => { const result = await tool.execute(input); if (isSuccessfulWebMcpResult(result)) recordWebMcpCall(tool.name); return result; } }, { signal: controller.signal })));
   const registered = registrations.filter(({ status }) => status === "fulfilled").length;
   const errors = registrations.flatMap((result, index) => result.status === "rejected" ? [`${tools[index].name}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`] : []);
   reportWebMcpDiagnostics({ state: errors.length ? "error" : "ready", registered: errors.length ? 0 : registered, total: tools.length, errors });

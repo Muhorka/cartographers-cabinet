@@ -55,7 +55,6 @@ export class EditorSession {
   private viewState?: { source: EditorSessionState; value: EditorSessionState };
 
   constructor(project: EditorProject, options: EditorSessionOptions = {}) {
-    if (options.initialPlaceId && !activePlace(project, options.initialPlaceId)) throw new Error("initial-place-not-found");
     this.createId = options.createId ?? (() => crypto.randomUUID());
     this.createRoomName = options.createRoomName ?? ((index) => `room-${index}`);
     this.historyLimit = Number.isFinite(options.historyLimit) ? Math.max(0, Math.floor(options.historyLimit!)) : 100;
