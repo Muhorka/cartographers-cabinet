@@ -7,9 +7,9 @@ import { MapGesturePreview } from "./map-gesture-preview";
 
 const copy = { ariaLabel: "Map", empty: "Empty", compass: "Rotate", zoomIn: "+", zoomOut: "-", resetView: "Reset", back: "Back" };
 const viewport = { center: { x: 0, y: 0 }, zoom: 1, rotation: 0 };
-function pointer(type: string, x: number, y: number) {
+function pointer(type: string, x: number, y: number, buttons = type === "pointerup" || type === "pointercancel" ? 0 : 1) {
   const event = new Event(type, { bubbles: true });
-  Object.defineProperties(event, { pointerId: { value: 1 }, pointerType: { value: "mouse" }, button: { value: 0 }, clientX: { value: x }, clientY: { value: y } }); return event;
+  Object.defineProperties(event, { pointerId: { value: 1 }, pointerType: { value: "mouse" }, button: { value: 0 }, buttons: { value: buttons }, clientX: { value: x }, clientY: { value: y } }); return event;
 }
 function mount(props: Partial<Parameters<typeof MapSheet>[0]> = {}) {
   const container = document.createElement("div"); document.body.appendChild(container); const root = createRoot(container);

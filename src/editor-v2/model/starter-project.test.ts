@@ -18,8 +18,8 @@ describe("starter project", () => {
     expect(project.places[0].name).toBe("My plan");
   });
 
-  it("opens a new world as an unbounded clean sheet", () => {
-    const project = createProjectAtScale("blank-world", "Blank world", "en", "world");
+  it.each(["world", "location"] as const)("opens a new %s as an unbounded clean sheet", (scale) => {
+    const project = createProjectAtScale(`blank-${scale}`, `Blank ${scale}`, "en", scale);
     expect(project.places[0].boundary).toBeUndefined();
     expect(project.elements).toEqual([]);
   });

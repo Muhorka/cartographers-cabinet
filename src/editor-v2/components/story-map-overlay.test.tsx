@@ -26,6 +26,7 @@ it("canonicalizes legacy room references identically for saved and temporary con
 
 it("interleaves matching colors without hiding geometry or growing a selection halo", () => {
   const project = createProjectAtScale("overlay", "Synthetic place", "en", "location");
+  project.places[0].boundary = { kind: "rectangle", x: -30, y: -20, width: 60, height: 40 };
   project.story.lenses = [red, blue]; const before = structuredClone(project);
   const html = renderToStaticMarkup(<svg><StoryMapOverlay project={project} activePlaceId={project.places[0].id} zoom={10} context={{}} lensView={{ activeLensIds: ["red", "blue"] }}/></svg>);
   const host = document.createElement("div"); host.innerHTML = html;
@@ -40,6 +41,7 @@ it("interleaves matching colors without hiding geometry or growing a selection h
 
 it("renders an unsaved preview using the same evaluator for places, terrain and platforms", () => {
   const project = createProjectAtScale("preview", "Synthetic place", "en", "location");
+  project.places[0].boundary = { kind: "rectangle", x: -30, y: -20, width: 60, height: 40 };
   const place = project.places[0]; const shape = { kind: "rectangle" as const, x: 1, y: 1, width: 4, height: 3 };
   project.elements.push({ id: "forest", belongsToId: place.id, name: "Forest", layerId: "terrain", subjectId: "terrain.forest", geometry: { kind: "region", shape }, visible: true, locked: false, tags: [], access: [], properties: {} });
   project.surfaces.push({ id: "platform", belongsToId: place.id, name: "Stage", kind: "stage", shape, attachment: "free", elevation: 0, visible: true, locked: false, tags: [], access: [], properties: {} });

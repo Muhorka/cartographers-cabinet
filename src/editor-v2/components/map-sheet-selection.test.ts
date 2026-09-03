@@ -26,6 +26,14 @@ describe("editor v2 Story map selection", () => {
     act(() => root.unmount()); container.remove();
   });
 
+  it("renders a separate room highlight that remains visible over zone and lens ink", () => {
+    const source = project();
+    const html = document.createElement("div"); document.body.appendChild(html); const root = createRoot(html);
+    act(() => root.render(createElement(MapSheet, { project: source, activePlaceId: "floor", viewport: { center: { x: 0, y: 0 }, zoom: 1, rotation: 0 }, copy, selectedIds: [selectionKey({ kind: "room", id: "room", scopeId: "plan" })], selectionOnly: true, storyOverlay: createElement("g", { "data-story-overlay": "true" }) })));
+    expect(html.querySelector('[data-selection-highlight="room"]')).not.toBeNull();
+    act(() => root.unmount()); html.remove();
+  });
+
   it("keeps a Ctrl building hit ahead of the unlayered active sheet in Story", () => {
     const source = project();
     source.places.push({ id: "building", parentId: "world", name: "House", kind: "building", transform: { x: 0, y: 0, rotation: 0 }, boundary: { kind: "rectangle", x: 10, y: 10, width: 20, height: 15 }, tags: [], access: [], properties: {} });

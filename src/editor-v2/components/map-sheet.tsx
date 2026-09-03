@@ -16,15 +16,16 @@ import { captureMapPoint, capturePointPointer } from "./map-point-picker";
 import { fallbackMeasurementCopy, ViewMeasureControls } from "./view-measure-controls";
 import { MapSheetScene } from "./map-sheet-scene";
 import { conservativeQuantizedLabelLayoutZoom } from "../geometry/label-layout-zoom";
+import { useMapSelectionDrag } from "./use-map-selection-drag";
 export type { MapSelection, MapSheetCopy } from "./map-sheet-types";
 const emptySelectedIds: string[] = []; const emptyDraftStrokes: KernelPoint[][] = [];
 export function MapSheet({ pointPicker, storyOverlay, rotationControl, project, activePlaceId, viewport, copy, selectedIds = emptySelectedIds, draftStrokes = emptyDraftStrokes, gestureDraft, sheetSize = { width: 1000, height: 700 }, interaction, selectionEditing = false, selectionOnly = false, outlineEditing = false, selectionMode = "direct", selectionLayerId, sketchVisible = true, sketchOpacity = .75, eraserSize = 10, gapClosingEnabled = false, gapClosingTolerance = 14, tracingProject, tracingOpacity = .4, onSelect, onSelectMany, onOpenPlace, onClearSelection, onDeleteSelected, onCancelDrawing, onViewportChange, onGesture, onGestureDraftChange, onMeasureSettingsChange, onNoteTextChange, onMoveSelection, onMoveWallEndpoint, onResizeOpening, onResizeTransition, onResizeElement, onResizeSurface, onResizePlace, onMoveElementVertex, onMoveSurfaceVertex, onMovePlaceVertex, nodeInsertion }: MapSheetProps) {
   const prefix = useId().replaceAll(":", ""); const canvasRef = useRef<SVGSVGElement>(null); const drag = useRef<{ point: { x: number; y: number }; pointerId: number } | undefined>(undefined);
   const insertion = useMapNodeInsertion(nodeInsertion, viewport, sheetSize);
-  const moving = useRef<{ selection: MapSelection; start: KernelPoint; pointerId: number } | undefined>(undefined); const movingEndpoint = useRef<{ selection: MapSelection; endpoint: "start" | "end"; pointerId: number } | undefined>(undefined); const resizingOpening = useRef<{ selection: MapSelection; pointerId: number } | undefined>(undefined);
+  const selectionDrag = useMapSelectionDrag(); const movingEndpoint = useRef<{ selection: MapSelection; endpoint: "start" | "end"; pointerId: number } | undefined>(undefined); const resizingOpening = useRef<{ selection: MapSelection; pointerId: number } | undefined>(undefined);
   const rotating = useRef<{ pointerId: number } | undefined>(undefined); const resizing = useRef<{ kind: "element" | "surface" | "place" | "transition"; id: string; scopeId?: string; corner: ResizeCorner; pointerId: number } | undefined>(undefined); const movingVertex = useRef<{ kind: "element" | "surface" | "place"; id: string; polygonIndex: number; vertexIndex: number; pointerId: number } | undefined>(undefined);
   const suppressSelectionClick = useRef(false); const marquee = useRef<MarqueeDraft | undefined>(undefined); const [marqueePreview, setMarqueePreview] = useState<MarqueeDraft>();
-  const [movePreview, setMovePreview] = useState<{ selection: MapSelection; delta: KernelPoint }>(); const [openingWidthPreview, setOpeningWidthPreview] = useState<{ id: string; width: number }>(); const [resizeProjectPreview, setResizeProjectPreview] = useState<typeof project>(); const [renderedGestureDraft, setRenderedGestureDraft] = useState<MapGestureDraft | undefined>(gestureDraft);
+  const movePreview = selectionDrag.preview; const [openingWidthPreview, setOpeningWidthPreview] = useState<{ id: string; width: number }>(); const [resizeProjectPreview, setResizeProjectPreview] = useState<typeof project>(); const [renderedGestureDraft, setRenderedGestureDraft] = useState<MapGestureDraft | undefined>(gestureDraft);
   const visibleGestureDraft = onGestureDraftChange ? gestureDraft : renderedGestureDraft;
   const gestureDraftRef = useRef<MapGestureDraft | undefined>(visibleGestureDraft); const activeGesture = gestureInstrument(interaction);
   const sourceSelection = selectionEditing || selectionOnly;
@@ -56,7 +57,7 @@ export function MapSheet({ pointPicker, storyOverlay, rotationControl, project, 
     canvas.addEventListener("wheel", onWheel, { passive: false });
     return () => canvas.removeEventListener("wheel", onWheel);
   }, [sheetSize.height, sheetSize.width, stableOnViewportChange, viewportNavigationEnabled]);
-  const touchNavigation = useTouchViewport({ viewport, sheetSize, onChange: onViewportChange, onGestureStart: () => { drag.current = undefined; moving.current = undefined; setMovePreview(undefined); movingEndpoint.current = undefined; resizingOpening.current = undefined; setOpeningWidthPreview(undefined); resizing.current = undefined; setResizeProjectPreview(undefined); movingVertex.current = undefined; rotating.current = undefined; marquee.current = undefined; setMarqueePreview(undefined); showGesture(); } });
+  const touchNavigation = useTouchViewport({ viewport, sheetSize, onChange: onViewportChange, onGestureStart: () => { drag.current = undefined; selectionDrag.reset(); movingEndpoint.current = undefined; resizingOpening.current = undefined; setOpeningWidthPreview(undefined); resizing.current = undefined; setResizeProjectPreview(undefined); movingVertex.current = undefined; rotating.current = undefined; marquee.current = undefined; setMarqueePreview(undefined); showGesture(); } });
   function mapPoint(event: { clientX: number; clientY: number; currentTarget: SVGSVGElement }) { const point = clientPointToMap({ x: event.clientX, y: event.clientY }, event.currentTarget.getBoundingClientRect(), sheetSize, viewport); const spacing = project.measureSettings.gridSpacingMeters; return activeGesture !== "erase" && project.measureSettings.snapToGrid && spacing > 0 ? { x: Math.round(point.x / spacing) * spacing, y: Math.round(point.y / spacing) * spacing } : point; }
   function rawMapPoint(event: { clientX: number; clientY: number; currentTarget: SVGSVGElement }) { return clientPointToMap({ x: event.clientX, y: event.clientY }, event.currentTarget.getBoundingClientRect(), sheetSize, viewport); }
   function openingWidthAt(openingId: string, point: KernelPoint) { const opening = activeConstruction?.openings.find(({ id }) => id === openingId); const wall = activeConstruction?.walls.find(({ id }) => id === opening?.wallId); if (!opening || !wall) return; const dx = wall.end.x - wall.start.x; const dy = wall.end.y - wall.start.y; const length = Math.hypot(dx, dy); const center = { x: wall.start.x + dx * opening.position, y: wall.start.y + dy * opening.position }; return Math.max(.2, 2 * (length ? Math.abs((point.x - center.x) * dx / length + (point.y - center.y) * dy / length) : opening.width / 2)); }
@@ -73,6 +74,7 @@ export function MapSheet({ pointPicker, storyOverlay, rotationControl, project, 
   }
   function beginPan(event: PointerEvent<SVGSVGElement>) {
     if (touchNavigation.begin(event)) return;
+    if (event.button !== 0) return;
     const openingHandle = (event.target as Element).closest<SVGElement>("[data-opening-resize]");
     if (selectionEditing && openingHandle?.dataset.openingResize) {
       const selection = { kind: "opening" as const, id: openingHandle.dataset.openingResize, scopeId: openingHandle.dataset.openingScope };
@@ -100,7 +102,7 @@ export function MapSheet({ pointPicker, storyOverlay, rotationControl, project, 
       const client = { x: event.clientX, y: event.clientY }; const sheet = clientPointToSheet(client, event.currentTarget.getBoundingClientRect(), sheetSize);
       const next = { pointerId: event.pointerId, clientStart: client, clientEnd: client, sheetStart: sheet, sheetEnd: sheet }; marquee.current = next; setMarqueePreview(next); event.currentTarget.setPointerCapture(event.pointerId); return;
     }
-    if (activeGesture && !movingVertex.current && !movingEndpoint.current && !resizing.current && !resizingOpening.current && !moving.current) {
+    if (activeGesture && !movingVertex.current && !movingEndpoint.current && !resizing.current && !resizingOpening.current && !selectionDrag.isActive()) {
       event.currentTarget.focus({ preventScroll: true });
       const point = mapPoint(event);
       if (activeGesture === "pen") {
@@ -128,8 +130,9 @@ export function MapSheet({ pointPicker, storyOverlay, rotationControl, project, 
       const layerId = selectable.dataset.selectionLayer as WorkLayerId | undefined;
       if (sourceSelection && layerId && kind && id) {
         const selection = { kind, id, ...(scopeId ? { scopeId } : {}) } as MapSelection;
+        event.currentTarget.focus({ preventScroll: true });
         onSelect?.(selection, additive ? true : undefined);
-        if (selectionEditing && !additive) { moving.current = { selection, start: rawMapPoint(event), pointerId: event.pointerId }; setMovePreview({ selection, delta: { x: 0, y: 0 } }); event.currentTarget.setPointerCapture(event.pointerId); }
+        if (selectionEditing && !additive) { selectionDrag.begin(selection, rawMapPoint(event), event); event.currentTarget.setPointerCapture(event.pointerId); }
       }
       return;
     }
@@ -139,7 +142,7 @@ export function MapSheet({ pointPicker, storyOverlay, rotationControl, project, 
     if (touchNavigation.move(event)) return;
     if (rotating.current?.pointerId === event.pointerId) { onViewportChange?.({ ...viewport, rotation: rotationAt(event) }); return; }
     if (marquee.current?.pointerId === event.pointerId) { const next = { ...marquee.current, clientEnd: { x: event.clientX, y: event.clientY }, sheetEnd: clientPointToSheet({ x: event.clientX, y: event.clientY }, event.currentTarget.getBoundingClientRect(), sheetSize) }; marquee.current = next; setMarqueePreview(next); return; }
-    if (activeGesture && !movingVertex.current && !movingEndpoint.current && !resizing.current && !resizingOpening.current && !moving.current) {
+    if (activeGesture && !movingVertex.current && !movingEndpoint.current && !resizing.current && !resizingOpening.current && !selectionDrag.isActive()) {
       const current = gestureDraftRef.current; if (!current || current.instrumentId !== activeGesture) return; const point = mapPoint(event);
       if (activeGesture === "pen" && current.pointerId === event.pointerId && current.bezierNodes?.length) {
         const last = current.bezierNodes.at(-1)!; const dx = point.x - last.anchor.x; const dy = point.y - last.anchor.y; const node = Math.hypot(dx, dy) > .8 / viewport.zoom ? { ...last, inHandle: { x: last.anchor.x - dx, y: last.anchor.y - dy }, outHandle: point } : last; const bezierNodes = [...current.bezierNodes.slice(0, -1), node]; showGesture({ ...current, points: bezierNodes.map(({ anchor }) => anchor), bezierNodes, hover: point }); return;
@@ -151,7 +154,7 @@ export function MapSheet({ pointPicker, storyOverlay, rotationControl, project, 
       else if (current.pointerId === event.pointerId) showGesture({ ...current, points: isContinuousGesture(activeGesture) ? appendDistinct(current.points, point) : [current.points[0], point] });
       return;
     }
-    if (moving.current?.pointerId === event.pointerId) { const point = rawMapPoint(event); setMovePreview({ selection: moving.current.selection, delta: { x: point.x - moving.current.start.x, y: point.y - moving.current.start.y } }); return; }
+    if (selectionDrag.move(event, rawMapPoint(event))) return;
     if (resizingOpening.current?.pointerId === event.pointerId) { const width = openingWidthAt(resizingOpening.current.selection.id, rawMapPoint(event)); if (width) setOpeningWidthPreview({ id: resizingOpening.current.selection.id, width }); return; }
     if (resizing.current?.pointerId === event.pointerId) { setResizeProjectPreview(previewRegionResize(project, activePlaceId, resizing.current, rawMapPoint(event))); return; }
     if (movingVertex.current?.pointerId === event.pointerId) { setResizeProjectPreview(previewRegionVertex(project, activePlaceId, movingVertex.current, rawMapPoint(event))); return; }
@@ -181,14 +184,12 @@ export function MapSheet({ pointPicker, storyOverlay, rotationControl, project, 
       const current = movingEndpoint.current; movingEndpoint.current = undefined; setResizeProjectPreview(undefined);
       onMoveWallEndpoint?.(current.selection, current.endpoint, mapPoint(event)); return;
     }
-    if (moving.current?.pointerId === event.pointerId) {
-      const start = moving.current.start; const selection = moving.current.selection; const end = mapPoint(event); moving.current = undefined;
-      const delta = { x: end.x - start.x, y: end.y - start.y }; setMovePreview(undefined); if (Math.hypot(delta.x, delta.y) > .08) { suppressSelectionClick.current = true; onMoveSelection?.(selection, delta); }
-      return;
-    }
+    const moved = selectionDrag.finish(event, mapPoint(event));
+    if (moved?.handled) { if (moved.selection) { suppressSelectionClick.current = true; onMoveSelection?.(moved.selection, moved.delta); } return; }
     if (drag.current?.pointerId === event.pointerId) drag.current = undefined;
   }
-  function cancelPointer(event: PointerEvent<SVGSVGElement>) { if (touchNavigation.end(event)) return; if (movingVertex.current || movingEndpoint.current) { movingVertex.current = undefined; movingEndpoint.current = undefined; setResizeProjectPreview(undefined); return; } if (resizingOpening.current?.pointerId === event.pointerId) { resizingOpening.current = undefined; setOpeningWidthPreview(undefined); return; } if (resizing.current?.pointerId === event.pointerId) { resizing.current = undefined; setResizeProjectPreview(undefined); return; } if (moving.current?.pointerId === event.pointerId) { moving.current = undefined; setMovePreview(undefined); return; } if (marquee.current?.pointerId === event.pointerId) { marquee.current = undefined; setMarqueePreview(undefined); return; } if (activeGesture === "pen") { showGesture(); lastPenClick.current = undefined; } else if (activeGesture && !isPolygonGesture(activeGesture)) showGesture(); else finishPan(event); }
+  function cancelPointerState(pointerId: number) { if (movingVertex.current?.pointerId === pointerId) { movingVertex.current = undefined; setResizeProjectPreview(undefined); } if (movingEndpoint.current?.pointerId === pointerId) { movingEndpoint.current = undefined; setResizeProjectPreview(undefined); } if (resizingOpening.current?.pointerId === pointerId) { resizingOpening.current = undefined; setOpeningWidthPreview(undefined); } if (resizing.current?.pointerId === pointerId) { resizing.current = undefined; setResizeProjectPreview(undefined); } selectionDrag.cancel(pointerId); if (marquee.current?.pointerId === pointerId) { marquee.current = undefined; setMarqueePreview(undefined); } if (rotating.current?.pointerId === pointerId) rotating.current = undefined; if (drag.current?.pointerId === pointerId) drag.current = undefined; }
+  function cancelPointer(event: PointerEvent<SVGSVGElement>) { if (touchNavigation.end(event)) return; cancelPointerState(event.pointerId); if (activeGesture === "pen") { showGesture(); lastPenClick.current = undefined; } else if (activeGesture && !isPolygonGesture(activeGesture)) showGesture(); }
   function finishMultiClick() { const current = gestureDraftRef.current; if (!current || !isPolygonGesture(current.instrumentId)) return; const completed = completedGesture(current); if (completed) emitGesture(completed); showGesture(); }
   function suppressDrawingSelection(event: ReactMouseEvent<SVGSVGElement>) { if ((event.target as Element).closest("[data-note-editor]")) return; if (suppressSelectionClick.current) { suppressSelectionClick.current = false; event.preventDefault(); event.stopPropagation(); return; } if (activeGesture || sourceSelection) { event.preventDefault(); event.stopPropagation(); } }
   function keyNavigation(event: KeyboardEvent<SVGSVGElement>) {
@@ -196,7 +197,7 @@ export function MapSheet({ pointPicker, storyOverlay, rotationControl, project, 
     if (activeGesture && event.key === "Escape") { event.preventDefault(); showGesture(); onCancelDrawing?.(); return; }
     if (activeGesture === "pen" && event.key === "Enter") { event.preventDefault(); finishPen(false); return; }
     if (activeGesture && isPolygonGesture(activeGesture) && event.key === "Enter") { event.preventDefault(); finishMultiClick(); return; }
-    if (selectionEditing && selectedIds.length && (event.key === "Delete" || event.key === "Backspace")) { event.preventDefault(); onDeleteSelected?.(); return; }
+    if (selectionEditing && selectedIds.length && (event.key === "Delete" || event.key === "Backspace")) { event.preventDefault(); if (selectionDrag.isActive() || movingEndpoint.current || movingVertex.current || resizing.current || resizingOpening.current || marquee.current || rotating.current) return; onDeleteSelected?.(); return; }
     if (!onViewportChange) return; const step = event.shiftKey ? 80 : 24;
     const delta = event.key === "ArrowLeft" ? { x: step, y: 0 } : event.key === "ArrowRight" ? { x: -step, y: 0 } : event.key === "ArrowUp" ? { x: 0, y: step } : event.key === "ArrowDown" ? { x: 0, y: -step } : undefined;
     if (delta) { event.preventDefault(); onViewportChange(panViewport(viewport, delta)); }
@@ -206,7 +207,7 @@ export function MapSheet({ pointPicker, storyOverlay, rotationControl, project, 
   const movingTransform = movePreview ? `translate(${movePreview.delta.x} ${movePreview.delta.y})` : undefined;
   return <div className={styles.sheet} data-drawing={activeGesture || nodeInsertion?.active ? "true" : undefined}>
     {broaderPlaceId && <button type="button" className={styles.backControl} title={copy.back} aria-label={copy.back} onClick={() => onOpenPlace?.(broaderPlaceId)}>←</button>}
-    <svg ref={canvasRef} {...insertion.handlers} className={styles.canvas} style={activeGesture || pointPicker ? { cursor: "crosshair" } : undefined} viewBox={`0 0 ${sheetSize.width} ${sheetSize.height}`} role="img" aria-label={copy.ariaLabel} tabIndex={0} onPointerDownCapture={(event) => { if (!capturePointPointer(event, pointPicker)) insertion.handlers.onPointerDownCapture(event); }} onClickCapture={(event) => { if (captureMapPoint(event, pointPicker, viewport, sheetSize)) return; insertion.handlers.onClickCapture(event); if (!nodeInsertion?.active) suppressDrawingSelection(event); }} onContextMenu={(event) => { if (pointPicker) { event.preventDefault(); pointPicker.cancel(); return; } if (!activeGesture) return; event.preventDefault(); showGesture(); lastPenClick.current = undefined; onCancelDrawing?.(); }} onDoubleClick={() => activeGesture && isPolygonGesture(activeGesture) && finishMultiClick()} onPointerDown={beginPan} onPointerMove={continuePan} onPointerUp={finishPan} onPointerCancel={cancelPointer} onKeyDown={keyNavigation}>
+    <svg ref={canvasRef} {...insertion.handlers} className={styles.canvas} style={activeGesture || pointPicker ? { cursor: "crosshair" } : undefined} viewBox={`0 0 ${sheetSize.width} ${sheetSize.height}`} role="img" aria-label={copy.ariaLabel} tabIndex={0} onPointerDownCapture={(event) => { if (!capturePointPointer(event, pointPicker)) insertion.handlers.onPointerDownCapture(event); }} onClickCapture={(event) => { if (captureMapPoint(event, pointPicker, viewport, sheetSize)) return; insertion.handlers.onClickCapture(event); if (!nodeInsertion?.active) suppressDrawingSelection(event); }} onContextMenu={(event) => { if (pointPicker) { event.preventDefault(); pointPicker.cancel(); return; } if (!activeGesture) return; event.preventDefault(); showGesture(); lastPenClick.current = undefined; onCancelDrawing?.(); }} onDoubleClick={() => activeGesture && isPolygonGesture(activeGesture) && finishMultiClick()} onPointerDown={beginPan} onPointerMove={continuePan} onPointerUp={finishPan} onPointerCancel={cancelPointer} onLostPointerCapture={(event) => cancelPointerState(event.pointerId)} onKeyDown={keyNavigation}>
       <defs><filter id={`${prefix}-ink`}><feTurbulence baseFrequency="0.025" numOctaves="2" seed="17" result="noise"/><feDisplacementMap in="SourceGraphic" in2="noise" scale="0.7"/></filter></defs>
       <g transform={mapTransform}>
         <MapGrid prefix={prefix} settings={project.measureSettings} viewport={viewport} sheetSize={sheetSize}/>

@@ -26,8 +26,8 @@ export function project(): EditorProject {
   ], constructions: [construction] };
 }
 
-export function pointerEvent(type: string, clientX: number, clientY: number, pointerId = 9, pointerType = "mouse", ctrlKey = false) {
+export function pointerEvent(type: string, clientX: number, clientY: number, pointerId = 9, pointerType = "mouse", ctrlKey = false, buttons = type === "pointerup" || type === "pointercancel" ? 0 : 1) {
   const event = new Event(type, { bubbles: true });
-  Object.defineProperties(event, { pointerId: { value: pointerId }, pointerType: { value: pointerType }, clientX: { value: clientX }, clientY: { value: clientY }, ctrlKey: { value: ctrlKey }, metaKey: { value: false }, shiftKey: { value: false } });
+  Object.defineProperties(event, { pointerId: { value: pointerId }, pointerType: { value: pointerType }, button: { value: 0 }, buttons: { value: buttons }, clientX: { value: clientX }, clientY: { value: clientY }, ctrlKey: { value: ctrlKey }, metaKey: { value: false }, shiftKey: { value: false } });
   return event;
 }

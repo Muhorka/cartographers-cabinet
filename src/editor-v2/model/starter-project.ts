@@ -11,7 +11,7 @@ export function createProjectAtScale(id: string, name: string, locale: EditorLoc
   let project = emptyProject(id, name); const rootId = `${id}:${scale}`;
   if (scale === "building") project = createBuildingWithDefaultLevel(project, { id: rootId, levelId: `${id}:level`, constructionId: `${id}:plan`, name, levelName: locale === "pl" ? "Parter" : "Ground floor", boundary, roomName: (index) => locale === "pl" ? `Pomieszczenie ${index}` : `Room ${index}` }, identity);
   else if (scale === "level") project = createIndependentLevel(project, { id: rootId, constructionId: `${id}:plan`, name, boundary, roomName: (index) => locale === "pl" ? `Pomieszczenie ${index}` : `Room ${index}` }, identity);
-  else project = createPlace(project, { id: rootId, name, kind: scale === "room" ? "standalone-room" : scale, ...(scale === "world" ? {} : { boundary }) });
+  else project = createPlace(project, { id: rootId, name, kind: scale === "room" ? "standalone-room" : scale, ...(scale === "world" || scale === "location" ? {} : { boundary }) });
   return { ...project, updatedAt: new Date().toISOString() };
 }
 

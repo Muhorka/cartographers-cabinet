@@ -19,5 +19,5 @@ describe("map sheet arc interaction", () => {
 });
 
 function pointerEvent(type: string, clientX: number, clientY: number) {
-  const event = new Event(type, { bubbles: true }); Object.defineProperties(event, { pointerId: { value: 9 }, pointerType: { value: "mouse" }, clientX: { value: clientX }, clientY: { value: clientY }, ctrlKey: { value: false }, metaKey: { value: false }, shiftKey: { value: false } }); return event;
+  const event = new Event(type, { bubbles: true }); Object.defineProperties(event, { pointerId: { value: 9 }, pointerType: { value: "mouse" }, button: { value: 0 }, buttons: { value: 1 }, clientX: { value: clientX }, clientY: { value: clientY }, ctrlKey: { value: false }, metaKey: { value: false }, shiftKey: { value: false } }); return event;
 }

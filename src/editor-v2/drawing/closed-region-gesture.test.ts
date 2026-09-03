@@ -7,8 +7,10 @@ import { applyMapGesture } from "./map-gesture-command";
 
 function fixture() {
   let id = 0;
+  const project = createProjectAtScale("small-region", "Small regions", "en", "location");
+  project.places[0].boundary = { kind: "rectangle", x: -30, y: -20, width: 60, height: 40 };
   return {
-    project: createProjectAtScale("small-region", "Small regions", "en", "location"),
+    project,
     identity: { createId: () => `draw-${++id}`, createRoomName: (index: number) => `Room ${index}` },
     naming: { nameFor: () => "Fountain sculpture", levelName: () => "Ground floor" },
   };
