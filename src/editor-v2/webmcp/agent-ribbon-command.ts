@@ -5,7 +5,7 @@ import { commitRibbonEdit } from "../geometry/ribbon-commit";
 import { updateElementDetails } from "../drawing/selection-detail-operations";
 import { selectionIsLocked } from "../drawing/selection-locks";
 import type { EditorProject } from "../model/project-model";
-import type { AgentObjectRef } from "./agent-command-types";
+import type { AgentLocale, AgentObjectRef } from "./agent-command-types";
 import { joinFlowingWater } from "../roads/road-joining";
 
 const inputSchema = z.object({
@@ -24,7 +24,7 @@ export function ribbonEditingHandles(project: EditorProject, id: string) {
 /** Builds the same prepared edit used by the editor for roads, rivers and
  * streams. Road routing remains inside commitRibbonEdit; water is committed
  * directly and therefore never receives obstacle constraints. */
-export function buildRibbonEdit(project: EditorProject, value: unknown) {
+export function buildRibbonEdit(project: EditorProject, value: unknown, locale: AgentLocale = "en") {
   const input = inputSchema.parse(value); const ribbon = project.elements.find(({ id }) => id === input.id);
   if (!ribbon || !isRibbonElement(ribbon) || selectionIsLocked(project, { kind: "element", id: input.id })) throw new Error("ribbon-not-editable");
   let next = input.widthMeters !== undefined ? updateElementDetails(project, ribbon.id, { widthMeters: input.widthMeters }) : project;
@@ -35,12 +35,12 @@ export function buildRibbonEdit(project: EditorProject, value: unknown) {
     if (!committed) throw new Error(isRibbonElement(current) && current.layerId === "roads" ? "road-obstacle" : "ribbon-edit-invalid");
     next = committed;
   }
-  return { project: next, summary: "Updated ribbon shape / width.", effects: [`updated:element:${ribbon.id}`] };
+  return { project: next, summary: locale === "pl" ? "Zmieniono kształt lub szerokość rzeki albo strumienia." : "Updated ribbon shape / width.", effects: [`updated:element:${ribbon.id}`] };
 }
 
-export function buildFlowingWaterJoin(project: EditorProject, refs: AgentObjectRef[]) {
+export function buildFlowingWaterJoin(project: EditorProject, refs: AgentObjectRef[], locale: AgentLocale = "en") {
   if (refs.length !== 2 || refs.some(({ type }) => type !== "element")) throw new Error("join-requires-two-watercourses");
   const result = joinFlowingWater(project, refs.map(({ id }) => id));
   if (result.state !== "joined") throw new Error(result.state === "blocked" ? result.reason : "watercourse-join-unavailable");
-  return { project: result.project, summary: "Połączono rzekę lub strumień w jeden edytowalny przebieg.", effects: [`joined:watercourse:${result.survivorId}:${result.removedId}`] };
+  return { project: result.project, summary: locale === "pl" ? "Połączono rzekę lub strumień w jeden edytowalny przebieg." : "Joined the river or stream into one editable path.", effects: [`joined:watercourse:${result.survivorId}:${result.removedId}`] };
 }

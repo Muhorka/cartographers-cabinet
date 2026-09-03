@@ -47,7 +47,28 @@ export async function registerEditorV2Tools(bridge: EditorToolBridge) {
     { name: "list_valid_object_containers", title: "List valid containers for an object", description: "List legal destination places for a place/element while preserving hierarchy and containment. Read-only.", inputSchema: { type: "object", properties: { type: { type: "string", enum: ["place", "element"] }, id: { type: "string" } }, required: ["type", "id"], additionalProperties: false }, annotations: { readOnlyHint: true }, execute: async (input) => structuredResponse({ containers: validContainerSnapshot(bridge.getProject(), { type: text(input, "type") as "place" | "element", id: text(input, "id") }) }) },
     ...createWorkshopGuideTools(),
   ];
-  const tools = [...readTools, ...createProposalChangeTools(bridge), ...createStoryReviewTools(bridge, reviewRouteService), ...createEditorCommandTools(bridge, undefined, routeService), ...createProjectLibraryTools(bridge), ...createAgentBatchTools(bridge, (session) => createEditorCommandTools({ getSession: () => session, getActivePlaceId: () => session.getState().activePlaceId ?? bridge.getActivePlaceId(), getEditorContext: () => bridge.getEditorContext?.() ?? { selections: [], mode: "drawing", view: {} }, refresh: () => undefined }, undefined, routeService))];
+  const tools = [
+    ...readTools,
+    ...createProposalChangeTools(bridge),
+    ...createStoryReviewTools(bridge, reviewRouteService),
+    ...createEditorCommandTools(bridge, undefined, routeService),
+    ...createProjectLibraryTools(bridge),
+    ...createAgentBatchTools(bridge, (session) => {
+      // A batch owns its route worker. Concurrent agent tasks must not cancel
+      // the interactive route request or another isolated batch.
+      const batchRouteService = createStoryRouteCalculationService();
+      return {
+        tools: createEditorCommandTools({
+          getSession: () => session,
+          getActivePlaceId: () => session.getViewState().activePlaceId ?? bridge.getActivePlaceId(),
+          getEditorContext: () => bridge.getEditorContext?.() ?? { selections: [], mode: "drawing", view: {} },
+          getLocale: () => bridge.getLocale?.() ?? "en",
+          refresh: () => undefined,
+        }, undefined, batchRouteService),
+        dispose: () => batchRouteService.dispose(),
+      };
+    }),
+  ];
   const registrations = await Promise.allSettled(tools.map((tool) => document.modelContext!.registerTool({ ...tool, execute: async (input) => { const result = await tool.execute(input); recordWebMcpCall(tool.name); return result; } }, { signal: controller.signal })));
   const registered = registrations.filter(({ status }) => status === "fulfilled").length;
   const errors = registrations.flatMap((result, index) => result.status === "rejected" ? [`${tools[index].name}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`] : []);

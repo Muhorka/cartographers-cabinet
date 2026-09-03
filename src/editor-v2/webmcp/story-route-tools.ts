@@ -17,14 +17,14 @@ export function createStoryRouteTools(bridge: EditorAgentBridge & EditorContextB
   const routeService = suppliedRouteService ?? createStoryRouteCalculationService();
   const context = (): { scenarioId?: string; stepId?: string } => { const view = bridge.getEditorContext?.().view; return { scenarioId: view?.scenarioId, stepId: view?.stepId }; };
   const capture = (query: z.infer<typeof routeRequestSchema>, requestedContext = context()) => {
-    const session = bridge.getSession(); const project = structuredClone(session.getState().project); const inspected = inspectEditorContext(bridge);
+    const session = bridge.getSession(); const project = session.getViewState().project; const inspected = inspectEditorContext(bridge);
     return { session, project, query: { ...requestedContext, ...query }, baseRevision: projectRevision(project), contextVersion: inspected.contextVersion };
   };
   const isStale = (run: ReturnType<typeof capture>) => {
-    try { const current = bridge.getSession(); return current !== run.session || projectRevision(current.getState().project) !== run.baseRevision || inspectEditorContext(bridge).contextVersion !== run.contextVersion; }
+    try { const current = bridge.getSession(); return current !== run.session || projectRevision(current.getViewState().project) !== run.baseRevision || inspectEditorContext(bridge).contextVersion !== run.contextVersion; }
     catch { return true; }
   };
-  const staleResponse = (run: ReturnType<typeof capture>) => response({ status: "stale" as const, expectedRevision: run.baseRevision, actualRevision: (() => { try { return projectRevision(bridge.getSession().getState().project); } catch { return undefined; } })() });
+  const staleResponse = (run: ReturnType<typeof capture>) => response({ status: "stale" as const, expectedRevision: run.baseRevision, actualRevision: (() => { try { return projectRevision(bridge.getSession().getViewState().project); } catch { return undefined; } })() });
   const calculate = async (run: ReturnType<typeof capture>) => {
     const outcome = await routeService.calculate(run.project, run.query); if (outcome.status !== "ready") return response({ status: outcome.status, error: outcome.error, attemptId: outcome.attemptId });
     if (isStale(run)) return staleResponse(run); return response(outcome.result);
@@ -53,7 +53,7 @@ export function createStoryRouteTools(bridge: EditorAgentBridge & EditorContextB
       return response(result);
     } },
     { name: "inspect_saved_story_routes", description: "List saved route requests and whether source geometry/narrative revision is current. Recalculate stale routes; do not describe them as verified.", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true }, execute: async () => {
-      const project = bridge.getSession().getState().project; const revision = storyRouteRevision(project);
+      const project = bridge.getSession().getViewState().project; const revision = storyRouteRevision(project);
       return response({ revision, routes: project.story.routes.map((route) => ({ ...route, stale: !isStoryRouteCurrent(project, route) })) });
     } },
   ];

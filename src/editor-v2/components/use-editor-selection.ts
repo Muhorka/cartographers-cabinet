@@ -5,10 +5,9 @@ import type { KernelPoint } from "../geometry/geometry-types";
 import { deleteSelection, mergeSelectedRooms, moveElementRegionVertex, moveSelection, moveWallEndpoint, resizeElementRegion, resizeTransitionFootprint, updateElementDetails, updateOpeningWidth, updateSelectionState, updateTransitionDetails, type EditableSelection, type SelectionOperationResult } from "../drawing/selection-operations";
 import { movePlaceBoundaryVertex, resizePlaceBoundary } from "../drawing/place-boundary-operations";
 import { deleteSelectionGroup, moveSelectionGroup } from "../drawing/group-selection-operations";
-import type { EditorSession, EditorSessionState } from "../state/editor-session";
+import type { EditorSession, EditorSessionState, PreparedProjectTransaction } from "../state/editor-session";
 import type { WorkbenchCopy } from "../i18n/workbench-copy";
 import type { EditorLocale } from "../i18n/workbench-copy";
-import type { DrawingNoticeModel } from "./drawing-notice";
 import type { DrawingElement, MapAppearance } from "../model/project-model";
 import type { ResizeCorner } from "../geometry/region-resize";
 import { duplicateSelectedElements, mergeSelectedElementRegions, transformSelectedElements, type ElementTransformationResult } from "../drawing/element-transformations";
@@ -19,6 +18,8 @@ import { duplicateSelectedConstructionSurfaces, mergeSelectedConstructionSurface
 import { joinFlowingWater, joinRoads, roadJoinNoticeKey } from "../roads/road-joining";
 import { isFlowingWater } from "../geometry/ribbon-geometry";
 import { useEditorTransaction } from "./use-editor-transaction";
+import { selectionKey } from "../drawing/selection-reference";
+import { selectionNotice } from "./selection-notice";
 
 export function useEditorSelection({ session, snapshot, copy, locale, refresh, onSelection, onSelections }: {
   session?: EditorSession;
@@ -29,16 +30,21 @@ export function useEditorSelection({ session, snapshot, copy, locale, refresh, o
   onSelection(selection?: EditableSelection): void;
   onSelections(selections: EditableSelection[]): void;
 }) {
-  const [review, setReview] = useState<{ project: EditorSessionState["project"]; effects: string[] }>();
+  const [review, setReview] = useState<{ session: EditorSession; transaction: PreparedProjectTransaction; effects: string[] }>();
   const [blocked, setBlocked] = useState<keyof WorkbenchCopy["editingStatus"]["blocked"]>();
   const identity = useMemo(() => ({ createId: () => crypto.randomUUID(), createRoomName: (index: number) => locale === "pl" ? `Pomieszczenie ${index}` : `Room ${index}` }), [locale]);
-  const { commit: commitTransaction } = useEditorTransaction(session, refresh, setBlocked);
+  const { accept: acceptTransaction, commit: commitTransaction } = useEditorTransaction(session, refresh, setBlocked);
   const commit = (project: EditorSessionState["project"] | ((project: EditorSessionState["project"]) => EditorSessionState["project"]), transactionId: string) => commitTransaction(transactionId, project);
 
   function finish(result: SelectionOperationResult, transactionId: string, applyReviewImmediately = false) {
     setBlocked(undefined);
     if (result.state === "blocked") { setBlocked(result.reason); return false; }
-    if (result.state === "review-required" && !applyReviewImmediately) { setReview({ project: result.accept(), effects: result.effects }); return true; }
+    if (result.state === "review-required" && !applyReviewImmediately) {
+      if (!session) { setBlocked("transaction-failed"); return false; }
+      const transaction = session.prepareTransaction({ id: transactionId, isolation: "structural", apply: () => result.accept() });
+      setReview({ session, transaction, effects: result.effects });
+      return true;
+    }
     const project = result.state === "review-required" ? result.accept() : result.project;
     return commit(project, transactionId);
   }
@@ -69,28 +75,28 @@ export function useEditorSelection({ session, snapshot, copy, locale, refresh, o
 
   function move(selection: EditableSelection, delta: KernelPoint) {
     if (!snapshot) return;
-    finish(moveSelection(snapshot.project, { activePlaceId: snapshot.activePlaceId ?? "", selection, delta, boundaryEditing: snapshot.boundaryEditing }, identity), `move:${selection.kind}:${selection.id}`, true);
+    finish(moveSelection(snapshot.project, { activePlaceId: snapshot.activePlaceId ?? "", selection, delta, boundaryEditing: snapshot.boundaryEditing }, identity), `move:${selectionKey(selection)}`, true);
   }
 
   function moveMany(selections: EditableSelection[], delta: KernelPoint) {
     if (!snapshot) return;
-    finish(moveSelectionGroup(snapshot.project, { activePlaceId: snapshot.activePlaceId ?? "", selections, delta, boundaryEditing: snapshot.boundaryEditing }, identity), `move:group:${selections.map(({ id }) => id).join(":")}`, true);
+    finish(moveSelectionGroup(snapshot.project, { activePlaceId: snapshot.activePlaceId ?? "", selections, delta, boundaryEditing: snapshot.boundaryEditing }, identity), `move:group:${selections.map(selectionKey).join("|")}`, true);
   }
 
-  function moveEndpoint(wallId: string, endpoint: "start" | "end", point: KernelPoint) {
+  function moveEndpoint(selection: EditableSelection, endpoint: "start" | "end", point: KernelPoint) {
     if (!snapshot) return;
-    finish(moveWallEndpoint(snapshot.project, { activePlaceId: snapshot.activePlaceId ?? "", wallId, endpoint, point, boundaryEditing: snapshot.boundaryEditing }, identity), `move:wall-endpoint:${wallId}:${endpoint}`, true);
+    finish(moveWallEndpoint(snapshot.project, { activePlaceId: snapshot.activePlaceId ?? "", wallId: selection.id, scopeId: selection.scopeId, endpoint, point, boundaryEditing: snapshot.boundaryEditing }, identity), `move:wall-endpoint:${selectionKey(selection)}:${endpoint}`, true);
   }
 
   function remove(selection: EditableSelection) {
     if (!snapshot) return;
-    const accepted = finish(deleteSelection(snapshot.project, { activePlaceId: snapshot.activePlaceId ?? "", selection, boundaryEditing: snapshot.boundaryEditing }, identity), `delete:${selection.kind}:${selection.id}`);
+    const accepted = finish(deleteSelection(snapshot.project, { activePlaceId: snapshot.activePlaceId ?? "", selection, boundaryEditing: snapshot.boundaryEditing }, identity), `delete:${selectionKey(selection)}`);
     if (accepted && selection.kind !== "wall") onSelection(undefined);
   }
 
   function removeMany(selections: EditableSelection[]) {
     if (!snapshot) return;
-    if (finish(deleteSelectionGroup(snapshot.project, { activePlaceId: snapshot.activePlaceId ?? "", selections, boundaryEditing: snapshot.boundaryEditing }, identity), `delete:group:${selections.map(({ id }) => id).join(":")}`)) onSelection(undefined);
+    if (finish(deleteSelectionGroup(snapshot.project, { activePlaceId: snapshot.activePlaceId ?? "", selections, boundaryEditing: snapshot.boundaryEditing }, identity), `delete:group:${selections.map(selectionKey).join("|")}`)) onSelection(undefined);
   }
 
   function editElement(id: string, details: { widthMeters?: number; name?: string; description?: string; tags?: string[]; belongsToId?: string; appearance?: MapAppearance; properties?: Record<string, string | number | boolean | null>; geometry?: DrawingElement["geometry"]; visible?: boolean; locked?: boolean }) {
@@ -106,17 +112,17 @@ export function useEditorSelection({ session, snapshot, copy, locale, refresh, o
     if (!session) return; commit((project) => updateSelectionState(project, selection, details), `state:${selection.kind}:${selection.id}`);
   }
 
-  function resizeOpening(id: string, width: number) {
+  function resizeOpening(selection: EditableSelection, width: number) {
     if (!snapshot?.activePlaceId) return;
-    finish(updateOpeningWidth(snapshot.project, snapshot.activePlaceId, id, width), `resize:opening:${id}`);
+    finish(updateOpeningWidth(snapshot.project, snapshot.activePlaceId, selection.id, width, selection.scopeId), `resize:opening:${selectionKey(selection)}`);
   }
 
-  function resizeTransition(id: string, corner: ResizeCorner, point: KernelPoint) {
-    if (!snapshot) return; finish(resizeTransitionFootprint(snapshot.project, id, corner, point), `resize:transition:${id}`);
+  function resizeTransition(selection: EditableSelection, corner: ResizeCorner, point: KernelPoint) {
+    if (!snapshot) return; finish(resizeTransitionFootprint(snapshot.project, selection.id, corner, point, selection.scopeId), `resize:transition:${selectionKey(selection)}`);
   }
 
-  function editTransition(id: string, details: Parameters<typeof updateTransitionDetails>[2]) {
-    if (!snapshot) return; finish(updateTransitionDetails(snapshot.project, id, details), `details:transition:${id}`);
+  function editTransition(selection: EditableSelection, details: Parameters<typeof updateTransitionDetails>[2]) {
+    if (!snapshot) return; finish(updateTransitionDetails(snapshot.project, selection.id, details, selection.scopeId), `details:transition:${selectionKey(selection)}`);
   }
 
   function resizeElement(id: string, corner: ResizeCorner, point: KernelPoint) {
@@ -238,17 +244,12 @@ export function useEditorSelection({ session, snapshot, copy, locale, refresh, o
 
   function acceptReview() {
     if (!review || !session) return;
-    if (commit(review.project, "selection:reviewed-change")) setReview(undefined);
+    if (review.session !== session) { setReview(undefined); return; }
+    acceptTransaction(session.commitPreparedTransaction(review.transaction));
+    setReview(undefined);
   }
 
-  let notice: DrawingNoticeModel | undefined;
-  if (review) notice = { message: copy.editingStatus.reviewQuestion, tone: "warning", actions: [
-    { id: "apply", label: copy.editingStatus.apply, primary: true, onClick: acceptReview },
-    { id: "cancel", label: copy.editingStatus.cancel, onClick: () => setReview(undefined) },
-  ] };
-  else if (blocked) notice = { message: copy.editingStatus.blocked[blocked], tone: "warning", actions: [
-    { id: "close", label: copy.close, onClick: () => setBlocked(undefined) },
-  ] };
+  const notice = selectionNotice({ review, session, blocked, copy, acceptReview, clearReview: () => setReview(undefined), clearBlocked: () => setBlocked(undefined) });
 
   return { move, moveMany, moveEndpoint, resizeElement, resizeSurface, resizePlace, resizeTransition, movePlaceVertex, moveElementVertex, moveSurfaceVertex, remove, removeMany, editElement, editNoteText, editSelectionState, editSurface, editTransition, resizeOpening, duplicateElements, rotateElements, mirrorElements, mergeElements, joinSelectedRoads, duplicateSurfaces, transformSurfaces, mergeSurfaces, mergeRooms, mergePlaces, duplicateRooms, transformRooms, duplicatePlaces, transformPlaces, notice, reset: () => { setReview(undefined); setBlocked(undefined); } };
 }

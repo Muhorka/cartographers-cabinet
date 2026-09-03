@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { addElement, changeElementOwnership, createBuildingWithDefaultLevel, createLevelForBuilding, createPlace, deletePlaceSubtree, movePlace, reparentPlace, roots, syncConstructionRooms, updatePlaceDetails, validContainingPlaces, worldPosition, wrapPlaceInBroaderMap, wrapStandaloneRoomInBuilding } from "./hierarchy-operations";
+import { addConstructionSurface, addElement, changeElementOwnership, createBuildingWithDefaultLevel, createLevelForBuilding, createPlace, deletePlaceSubtree, movePlace, reparentPlace, roots, syncConstructionRooms, updatePlaceDetails, validContainingPlaces, worldPosition, wrapPlaceInBroaderMap, wrapStandaloneRoomInBuilding } from "./hierarchy-operations";
 import { reorderLevel } from "./level-operations";
 import { emptyProject } from "./project-model";
-import { shapePoints } from "../geometry/region-constraints";
-import { previewWallAddition } from "../construction/construction-document";
+import { previewWallAddition, previewWallRemoval } from "../construction/construction-document";
 
 const identities = () => { let value = 0; return { createId: () => `id-${++value}` }; };
 
@@ -31,6 +30,28 @@ describe("editor v2 hierarchy", () => {
     project = syncConstructionRooms({ ...project, constructions: [withSplit] }, withSplit);
     expect(project.constructions[0].rooms).toHaveLength(2);
     expect(project.places.filter(({ parentId, kind }) => parentId === "ground" && kind === "room")).toHaveLength(2);
+  });
+
+  it("reparents descendants of a removed room without teleporting them", () => {
+    const identity = identities();
+    let project = createBuildingWithDefaultLevel(emptyProject("project", "Project"), { id: "house", levelId: "ground", constructionId: "ground-plan", name: "House", levelName: "Ground floor", boundary: { kind: "rectangle", x: 0, y: 0, width: 10, height: 8 }, transform: { x: 20, y: 15, rotation: 25 } }, identity);
+    const base = project.constructions[0];
+    const split = previewWallAddition(base, [{ id: "partition", start: { x: 5, y: 0 }, end: { x: 5, y: 8 }, thickness: .3, role: "partition" as const }], { createId: identity.createId, createName: (index) => `Room ${index}` }).after;
+    project = syncConstructionRooms({ ...project, constructions: [split] }, split);
+    const merged = previewWallRemoval(split, ["partition"], { createId: identity.createId, createName: (index) => `Room ${index}` }).after;
+    const removedRoomId = split.rooms.find(({ id }) => !merged.rooms.some((room) => room.id === id))?.id;
+    expect(removedRoomId).toBeDefined();
+    if (!removedRoomId) throw new Error("The partition removal did not remove a room");
+    project = createPlace(project, { id: "kept-child", parentId: removedRoomId, name: "Kept child", kind: "custom", transform: { x: 2, y: 1, rotation: 35 } });
+    project = createPlace(project, { id: "nested-child", parentId: "kept-child", name: "Nested child", kind: "object", transform: { x: -1, y: 3, rotation: -10 } });
+    const beforeChild = worldPosition(project, "kept-child"); const beforeNested = worldPosition(project, "nested-child");
+    const repaired = syncConstructionRooms({ ...project, constructions: [merged] }, merged);
+    expect(repaired.places.some(({ id }) => id === removedRoomId)).toBe(false);
+    expect(repaired.places.find(({ id }) => id === "kept-child")).toMatchObject({ parentId: "ground" });
+    expect(worldPosition(repaired, "kept-child").x).toBeCloseTo(beforeChild.x);
+    expect(worldPosition(repaired, "kept-child").y).toBeCloseTo(beforeChild.y);
+    expect(worldPosition(repaired, "nested-child").x).toBeCloseTo(beforeNested.x);
+    expect(worldPosition(repaired, "nested-child").y).toBeCloseTo(beforeNested.y);
   });
 
   it("does not turn a closed face outside the level enclosure into a room", () => {
@@ -172,16 +193,55 @@ describe("editor v2 hierarchy", () => {
     expect(project.places.map(({ id }) => id)).toEqual(["world"]); expect(project.constructions).toEqual([]);
   });
 
-  it("rebuilds building footprints after a level is moved or deleted", () => {
-    const identity = { createId: (() => { let index = 0; return () => `id-${++index}`; })() };
-    let project = createPlace(emptyProject("p", "P"), { id: "map", name: "Map", kind: "location", boundary: { kind: "rectangle", x: 0, y: 0, width: 100, height: 80 } });
-    project = createBuildingWithDefaultLevel(project, { id: "first", levelId: "ground", constructionId: "ground-plan", parentId: "map", name: "First", levelName: "Ground", boundary: { kind: "rectangle", x: -5, y: -5, width: 10, height: 10 }, transform: { x: 30, y: 30, rotation: 0 } }, identity);
-    project = createBuildingWithDefaultLevel(project, { id: "second", levelId: "other-ground", constructionId: "other-plan", parentId: "map", name: "Second", levelName: "Ground", boundary: { kind: "rectangle", x: -5, y: -5, width: 10, height: 10 }, transform: { x: 40, y: 30, rotation: 0 } }, identity);
-    project = createLevelForBuilding(project, { id: "upper", constructionId: "upper-plan", buildingId: "first", name: "Upper" }, identity);
-    project = { ...project, places: project.places.map((place) => place.id === "upper" ? { ...place, transform: { x: 10, y: 0, rotation: 0 } } : place) };
-    const moved = reparentPlace(project, "upper", "second");
-    expect(shapePoints(moved.places.find(({ id }) => id === "first")!.boundary!).every(({ x }) => x >= -5 && x <= 5)).toBe(true);
-    const deleted = deletePlaceSubtree(moved, "upper");
-    expect(shapePoints(deleted.places.find(({ id }) => id === "second")!.boundary!).every(({ x }) => x >= -5 && x <= 5)).toBe(true);
+  it.each(["place", "element", "surface", "wall", "room", "opening", "transition"] as const)("atomically refuses deleting a subtree containing a locked %s", (kind) => {
+    let project = createBuildingWithDefaultLevel(emptyProject("p", "P"), { id: "house", levelId: "floor", constructionId: "plan", name: "House", levelName: "Floor", boundary: { kind: "rectangle", x: 0, y: 0, width: 4, height: 3 } }, identities());
+    project = createPlace(project, { id: "locked-child", parentId: "house", name: "Locked child", kind: "custom", locked: kind === "place" });
+    project = addElement(project, { id: "locked-element", belongsToId: "locked-child", name: "Locked element", layerId: "sketch", subjectId: "sketch.note", geometry: { kind: "point", at: { x: 0, y: 0 } }, visible: true, locked: kind === "element", tags: [], access: [], properties: {} }, "locked-child");
+    project = addConstructionSurface(project, { id: "locked-surface", belongsToId: "floor", name: "Locked surface", kind: "stage", attachment: "free", shape: { kind: "rectangle", x: 0, y: 0, width: 1, height: 1 }, elevation: 0, visible: true, locked: kind === "surface", tags: [], access: [], properties: {} }, "floor");
+    const document = project.constructions[0]!;
+    if (kind === "wall") document.walls[0]!.locked = true;
+    if (kind === "room") document.rooms[0]!.locked = true;
+    if (kind === "opening") document.openings.push({ id: "locked-opening", kind: "door", wallId: document.walls[0]!.id, position: .5, width: 1, locked: true });
+    if (kind === "transition") document.transitions.push({ id: "locked-transition", kind: "stairs", footprint: { kind: "rectangle", x: 1, y: 1, width: 1, height: 1 }, sourceLevelId: "floor", sameLevelRise: true, locked: true });
+    const before = structuredClone(project);
+    expect(() => deletePlaceSubtree(project, "house")).toThrow(new RegExp(`${kind} .* locked`, "i"));
+    expect(project).toEqual(before);
   });
+
+  it("refuses deletion when story data or a saved route references the subtree", () => {
+    let project = createPlace(emptyProject("p", "P"), { id: "world", name: "World", kind: "world" });
+    project = createBuildingWithDefaultLevel(project, { id: "house", levelId: "floor", constructionId: "plan", parentId: "world", name: "House", levelName: "Floor", boundary: { kind: "rectangle", x: 0, y: 0, width: 4, height: 3 } }, identities());
+    project.story.objects = [{ ref: { kind: "place", id: "floor" }, metadata: {} }];
+    expect(() => deletePlaceSubtree(project, "house")).toThrow(/story data references place floor/i);
+    const routeProject = structuredClone(project); routeProject.story.objects = []; routeProject.story.routes = [{
+      id: "saved-route", name: "Saved route", query: { from: { placeId: "world", point: { x: 0, y: 0 } }, to: { placeId: "world", point: { x: 1, y: 1 } } },
+      result: { status: "ready", revision: 0, sourceRevision: "revision", routes: [{ id: "route", sourceRevision: "revision", segments: [{ placeId: "floor", levelId: "floor", kind: "indoor", points: [{ x: 0, y: 0 }, { x: 1, y: 1 }] }], points: [{ x: 0, y: 0 }, { x: 1, y: 1 }], distance: 1, conditions: [], reasons: [], usedOpeningIds: [], usedTransitionIds: [] }], missingFacts: [], reasons: [] }, sourceRevision: "revision",
+    }];
+    expect(() => deletePlaceSubtree(routeProject, "house")).toThrow(/saved route saved-route references/i);
+  });
+
+  it("refuses deleting a level while a transition in another construction still connects to it", () => {
+    const identity = identities();
+    let project = createBuildingWithDefaultLevel(emptyProject("p", "P"), { id: "house", levelId: "ground", constructionId: "ground-plan", name: "House", levelName: "Ground", boundary: { kind: "rectangle", x: 0, y: 0, width: 8, height: 6 } }, identity);
+    project = createLevelForBuilding(project, { id: "upper", constructionId: "upper-plan", buildingId: "house", name: "Upper" }, identity);
+    project = { ...project, constructions: project.constructions.map((document) => document.id === "ground-plan" ? {
+      ...document,
+      transitions: [{ id: "stairs", kind: "stairs", footprint: { kind: "rectangle", x: 1, y: 1, width: 1, height: 2 }, sourceLevelId: "ground", targetLevelId: "upper" }],
+    } : document) };
+
+    expect(() => deletePlaceSubtree(project, "upper")).toThrow(/transition stairs connects to a deleted level/i);
+  });
+
+  it("removes road junctions owned by or connected to the deleted subtree", () => {
+    let project = createPlace(emptyProject("p", "P"), { id: "world", name: "World", kind: "world" });
+    project = createPlace(project, { id: "grounds", parentId: "world", name: "Grounds", kind: "location" });
+    const road = (id: string, points: [{ x: number; y: number }, { x: number; y: number }]) => ({ id, belongsToId: "grounds", name: id, layerId: "roads" as const, subjectId: "road.paved", geometry: { kind: "path" as const, points, closed: false }, visible: true, locked: false, tags: [], access: [], properties: {} });
+    project = { ...project, elements: [road("road-a", [{ x: 0, y: 1 }, { x: 2, y: 1 }]), road("road-b", [{ x: 1, y: 0 }, { x: 1, y: 2 }])], roadJunctions: [{ id: "junction", belongsToId: "grounds", point: { x: 1, y: 1 }, roadIds: ["road-a", "road-b"] }] };
+
+    const next = deletePlaceSubtree(project, "grounds");
+
+    expect(next.elements).toEqual([]);
+    expect(next.roadJunctions).toEqual([]);
+  });
+
 });

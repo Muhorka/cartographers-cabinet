@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { localizeRegion, regionBoundsCenter, translateRegion } from "./region-transform";
+import { localizeRegion, pointBounds, regionBoundsCenter, translateRegion } from "./region-transform";
 
 describe("region coordinate transforms", () => {
   it("separates a shape drawn on a containing map into local geometry and placement", () => {
@@ -15,5 +15,10 @@ describe("region coordinate transforms", () => {
     const localized = localizeRegion(source);
     expect(translateRegion(localized.boundary, localized.transform)).toEqual(source);
     expect(regionBoundsCenter(localized.boundary)).toEqual({ x: 0, y: 0 });
+  });
+
+  it("measures very large point sets without spreading them as function arguments", () => {
+    const points = Array.from({ length: 100_000 }, (_, index) => ({ x: index - 50_000, y: 50_000 - index }));
+    expect(pointBounds(points)).toEqual({ minX: -50_000, minY: -49_999, maxX: 49_999, maxY: 50_000 });
   });
 });

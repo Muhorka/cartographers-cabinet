@@ -4,6 +4,7 @@ import type { MapSelection } from "./map-sheet";
 import type { EditorProject } from "../model/project-model";
 import styles from "./sheet-object-list.module.css";
 import { filterSheetObjectGroups, sheetObjectGroups, type SheetObjectItem } from "./sheet-object-catalogue";
+import { selectionKey } from "../drawing/selection-reference";
 
 export type SheetObjectListCopy = {
   title: string;
@@ -44,9 +45,9 @@ export function SheetObjectList({ project, activePlaceId, selections = [], copy,
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const allGroups = useMemo(() => sheetObjectGroups(project, activePlaceId, copy), [project, activePlaceId, copy]);
   const groups = useMemo(() => filterSheetObjectGroups(allGroups, query), [allGroups, query]);
-  const selected = new Set(selections.map(({ kind, id }) => `${kind}:${id}`));
+  const selected = new Set(selections.map(selectionKey));
   const emptyMessage = allGroups.length ? copy.noResults : copy.empty;
-  return <section className={styles.list}><h3>{copy.title}</h3><label className={styles.search}><span className={styles.visuallyHidden}>{copy.search}</span><input type="search" value={query} placeholder={copy.search} onChange={(event) => setQuery(event.currentTarget.value)}/></label>{groups.length ? groups.map((group) => <details key={group.id} open={query ? true : openGroups[group.id] ?? group.open} onToggle={(event) => { if (query) return; const nextOpen = event.currentTarget.open; setOpenGroups((current) => ({ ...current, [group.id]: nextOpen })); }}><summary>{group.label} <small>{group.items.length}</small></summary><div className={styles.items}>{group.items.map((item) => <ObjectRow key={`${item.selection.kind}:${item.selection.id}`} item={item} selected={selected.has(`${item.selection.kind}:${item.selection.id}`)} copy={copy} onSelect={onSelect} onUpdateElement={onUpdateElement} onUpdateSelection={onUpdateSelection} onDelete={onDelete}/>)}</div></details>) : <p>{emptyMessage}</p>}</section>;
+  return <section className={styles.list}><h3>{copy.title}</h3><label className={styles.search}><span className={styles.visuallyHidden}>{copy.search}</span><input type="search" value={query} placeholder={copy.search} onChange={(event) => setQuery(event.currentTarget.value)}/></label>{groups.length ? groups.map((group) => <details key={group.id} open={query ? true : openGroups[group.id] ?? group.open} onToggle={(event) => { if (query) return; const nextOpen = event.currentTarget.open; setOpenGroups((current) => ({ ...current, [group.id]: nextOpen })); }}><summary>{group.label} <small>{group.items.length}</small></summary><div className={styles.items}>{group.items.map((item) => <ObjectRow key={selectionKey(item.selection)} item={item} selected={selected.has(selectionKey(item.selection))} copy={copy} onSelect={onSelect} onUpdateElement={onUpdateElement} onUpdateSelection={onUpdateSelection} onDelete={onDelete}/>)}</div></details>) : <p>{emptyMessage}</p>}</section>;
 }
 
 function ObjectRow({ item, selected, copy, onSelect, onUpdateElement, onUpdateSelection, onDelete }: { item: SheetObjectItem; selected: boolean; copy: SheetObjectListCopy; onSelect(selection: MapSelection, additive?: boolean): void; onUpdateElement?(id: string, details: { visible?: boolean; locked?: boolean }): void; onUpdateSelection?(selection: MapSelection, details: { visible?: boolean; locked?: boolean }): void; onDelete?(selection: MapSelection): void }) {

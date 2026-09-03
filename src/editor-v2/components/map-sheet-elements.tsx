@@ -8,6 +8,7 @@ import { type LabelObstacle } from "../geometry/room-label-layout";
 import { labelObstaclesForShape } from "../geometry/region-label-layout";
 import { applyAffinePoint } from "../geometry/affine-transform";
 import type { LabelLayoutPlan } from "../geometry/label-collision";
+import { selectionKey } from "../drawing/selection-reference";
 
 type ElementSelection = { kind: "element"; id: string };
 
@@ -50,7 +51,8 @@ export function MapSheetElements({ project, activePlaceId, terrain, prefix, sele
     const contextOpacity = depth < 0 ? .42 : .68;
     const ownerTransform = depth === 0 ? undefined : matrixAttribute(relativePlaceMatrix(project, activePlaceId, element.belongsToId));
     const elementObstacles = element.belongsToId === activePlaceId ? labelObstacles : transformLabelObstacles(relativePlaceMatrix(project, element.belongsToId, activePlaceId), labelObstacles);
-    return <g key={element.id} transform={ownerTransform}><g transform={movingIds.has(element.id) ? movingTransform : undefined}><ElementShape element={element} opacity={element.layerId === "sketch" ? sketchOpacity : depth === 0 ? 1 : contextOpacity} prefix={prefix} viewportZoom={viewportZoom} pointRadius={5 / viewportZoom} resizeHandleSize={5 / viewportZoom} selectable={selectable} showResizeHandles={editable && selectionLayerId === element.layerId && selected.has(element.id)} selected={selected.has(element.id)} showArea={showArea} units={units} labelObstacles={elementObstacles} labelPlan={labelPlan} onNoteTextChange={editableOwner && !element.locked ? onNoteTextChange : undefined} onSelect={selectable ? (additive) => onSelect?.({ kind: "element", id: element.id }, additive) : undefined}/></g></g>;
+    const selectedKey = selectionKey({ kind: "element", id: element.id });
+    return <g key={selectedKey} transform={ownerTransform}><g transform={movingIds.has(element.id) ? movingTransform : undefined}><ElementShape element={element} opacity={element.layerId === "sketch" ? sketchOpacity : depth === 0 ? 1 : contextOpacity} prefix={prefix} viewportZoom={viewportZoom} pointRadius={5 / viewportZoom} resizeHandleSize={5 / viewportZoom} selectable={selectable} showResizeHandles={editable && selectionLayerId === element.layerId && selected.has(selectedKey)} selected={selected.has(selectedKey)} showArea={showArea} units={units} labelObstacles={elementObstacles} labelPlan={labelPlan} onNoteTextChange={editableOwner && !element.locked ? onNoteTextChange : undefined} onSelect={selectable ? (additive) => onSelect?.({ kind: "element", id: element.id }, additive) : undefined}/></g></g>;
   });
   const roads = new Map(project.elements.filter((element) => element.layerId === "roads").map((element) => [element.id, element]));
   const markers = terrain ? [] : (project.roadJunctions ?? []).flatMap((junction) => {

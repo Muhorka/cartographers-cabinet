@@ -28,7 +28,7 @@ function wallForSegment(start: KernelPoint, end: KernelPoint, previous: Canonica
   const forward = (end.x - start.x) * (source.end.x - source.start.x) + (end.y - start.y) * (source.end.y - source.start.y) >= 0;
   const sourceStart = forward ? start : end;
   const sourceEnd = sourceStart === start ? end : start;
-  return { ...source, id: `${source.id}:outline:${createId()}`, start: sourceStart, end: sourceEnd };
+  return { ...source, id: `${source.id}:outline:${createId()}`, sourceWallId: source.id, start: sourceStart, end: sourceEnd };
 }
 
 /** Materializes every outer and hole ring while retaining source wall identity

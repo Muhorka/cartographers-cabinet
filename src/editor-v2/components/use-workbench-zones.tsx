@@ -6,6 +6,7 @@ import type { ProjectTransaction } from "../state/editor-session";
 import { collectionItems, type StoryRecord, type StoryResolvedObject } from "../story/components/story-types";
 import { replaceStoryCollection } from "../story/components/use-story-view";
 import { StoryEntryEditor } from "../story/components/story-entry-editor";
+import { mergeStoryRecordUpdate } from "../story/components/story-record-update";
 import { StoryZoneList } from "../story/components/story-zone-list";
 import { StoryZoneMemberships } from "../story/components/story-zone-memberships";
 import { storyCopy } from "../story/i18n/story-copy";
@@ -40,7 +41,8 @@ export function useWorkbenchZones({ project, activePlaceId, selectionRefs, inspe
   }
   function edit(entry: StoryRecord) {
     return apply((current) => {
-      const entries = collectionItems(current.story, "zones").map((existing) => existing.id === entry.id ? entry : existing);
+      const rendered = selectedEntry;
+      const entries = collectionItems(current.story, "zones").map((existing) => existing.id === entry.id && rendered ? mergeStoryRecordUpdate(existing, rendered, entry) : existing);
       return { ...current, story: storyDataSchema.parse(replaceStoryCollection(current.story, "zones", entries, resolveObjects())) };
     });
   }

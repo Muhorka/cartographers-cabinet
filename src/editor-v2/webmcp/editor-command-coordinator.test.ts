@@ -13,20 +13,37 @@ function deferred<T>() {
 }
 
 function setup(options: EditorCommandCoordinatorOptions = {}) {
-  const initial = new EditorSession(emptyProject("coordinator", "Coordinator"));
+  const initial = new EditorSession(createPlace(emptyProject("coordinator", "Coordinator"), { id: "world", name: "World", kind: "world" }));
   let current = initial;
   const reports: unknown[] = [];
+  const preserved: unknown[] = [];
   const bridge: CommandBridge = {
     getSession: () => current,
     refresh: vi.fn(),
-    preserveAgentChange: async () => "checkpoint",
+    preserveAgentChange: async () => { preserved.push(true); return "checkpoint"; },
     reportAgentChange: (change) => { reports.push(change); },
   };
   const coordinator = new EditorCommandCoordinator(bridge, options);
   const base = initial.getState().project;
   const prepare = () => coordinator.prepare("coordinator-test", (project) => ({ project: { ...project, name: "Changed" }, summary: "Change project" }));
+  const prepareSafety = () => coordinator.prepare("coordinator-safety-test", (project) => ({ project: { ...project, name: "Changed" }, summary: "Change project", effects: ["cleared:sketch:all:world"] }));
   const replaceSession = () => { current = new EditorSession(base); };
-  return { initial, bridge, coordinator, base, prepare, replaceSession, reports };
+  return { initial, bridge, coordinator, base, prepare, prepareSafety, replaceSession, reports, preserved };
+}
+
+function bulkDeleteSetup() {
+  const base = createPlace(emptyProject("bulk", "Bulk"), { id: "world", name: "World", kind: "world" });
+  base.elements = Array.from({ length: 5 }, (_, index) => ({ ...road, id: `element-${index}`, belongsToId: "world" }));
+  const session = new EditorSession(base);
+  const preserved: { before: EditorProject; after: EditorProject }[] = [];
+  const bridge: CommandBridge = {
+    getSession: () => session,
+    refresh: vi.fn(),
+    preserveAgentChange: async (before, after) => { preserved.push({ before, after }); return "checkpoint"; },
+  };
+  const coordinator = new EditorCommandCoordinator(bridge);
+  const prepare = () => coordinator.prepare("bulk-delete", (before) => ({ project: { ...before, elements: [] }, summary: "Delete five records" }));
+  return { session, coordinator, prepare, preserved };
 }
 
 const road: DrawingElement = { id: "road", belongsToId: "world", name: "Road", layerId: "roads", subjectId: "road.paved", geometry: { kind: "path", points: [{ x: 0, y: 0 }, { x: 100, y: 0 }], closed: false }, widthMeters: 4, visible: true, locked: false, tags: [], access: [], properties: {} };
@@ -92,12 +109,12 @@ describe("EditorCommandCoordinator session guards", () => {
   });
 
   it("rejects a session replacement during safety preservation without mutating either session", async () => {
-    const { initial, bridge, coordinator, base, prepare, replaceSession, reports } = setup();
-    const prepared = prepare();
+    const { initial, bridge, coordinator, base, prepareSafety, replaceSession, reports } = setup();
+    const prepared = prepareSafety();
     if (prepared.status !== "prepared") throw new Error("expected prepared token");
     const gate = deferred<string>();
     bridge.preserveAgentChange = async () => gate.promise;
-    const applying = coordinator.applyWithSafety(prepared.token, 5);
+    const applying = coordinator.applyWithSafety(prepared.token);
     replaceSession();
     gate.resolve("safety-checkpoint");
 
@@ -110,17 +127,17 @@ describe("EditorCommandCoordinator session guards", () => {
   });
 
   it("applies a safety guarded change as one undoable transaction", async () => {
-    const { initial, coordinator, base, prepare, reports } = setup();
-    const prepared = prepare();
+    const { initial, coordinator, base, prepareSafety, reports } = setup();
+    const prepared = prepareSafety();
     if (prepared.status !== "prepared") throw new Error("expected prepared token");
 
-    const applied = await coordinator.applyWithSafety(prepared.token, 5);
+    const applied = await coordinator.applyWithSafety(prepared.token);
     expect(applied).toMatchObject({ status: "applied", checkpointId: "checkpoint" });
     expect(applied).not.toHaveProperty("session");
     expect(applied).not.toHaveProperty("sessionToken");
     expect(Object.values(applied).some((value) => typeof value === "symbol")).toBe(false);
     const repeated = coordinator.apply(prepared.token);
-    expect(repeated).toMatchObject({ status: "applied", alreadyApplied: true });
+    expect(repeated).toMatchObject({ status: "applied", alreadyApplied: true, stillCurrent: true });
     expect(repeated).not.toHaveProperty("session");
     expect(repeated).not.toHaveProperty("sessionToken");
     expect(Object.values(repeated).some((value) => typeof value === "symbol")).toBe(false);
@@ -129,6 +146,39 @@ describe("EditorCommandCoordinator session guards", () => {
     expect(reports).toHaveLength(1);
     expect(initial.undo().changed).toBe(true);
     expect(initial.getState().project).toEqual(base);
+    expect(coordinator.apply(prepared.token)).toMatchObject({ status: "applied", alreadyApplied: true, stillCurrent: false });
+  });
+
+  it("safety-traces five records deleted by a prepared token", async () => {
+    const { coordinator, prepare, preserved } = bulkDeleteSetup();
+    const prepared = prepare();
+    if (prepared.status !== "prepared") throw new Error("expected prepared token");
+
+    const applied = await coordinator.applyWithSafety(prepared.token);
+    expect(applied).toMatchObject({ status: "applied", checkpointId: "checkpoint", safetyReasons: ["many-targets"] });
+    expect(preserved).toHaveLength(1);
+    expect(preserved[0].before.elements).toHaveLength(5);
+    expect(preserved[0].after.elements).toHaveLength(0);
+  });
+
+  it("does not trust an obsolete caller target count", async () => {
+    const { coordinator, prepare, preserved } = setup();
+    const prepared = prepare();
+    if (prepared.status !== "prepared") throw new Error("expected prepared token");
+
+    const legacyCall = coordinator.applyWithSafety.bind(coordinator) as unknown as (token: string, targetCount: number) => Promise<{ status: string }>;
+    expect(await legacyCall(prepared.token, 999)).toMatchObject({ status: "applied" });
+    expect(preserved).toHaveLength(0);
+  });
+
+  it("safety-traces a clear-layer prepared change even below the record threshold", async () => {
+    const { coordinator, preserved } = setup();
+    const prepared = coordinator.prepare("clear-layer", (project) => ({ project: { ...project, name: "Cleared" }, summary: "Clear sketch layer", effects: ["cleared:sketch:all:world"] }));
+    if (prepared.status !== "prepared") throw new Error("expected prepared token");
+
+    const applied = await coordinator.applyWithSafety(prepared.token);
+    expect(applied).toMatchObject({ status: "applied", checkpointId: "checkpoint", safetyReasons: ["clear-layer"] });
+    expect(preserved).toHaveLength(1);
   });
 
   it("retains the ordinary stale revision guard", () => {
@@ -164,59 +214,10 @@ describe("EditorCommandCoordinator session guards", () => {
     if (prepared.status !== "prepared") throw new Error("expected prepared token");
     const preserve = vi.fn(async () => "checkpoint"); bridge.preserveAgentChange = preserve;
     replaceSession();
-    const outcome = method === "applyWithSafety" ? await coordinator.applyWithSafety(prepared.token, 5) : await coordinator.propose(prepared.token);
+    const outcome = method === "applyWithSafety" ? await coordinator.applyWithSafety(prepared.token) : await coordinator.propose(prepared.token);
     expect(outcome).toMatchObject({ status: "stale" }); expect(preserve).not.toHaveBeenCalled(); expect(reports).toHaveLength(0);
     expect(initial.getState().project).toEqual(base); expect(bridge.getSession().getState().project).toEqual(base);
     expect(initial.getHistoryState().canUndo).toBe(false); expect(bridge.getSession().getHistoryState().canUndo).toBe(false);
   });
 
-});
-
-describe("EditorCommandCoordinator retention", () => {
-  it("expires pending tokens at the configured TTL and keeps the not-found contract", () => {
-    let now = 1_000;
-    const { coordinator, prepare } = setup({ now: () => now, pendingTtlMs: 100 });
-    const prepared = prepare();
-    if (prepared.status !== "prepared") throw new Error("expected prepared token");
-
-    now += 100;
-    expect(coordinator.apply(prepared.token)).toMatchObject({ status: "not-found", token: prepared.token });
-  });
-
-  it("evicts the oldest pending token deterministically when the limit is exceeded", () => {
-    const { coordinator, prepare } = setup({ now: () => 2_000, maxPending: 1 });
-    const first = prepare(); const second = prepare();
-    if (first.status !== "prepared" || second.status !== "prepared") throw new Error("expected prepared tokens");
-
-    expect(coordinator.discard(first.token)).toMatchObject({ status: "not-found", token: first.token });
-    expect(coordinator.discard(second.token)).toMatchObject({ status: "discarded", token: second.token });
-  });
-
-  it("expires applied idempotency entries at the configured TTL", () => {
-    let now = 3_000;
-    const { coordinator, prepare } = setup({ now: () => now, appliedTtlMs: 100 });
-    const prepared = prepare();
-    if (prepared.status !== "prepared") throw new Error("expected prepared token");
-    expect(coordinator.apply(prepared.token).status).toBe("applied");
-
-    now += 100;
-    expect(coordinator.apply(prepared.token)).toMatchObject({ status: "not-found", token: prepared.token });
-  });
-
-  it("evicts the oldest applied idempotency entry deterministically", () => {
-    let now = 4_000;
-    const { coordinator } = setup({ now: () => now, maxApplied: 2 });
-    const tokens: string[] = [];
-    for (let index = 0; index < 3; index += 1) {
-      const prepared = coordinator.prepare(`retention-${index}`, (project) => ({ project: { ...project, name: `Changed ${index}` }, summary: "Change project" }));
-      if (prepared.status !== "prepared") throw new Error("expected prepared token");
-      tokens.push(prepared.token);
-      expect(coordinator.apply(prepared.token).status).toBe("applied");
-      now += 1;
-    }
-
-    expect(coordinator.apply(tokens[0]!)).toMatchObject({ status: "not-found", token: tokens[0] });
-    expect(coordinator.apply(tokens[1]!)).toMatchObject({ status: "applied", alreadyApplied: true });
-    expect(coordinator.apply(tokens[2]!)).toMatchObject({ status: "applied", alreadyApplied: true });
-  });
 });

@@ -20,6 +20,7 @@ import { defaultElementColor } from "../model/element-appearance";
 import { workbenchCopy, type EditorLocale } from "../i18n/workbench-copy";
 import { createProjectStoryDisplayNameResolver } from "../story/object-display-name";
 import { storyRefKey } from "../story/types";
+import { stableHash } from "../geometry/geometry-normalization";
 
 type ProjectRenderViewport = { center: KernelPoint; zoom: number; rotation: number };
 export type ProjectRenderOptions = { project: EditorProject; activePlaceId?: string; viewport?: ProjectRenderViewport; width?: number; height?: number; padding?: number; includeContext?: boolean; title?: string; locale?: EditorLocale };
@@ -37,7 +38,12 @@ function labelMarkup(text: MapLabelText, shape: RegionShape, zoom: number, id: s
   const rotate = label.rotation ? ` transform="rotate(${label.rotation} ${label.x} ${label.y})"` : "";
   return `<defs><clipPath id="${id}-label-clip"><path d="${regionPath(shape)}" fill-rule="evenodd"/></clipPath></defs><g clip-path="url(#${id}-label-clip)"><text x="${label.x}" y="${label.y + (label.nameOffsetY ?? 0)}" fill="${palette.ink}" font-family="Georgia,serif" font-size="${label.fontSize}" text-anchor="middle" dominant-baseline="middle" textLength="${label.textLength}" lengthAdjust="spacing" paint-order="stroke" stroke="${palette.paper}" stroke-width="${label.fontSize * .12}"${rotate}>${escapeXml(label.text)}</text>${label.secondaryLine ? `<text x="${label.x}" y="${label.y + label.secondaryLine.offsetY}" fill="${palette.ink}" font-family="Georgia,serif" text-anchor="middle" dominant-baseline="middle" font-size="${label.secondaryLine.fontSize}" textLength="${label.secondaryLine.textLength}" lengthAdjust="spacing"${rotate}>${escapeXml(label.secondaryLine.text)}</text>` : ""}</g>`;
 }
-function safeId(id: string) { return safeText(id, 80).replaceAll(/[^a-zA-Z0-9_-]/g, "-"); }
+function safeId(id: string) {
+  const source = safeText(id);
+  const sanitized = source.replaceAll(/[^a-zA-Z0-9_-]/g, "-");
+  if (source.length <= 80 && sanitized === source) return source;
+  return `${sanitized.slice(0, 64) || "id"}-${stableHash(source)}`;
+}
 function placeMarkup(place: PlaceNode, mode: "active" | "child" | "context" | "descendant", transform: string | undefined, zoom: number, units: "metric" | "imperial", showArea: boolean) {
   if (!place.boundary || place.visible === false) return ""; const context = mode === "context" || mode === "descendant"; const fill = safeColor(place.appearance?.fillColor, palette.place); const opacity = number(place.appearance?.fillOpacity, context ? .18 : .38, 0, 1); const label = mapLabelWithArea(place.name, mapRegionArea(place.boundary), units, showArea);
   const showLabel = mode === "child" || mode === "descendant" || mode === "context" && place.kind === "room";

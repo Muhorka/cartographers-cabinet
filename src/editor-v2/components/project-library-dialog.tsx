@@ -5,8 +5,13 @@ import type { WorkbenchCopy } from "../i18n/workbench-copy";
 import { projectLibraryCopy, type ProjectLibraryCopy } from "../i18n/project-library-copy";
 import { projectLibraryDetails, projectLibraryThumbnail } from "../persistence/project-library-presentation";
 import type { ProjectViewExportFormat } from "../export/project-export-browser";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import styles from "./project-library-dialog.module.css";
+
+function ProjectThumbnail({ project, alt }: { project: EditorProject; alt: string }) {
+  const source = useMemo(() => projectLibraryThumbnail(project), [project]);
+  return <img className={styles.thumbnail} src={source} alt={alt} loading="lazy" />;
+}
 
 export function ProjectLibraryDialog({ projects, activeProjectId, copy, libraryCopy, draftName, startingScale, pendingDeleteId, error, onDraftName, onStartingScale, onCreate, onOpen, onDuplicate, onRename, onExport, onExportView, onImport, onAskDelete, onDelete, onCancelDelete, onClose }: {
   projects: EditorProject[];
@@ -42,7 +47,7 @@ export function ProjectLibraryDialog({ projects, activeProjectId, copy, libraryC
         <button type="submit" disabled={!draftName.trim()}>{copy.create}</button>
       </form>
       <div className={styles.list}>{projects.map((project) => { const details = projectLibraryDetails(project); return <article key={project.id} className={project.id === activeProjectId ? styles.active : undefined}>
-        <img className={styles.thumbnail} src={projectLibraryThumbnail(project)} alt={detailCopy.thumbnail} loading="lazy" />
+        <ProjectThumbnail project={project} alt={detailCopy.thumbnail} />
         <div className={styles.projectInfo}>{editingId === project.id ? <form className={styles.rename} onSubmit={(event) => { event.preventDefault(); const name = editingName.trim(); if (name) onRename?.(project.id, name); setEditingId(undefined); }}><input autoFocus value={editingName} onChange={(event) => setEditingName(event.currentTarget.value)}/><button type="submit">{copy.saveName}</button><button type="button" onClick={() => setEditingId(undefined)}>{copy.close}</button></form> : <strong>{project.name}</strong>}<small>{detailCopy.places(details.placeCount)} · {detailCopy.levels(details.levelCount)} · {detailCopy.rooms(details.roomCount)}</small><small>{detailCopy.drawnItems(details.elementCount)} · {detailCopy.construction(details.wallCount)} · {detailCopy.updated}: {new Date(project.updatedAt).toLocaleString()}</small></div>
         {pendingDeleteId === project.id ? <div className={styles.confirm}><button type="button" onClick={() => onDelete(project.id)}>{copy.deleteProject}</button><button type="button" onClick={onCancelDelete}>{copy.close}</button></div> : <div className={styles.actions}>
           <button type="button" onClick={() => onOpen(project.id)}>{copy.openProject}</button>

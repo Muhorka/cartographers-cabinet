@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { storyDataSchema } from "../story/schema";
+import { migrateStoryData } from "../story/migration";
 import { isRibbonSubject } from "../geometry/ribbon-geometry";
 import { defaultMeasureSettings, normalizeEditorProject, type EditorProject } from "../model/project-model";
 import { validateProjectRelations } from "./project-relations";
@@ -13,7 +14,7 @@ const description = z.string().max(100_000);
 const finiteNumber = z.number().finite().min(-1_000_000_000).max(1_000_000_000);
 const positiveNumber = finiteNumber.positive();
 const point = z.object({ x: finiteNumber, y: finiteNumber }).strict();
-const roadJunction = z.object({ id: identifier, belongsToId: identifier, point, roadIds: z.array(identifier).min(2).max(32) }).strict();
+const roadJunction = z.object({ id: identifier, belongsToId: identifier, point, roadIds: z.array(identifier).length(2) }).strict();
 const bezierNode = z.object({ anchor: point, inHandle: point.optional(), outHandle: point.optional() }).strict();
 const stringList = z.array(shortText).max(10_000);
 const propertyValue = z.union([z.string().max(100_000), finiteNumber, z.boolean(), z.null()]);
@@ -80,7 +81,16 @@ const drawingElement = z.object({
   access: stringList,
   properties,
   appearance: appearance.optional(),
-}).strict().superRefine((element, context) => { if (isRibbonSubject(element.layerId, element.subjectId) && element.geometry.kind !== "path" && element.geometry.kind !== "bezier") context.addIssue({ code: "custom", message: "Ribbon subjects must use path or bezier geometry.", path: ["geometry", "kind"] }); if (!isRibbonSubject(element.layerId, element.subjectId) && element.ribbonCutouts) context.addIssue({ code: "custom", message: "Ribbon cutouts are only valid on ribbon elements.", path: ["ribbonCutouts"] }); });
+}).strict().superRefine((element, context) => {
+  const ribbon = isRibbonSubject(element.layerId, element.subjectId);
+  if (ribbon && element.geometry.kind !== "path" && element.geometry.kind !== "bezier") context.addIssue({ code: "custom", message: "Ribbon subjects must use path or bezier geometry.", path: ["geometry", "kind"] });
+  if (ribbon && (element.geometry.kind === "path" || element.geometry.kind === "bezier")) {
+    const anchors = element.geometry.kind === "path" ? element.geometry.points : element.geometry.nodes.map(({ anchor }) => anchor);
+    const first = anchors[0];
+    if (!first || !anchors.slice(1).some(({ x, y }) => x !== first.x || y !== first.y)) context.addIssue({ code: "custom", message: "Ribbon geometry needs at least two distinct points.", path: ["geometry"] });
+  }
+  if (!ribbon && element.ribbonCutouts) context.addIssue({ code: "custom", message: "Ribbon cutouts are only valid on ribbon elements.", path: ["ribbonCutouts"] });
+});
 const constructionSurface = z.object({
   id: identifier,
   belongsToId: identifier,
@@ -108,6 +118,7 @@ const measureSettings = z.object({
 }).strict();
 const wall = z.object({
   id: identifier,
+  sourceWallId: identifier.optional(),
   start: point,
   end: point,
   thickness: positiveNumber,
@@ -145,6 +156,9 @@ const transition = z.object({
   sameLevelRise: z.boolean().optional(),
   visible: z.boolean().optional(), locked: z.boolean().optional(),
 }).strict();
+const importedStory = z.preprocess((value) => value && typeof value === "object" && (value as { version?: unknown }).version === 1
+  ? value
+  : migrateStoryData(value), storyDataSchema);
 const construction = z.object({
   id: identifier,
   revision: z.number().int().finite().nonnegative(),
@@ -160,13 +174,13 @@ const rawEditorProjectSchema = z.object({
   id: identifier,
   name: shortText.refine((value) => Boolean(value.trim()), "Project name cannot be empty."),
   updatedAt: z.iso.datetime({ offset: true }),
-  places: z.array(place).max(100_000),
+  places: z.array(place).min(1, "A saved project needs at least one map.").max(100_000),
   elements: z.array(drawingElement).max(200_000),
   surfaces: z.array(constructionSurface).max(100_000).optional(),
   constructions: z.array(construction).max(100_000),
   measureSettings: measureSettings.optional(),
   roadJunctions: z.array(roadJunction).max(100_000).optional(),
-  story: storyDataSchema.optional(),
+  story: importedStory.optional(),
 }).strict();
 
 export const editorProjectSchema = rawEditorProjectSchema
@@ -191,7 +205,9 @@ function createProjectFileEnvelope(project: EditorProject, exportedAt = new Date
   return projectFileEnvelopeSchema.parse({ format: PROJECT_FILE_FORMAT, fileVersion: PROJECT_FILE_VERSION, exportedAt, project });
 }
 export function serializeProjectFile(project: EditorProject, exportedAt?: string) {
-  return JSON.stringify(createProjectFileEnvelope(project, exportedAt), null, 2);
+  const source = JSON.stringify(createProjectFileEnvelope(project, exportedAt), null, 2);
+  if (new TextEncoder().encode(source).byteLength > MAX_PROJECT_FILE_BYTES) throw new Error("Project file is too large.");
+  return source;
 }
 
 export function parseProjectFile(source: string | unknown): ProjectFileEnvelope {

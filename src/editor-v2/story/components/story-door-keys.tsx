@@ -71,7 +71,7 @@ function StoryDoorKeysContent({ project, openingRef, locale, context, target = "
   const attachedKeyIds = useMemo(() => [...new Set(effective?.metadata.access?.keyIds ?? [])], [effective]);
   const keys = useMemo(() => project.story.world.filter((entry) => entry.kind === "key" && attachedKeyIds.includes(entry.id)), [attachedKeyIds, project.story.world]);
   const holders = useMemo(() => project.story.world.filter((entry) => holderKinds.has(entry.kind)), [project.story.world]);
-  const scope = `${storyRefKey(openingRef)}:${target}:${context?.scenarioId ?? ""}:${context?.stepId ?? ""}`;
+  const scope = JSON.stringify([storyRefKey(openingRef), target, context?.scenarioId ?? null, context?.stepId ?? null]);
   const initialDrafts = useMemo(() => {
     const next: Record<string, string[]> = {};
     for (const key of keys) next[key.id] = holderIdsFor(project, key.id);

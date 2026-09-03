@@ -3,6 +3,7 @@ import { repairConstructionDocument } from "../construction/construction-documen
 import type { RoomFace } from "../geometry/geometry-types";
 
 import { shapePoints, shapePolygons } from "../geometry/region-constraints";
+import { mapRoomArea } from "../geometry/map-area";
 import { syncConstructionRooms } from "./hierarchy-operations";
 import type { EditorProject } from "./project-model";
 
@@ -20,10 +21,14 @@ function rememberedRoomFaces(project: EditorProject, construction: EditorProject
       const polygons = shapePolygons(rememberedPlace.boundary);
       if (polygons.length) {
         const polygon = polygons[0];
-        return [{ id: room.faceId, outer: polygon.outer, holes: polygon.holes, area: 0, wallIds: current?.wallIds ?? [] }];
+        const rememberedFace = { id: room.faceId, outer: polygon.outer, holes: polygon.holes, wallIds: current?.wallIds ?? [] };
+        return [{ ...rememberedFace, area: mapRoomArea(rememberedFace) ?? 0 }];
       }
       const points = shapePoints(rememberedPlace.boundary);
-      if (points.length >= 3) return [{ id: room.faceId, outer: points, holes: [], area: 0, wallIds: current?.wallIds ?? [] }];
+      if (points.length >= 3) {
+        const rememberedFace = { id: room.faceId, outer: points, holes: [], wallIds: current?.wallIds ?? [] };
+        return [{ ...rememberedFace, area: mapRoomArea(rememberedFace) ?? 0 }];
+      }
     }
     return current ? [current] : [];
   });

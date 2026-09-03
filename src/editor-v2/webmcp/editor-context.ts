@@ -30,7 +30,7 @@ export function scopedSelectionRefs(project: EditorProject, selections: { kind: 
 }
 
 export function inspectEditorContext(bridge: EditorContextBridge) {
-  const state = bridge.getSession().getState();
+  const state = bridge.getSession().getViewState();
   const live = bridge.getEditorContext?.() ?? { selections: [], mode: "drawing" as const, view: {} };
   const context = { ...live, projectId: state.project.id, activePlaceId: state.activePlaceId, toolbox: state.toolbox, boundaryEditing: state.boundaryEditing };
   return { ...context, contextVersion: valueRevision(context), projectRevision: projectRevision(state.project),

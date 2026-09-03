@@ -10,6 +10,7 @@ import { storyAccessDecision } from "../story/routes/access";
 import { defaultStoryAccessPolicy } from "../story/types";
 import type { EditorLiveContext, EditorStoryView, StoryViewUpdateResult } from "../webmcp/editor-context";
 import { EditorWorkbench } from "./editor-workbench";
+import { selectionKey } from "./map-sheet-types";
 
 type WorkbenchAgentActions = { getEditorContext?(): EditorLiveContext; setStoryView?(view: EditorStoryView): StoryViewUpdateResult | void };
 const fixture = vi.hoisted(() => ({ project: undefined as EditorProject | undefined, saved: undefined as EditorProject | undefined, sheet: undefined as ComponentProps<typeof MapSheet> | undefined, actions: undefined as WorkbenchAgentActions | undefined }));
@@ -46,6 +47,17 @@ beforeEach(async () => {
 afterEach(() => { act(() => root.unmount()); host.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe("Story works through the real editor shell, selection and session", () => {
+  it("starts Story with zones collapsed and keeps the manual choice across mode changes", () => {
+    const zones = [...host.querySelectorAll("summary")].find((summary) => summary.textContent === "Strefy")!;
+    const details = zones.parentElement as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+    act(() => { details.open = true; details.dispatchEvent(new Event("toggle")); });
+    expect(details.open).toBe(true);
+    click("Kreślenie"); click("Opowieść");
+    const reopened = [...host.querySelectorAll("summary")].find((summary) => summary.textContent === "Strefy")!;
+    expect((reopened.parentElement as HTMLDetailsElement).open).toBe(true);
+  });
+
   it("routes agent scenario and neutral views through the real mode bridge", () => {
     click("Kreślenie");
     expect(fixture.actions!.getEditorContext!()).toMatchObject({ mode: "drawing", view: {} });
@@ -85,7 +97,7 @@ describe("Story works through the real editor shell, selection and session", () 
   it("keeps mixed multi-selection and creates one shared trait for every selected object", () => {
     const room = roomRef(); act(() => fixture.sheet!.onSelect?.({ kind: "room", id: room.id }));
     act(() => fixture.sheet!.onSelect?.({ kind: "place", id: "p:building" }, true));
-    expect(fixture.sheet!.selectedIds).toEqual([room.id, "p:building"]);
+    expect(fixture.sheet!.selectedIds).toEqual([selectionKey({ kind: "room", id: room.id }), selectionKey({ kind: "place", id: "p:building" })]);
     expect(panel().textContent).toContain("Edytujesz: 2 obiektów");
     click("Nowa cecha…");
     inputText(panel().querySelector("form input") as HTMLInputElement, "Romantyczne"); click("Dodaj i przypisz");

@@ -1,28 +1,36 @@
 import { describe, expect, it } from "vitest";
-import { createBuildingWithDefaultLevel, createLevelForBuilding, createPlace } from "../model/hierarchy-operations";
+import { createLevelForBuilding, createPlace } from "../model/hierarchy-operations";
 import { shapePoints } from "../geometry/region-constraints";
-import { emptyProject } from "../model/project-model";
-import { localizeRegion } from "../geometry/region-transform";
 import { createConstructionDocument } from "../construction/construction-document";
 import { buildWallNetwork } from "../geometry/wall-network-kernel";
 import { deleteSelection, mergeSelectedRooms, moveElementRegionVertex, moveSelection, moveWallEndpoint, resizeElementRegion, updateElementDetails } from "./selection-operations";
-import { updateOpeningWidth } from "./selection-detail-operations";
-import { deleteSelectionGroup, moveSelectionGroup } from "./group-selection-operations";
-
-function identities() {
-  let index = 0;
-  return { createId: () => `id-${++index}`, createRoomName: (room: number) => `Room ${room}` };
-}
-
-function projectWithHouse() {
-  const identity = identities();
-  let project = createPlace(emptyProject("p", "P"), { id: "map", name: "Map", kind: "location", boundary: { kind: "rectangle", x: 0, y: 0, width: 100, height: 80 } });
-  const house = localizeRegion({ kind: "rectangle", x: 20, y: 20, width: 20, height: 14 });
-  project = createBuildingWithDefaultLevel(project, { id: "house", levelId: "floor", constructionId: "plan", parentId: "map", name: "House", levelName: "Floor", boundary: house.boundary, transform: house.transform }, identity);
-  return { project, identity };
-}
+import { updateOpeningWidth, updateSelectionState } from "./selection-detail-operations";
+import type { DrawingElement } from "../model/project-model";
+import { projectWithHouse } from "./selection-operations-fixtures";
 
 describe("selection operations", () => {
+  it("keeps construction-local ids scoped across two plans", () => {
+    const prepared = projectWithHouse();
+    const withUpper = createLevelForBuilding(prepared.project, { id: "upper", constructionId: "upper-plan", buildingId: "house", name: "Upper floor" }, prepared.identity);
+    const constructions = withUpper.constructions.map((document) => ({
+      ...document,
+      walls: document.walls.map((wall, index) => index === 0 ? { ...wall, id: "shared-wall" } : wall),
+      openings: [{ id: "shared-opening", kind: "door" as const, wallId: "shared-wall", position: .5, width: 1 }],
+      transitions: [{ id: "shared-transition", kind: "stairs" as const, footprint: { kind: "rectangle" as const, x: 3, y: 3, width: 2, height: 2 }, sameLevelRise: true }],
+    }));
+    const project = { ...withUpper, constructions };
+    const scoped = updateSelectionState(project, { kind: "wall", id: "shared-wall", scopeId: "upper-plan" }, { locked: true });
+    expect(scoped.constructions.find(({ id }) => id === "upper-plan")?.walls.find(({ id }) => id === "shared-wall")?.locked).toBe(true);
+    expect(scoped.constructions.find(({ id }) => id === "plan")?.walls.find(({ id }) => id === "shared-wall")?.locked).not.toBe(true);
+    const deleted = deleteSelection(project, { activePlaceId: "upper", selection: { kind: "opening", id: "shared-opening", scopeId: "upper-plan" }, boundaryEditing: false }, prepared.identity);
+    expect(deleted.state).toBe("applied");
+    if (deleted.state === "applied") {
+      expect(deleted.project.constructions.find(({ id }) => id === "upper-plan")?.openings).toHaveLength(0);
+      expect(deleted.project.constructions.find(({ id }) => id === "plan")?.openings).toHaveLength(1);
+    }
+    expect(moveSelection(project, { activePlaceId: "upper", selection: { kind: "wall", id: "shared-wall" }, delta: { x: 1, y: 0 }, boundaryEditing: true }, prepared.identity)).toMatchObject({ state: "blocked", reason: "not-found" });
+  });
+
   it("resizes every opening kind when the one-level building itself is active", () => {
     const { project } = projectWithHouse(); const document = project.constructions[0];
     const kinds = ["door", "window", "gate", "passage"] as const;
@@ -82,6 +90,24 @@ describe("selection operations", () => {
     expect(result.state).toBe("applied"); if (result.state !== "applied") return;
     const house = result.project.places.find(({ id }) => id === "house"); const floor = result.project.places.find(({ id }) => id === "floor");
     expect(floor?.boundary).toEqual(house?.boundary); expect(floor?.boundary).not.toEqual(project.places.find(({ id }) => id === "floor")?.boundary);
+  });
+
+  it("refuses to shrink a level past equipment of every supported geometry kind", () => {
+    const geometries: DrawingElement["geometry"][] = [
+      { kind: "region", shape: { kind: "rectangle", x: 7, y: -1, width: 1, height: 2 } },
+      { kind: "path", points: [{ x: 7, y: 0 }, { x: 8, y: 0 }], closed: false },
+      { kind: "bezier", nodes: [{ anchor: { x: 7, y: 0 } }, { anchor: { x: 8, y: 0 } }], closed: false },
+      { kind: "point", at: { x: 8, y: 0 } },
+      { kind: "note", at: { x: 8, y: 0 }, text: "Outside after shrink" },
+    ];
+
+    for (const [index, geometry] of geometries.entries()) {
+      const { project, identity } = projectWithHouse();
+      const rightWall = project.constructions[0].walls.find(({ start, end }) => start.x === 10 && end.x === 10)!;
+      const equipment: DrawingElement = { id: `equipment-${index}`, belongsToId: "floor", name: "Equipment", layerId: "equipment", subjectId: "equipment.object", geometry, visible: true, locked: false, tags: [], access: [], properties: {} };
+      const result = moveSelection({ ...project, elements: [equipment] }, { activePlaceId: "floor", selection: { kind: "wall", id: rightWall.id }, delta: { x: -4, y: 0 }, boundaryEditing: true }, identity);
+      expect(result, geometry.kind).toMatchObject({ state: "blocked", reason: "collision" });
+    }
   });
 
   it("lets one level extend into a balcony and expands the building footprint without changing its other level", () => {
@@ -202,52 +228,6 @@ describe("selection operations", () => {
     const table = { id: "table", belongsToId: "floor", name: "Table", layerId: "equipment" as const, subjectId: "equipment.furniture", geometry: { kind: "region" as const, shape: { kind: "rectangle" as const, x: -2, y: -2, width: 4, height: 3 } }, visible: true, locked: false, tags: [], access: [], properties: {} };
     const changed = updateElementDetails({ ...project, elements: [table] }, "table", { description: "Heavy oak table", tags: ["oak", "damaged"], visible: false, locked: true });
     expect(changed.elements[0]).toMatchObject({ description: "Heavy oak table", tags: ["oak", "damaged"], visible: false, locked: true, geometry: table.geometry });
-  });
-
-  it("moves several selected buildings atomically without treating their old positions as collisions", () => {
-    const prepared = projectWithHouse();
-    const second = { ...prepared.project.places.find(({ id }) => id === "house")!, id: "annex", name: "Annex", transform: { x: 65, y: 45, rotation: 0 } };
-    const project = { ...prepared.project, places: [...prepared.project.places, second] };
-    const moved = moveSelectionGroup(project, { activePlaceId: "map", selections: [{ kind: "place", id: "house" }, { kind: "place", id: "annex" }], delta: { x: 3, y: 2 }, boundaryEditing: false }, prepared.identity);
-    expect(moved.state).toBe("applied"); if (moved.state !== "applied") return;
-    expect(moved.project.places.find(({ id }) => id === "house")?.transform).toMatchObject({ x: 33, y: 29 });
-    expect(moved.project.places.find(({ id }) => id === "annex")?.transform).toMatchObject({ x: 68, y: 47 });
-  });
-
-  it("deletes several selected ordinary objects in one project change", () => {
-    const { project, identity } = projectWithHouse();
-    const object = (id: string, x: number) => ({ id, belongsToId: "floor", name: id, layerId: "equipment" as const, subjectId: "equipment.object", geometry: { kind: "point" as const, at: { x, y: 0 } }, visible: true, locked: false, tags: [], access: [], properties: {} });
-    const prepared = { ...project, elements: [object("a", 0), object("b", 2)] };
-    const deleted = deleteSelectionGroup(prepared, { activePlaceId: "floor", selections: [{ kind: "element", id: "a" }, { kind: "element", id: "b" }], boundaryEditing: false }, identity);
-    expect(deleted.state).toBe("applied"); if (deleted.state === "applied") expect(deleted.project.elements).toEqual([]);
-  });
-
-  it("deletes a mixed room and wall selection as one construction operation", () => {
-    const { project, identity } = projectWithHouse(); const base = project.constructions[0];
-    const document = createConstructionDocument(base.id, [...base.walls, { id: "partition", start: { x: 0, y: -7 }, end: { x: 0, y: 7 }, thickness: .2, role: "partition" }], { createId: identity.createId, createName: identity.createRoomName });
-    const deleted = deleteSelectionGroup({ ...project, constructions: [document] }, { activePlaceId: "floor", selections: [{ kind: "room", id: document.rooms[0].id }, { kind: "wall", id: "partition" }], boundaryEditing: false }, identity);
-    expect(deleted.state).toBe("applied"); if (deleted.state !== "applied") return;
-    expect(deleted.project.constructions[0].walls.map(({ id }) => id)).not.toContain("partition");
-    expect(deleted.project.constructions[0].rooms).toHaveLength(1);
-  });
-
-  it("moves only the selected atomic wall segments as one group", () => {
-    const { project, identity } = projectWithHouse();
-    const base = project.constructions[0];
-    const document = createConstructionDocument(base.id, [
-      ...base.walls,
-      { id: "horizontal", start: { x: -8, y: 0 }, end: { x: 8, y: 0 }, thickness: .2, role: "partition" },
-      { id: "vertical", start: { x: 0, y: -5 }, end: { x: 0, y: 5 }, thickness: .2, role: "partition" },
-    ], { createId: identity.createId, createName: identity.createRoomName });
-    const prepared = { ...project, constructions: [document] };
-    const selected = document.walls.filter(({ id }) => id === "horizontal:1" || id === "vertical:1");
-    const untouched = document.walls.find(({ id }) => id === "horizontal:2")!;
-    const result = moveSelectionGroup(prepared, { activePlaceId: "floor", selections: selected.map(({ id }) => ({ kind: "wall" as const, id })), delta: { x: 1, y: 2 }, boundaryEditing: false }, identity);
-    expect(result.state).toBe("applied"); if (result.state !== "applied") return;
-    const movedFamily = result.project.constructions[0].walls.filter(({ id }) => selected.some(({ id: sourceId }) => id === sourceId || id.startsWith(`${sourceId}:`)));
-    expect(movedFamily.some(({ start, end }) => [start, end].some((point) => point.x === selected[0].start.x + 1 && point.y === selected[0].start.y + 2))).toBe(true);
-    const untouchedFamily = result.project.constructions[0].walls.filter(({ id }) => id === untouched.id || id.startsWith(`${untouched.id}:`));
-    expect(untouchedFamily.flatMap(({ start, end }) => [start, end])).toContainEqual(untouched.end);
   });
 
 });

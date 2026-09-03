@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createConstructionDocument } from "./construction-document";
-import { deleteVerticalTransition, deleteWallOpening, moveWallOpening, placeVerticalTransition, placeWallOpening, resizeWallOpening } from "./wall-features";
+import { commitConstructionTransaction, createConstructionDocument, previewEnclosureReplacement } from "./construction-document";
+import { deleteVerticalTransition, deleteWallOpening, moveWallOpening, placeVerticalTransition, placeWallOpening, resizeWallOpening, validateVerticalTransitions } from "./wall-features";
 
 function plan() {
   return createConstructionDocument("plan", [{ id: "wall", start: { x: 0, y: 0 }, end: { x: 10, y: 0 }, thickness: .3, role: "boundary" }], { createId: () => "room", createName: () => "Room" });
@@ -34,6 +34,12 @@ describe("wall openings", () => {
 
 describe("vertical transitions", () => {
   const enclosure = { kind: "rectangle" as const, x: 0, y: 0, width: 10, height: 8 };
+  const enclosedPlan = () => createConstructionDocument("enclosed-plan", [
+    { id: "north", start: { x: 0, y: 0 }, end: { x: 10, y: 0 }, thickness: .3, role: "boundary" as const },
+    { id: "east", start: { x: 10, y: 0 }, end: { x: 10, y: 8 }, thickness: .3, role: "boundary" as const },
+    { id: "south", start: { x: 10, y: 8 }, end: { x: 0, y: 8 }, thickness: .3, role: "boundary" as const },
+    { id: "west", start: { x: 0, y: 8 }, end: { x: 0, y: 0 }, thickness: .3, role: "boundary" as const },
+  ], { createId: () => "room", createName: () => "Room" }, enclosure);
 
   it("places stairs only inside one enclosing room and prevents overlap", () => {
     const placed = placeVerticalTransition(plan(), { id: "stairs", footprint: { kind: "rectangle", x: 2, y: 2, width: 3, height: 2 }, enclosure });
@@ -45,5 +51,25 @@ describe("vertical transitions", () => {
   it("deletes a stair footprint as one object", () => {
     const placed = placeVerticalTransition(plan(), { id: "stairs", footprint: { kind: "rectangle", x: 2, y: 2, width: 3, height: 2 }, enclosure });
     expect(deleteVerticalTransition(placed.document, "stairs").document.transitions).toEqual([]);
+  });
+
+  it("reports overlap in persisted transition records", () => {
+    const document = { ...enclosedPlan(), transitions: [
+      { id: "stairs", kind: "stairs" as const, footprint: { kind: "rectangle" as const, x: 2, y: 2, width: 3, height: 2 } },
+      { id: "lift", kind: "elevator" as const, footprint: { kind: "rectangle" as const, x: 4, y: 2, width: 2, height: 2 } },
+    ] };
+    expect(validateVerticalTransitions(document)).toEqual(expect.arrayContaining([expect.objectContaining({ code: "overlap", transitionId: "stairs", relatedTransitionId: "lift" })]));
+  });
+
+  it("blocks a wall/enclosure rebuild that leaves a transition outside the room", () => {
+    const placed = placeVerticalTransition(enclosedPlan(), { id: "stairs", footprint: { kind: "rectangle", x: 7, y: 5, width: 2, height: 2 }, enclosure });
+    if (placed.state !== "placed") throw new Error("placement failed");
+    const candidate = previewEnclosureReplacement(placed.document, [
+      { id: "north", start: { x: 0, y: 0 }, end: { x: 6, y: 0 }, thickness: .3, role: "boundary" as const },
+      { id: "east", start: { x: 6, y: 0 }, end: { x: 6, y: 8 }, thickness: .3, role: "boundary" as const },
+      { id: "south", start: { x: 6, y: 8 }, end: { x: 0, y: 8 }, thickness: .3, role: "boundary" as const },
+      { id: "west", start: { x: 0, y: 8 }, end: { x: 0, y: 0 }, thickness: .3, role: "boundary" as const },
+    ], { kind: "rectangle", x: 0, y: 0, width: 6, height: 8 }, { createId: () => "room-2", createName: () => "Room" });
+    expect(commitConstructionTransaction(placed.document, candidate)).toMatchObject({ state: "blocked", document: placed.document });
   });
 });

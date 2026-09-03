@@ -6,7 +6,7 @@ export function exportProjectFile(project: EditorProject) {
   const url = URL.createObjectURL(new Blob([serializeProjectFile(project)], { type: PROJECT_FILE_MIME_TYPE }));
   const anchor = document.createElement("a");
   anchor.href = url; anchor.download = projectExportFileName(project.name); anchor.click();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 const PROJECT_RECOVERY_MIME_TYPE = "application/vnd.cartographers-cabinet.project-recovery+json";

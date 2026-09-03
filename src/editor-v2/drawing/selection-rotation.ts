@@ -1,5 +1,6 @@
 import { constructionNetwork } from "../construction/construction-network";
 import { commitConstructionTransaction, previewEnclosureReplacement, previewWallReplacement } from "../construction/construction-document";
+import { validateVerticalTransitions } from "../construction/wall-features";
 import { applyAffinePoint, relativePlaceMatrix, transformDrawingGeometry, transformRegion, type AffineMatrix } from "../geometry/affine-transform";
 import type { KernelPoint } from "../geometry/geometry-types";
 import { assessRegionConstraint, shapePoints } from "../geometry/region-constraints";
@@ -174,7 +175,8 @@ function transformedConstruction(project: EditorProject, item: ConstructionItem,
   if (candidate.state !== "committed") return undefined;
   const rotation = Math.atan2(local[1], local[0]) * 180 / Math.PI;
   const transitions = candidate.document.transitions.map((transition) => item.transitionIds.has(transition.id) ? { ...transition, footprint: transformRegion(local, transition.footprint), direction: transition.direction === undefined ? undefined : transition.direction + rotation } : transition);
-  return { ...candidate.document, transitions };
+  const result = { ...candidate.document, transitions };
+  return validateVerticalTransitions(result).length ? undefined : result;
 }
 
 function fits(project: EditorProject, elements: DrawingElement[]) {

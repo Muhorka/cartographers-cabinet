@@ -1,7 +1,9 @@
 import type { KernelPoint } from "../geometry/geometry-types";
 import type { RegionShape } from "../model/project-model";
 import type { ConstructionDocument } from "./construction-document";
-import { assessRegionConstraint } from "../geometry/region-constraints";
+import { assessRegionConstraint, isValidRegionShape, shapePoints, shapePolygons } from "../geometry/region-constraints";
+import { roomFaceShape } from "../geometry/room-face-shape";
+import { constructionNetwork } from "./construction-network";
 
 export type WallOpening = {
   id: string;
@@ -26,6 +28,89 @@ export type VerticalTransition = {
   visible?: boolean;
   locked?: boolean;
 };
+
+type VerticalTransitionIssue = {
+  code: "invalid-footprint" | "outside-room" | "overlap" | "invalid-level-reference" | "invalid-same-level";
+  transitionId: string;
+  relatedTransitionId?: string;
+  levelId?: string;
+  message: string;
+};
+
+export type VerticalTransitionValidationOptions = {
+  /** The project-level ids and kinds, when the project context is available. */
+  levelIds?: ReadonlySet<string>;
+  levelKinds?: ReadonlyMap<string, string>;
+};
+
+function finitePoint(point: KernelPoint) {
+  return Number.isFinite(point.x) && Number.isFinite(point.y);
+}
+
+function validTransitionFootprint(footprint: RegionShape) {
+  try {
+    if (footprint.kind === "rectangle" && (footprint.width <= 0 || footprint.height <= 0)) return false;
+    if (footprint.kind === "circle" && footprint.radius <= 0) return false;
+    if (footprint.kind === "ellipse" && (footprint.rx <= 0 || footprint.ry <= 0)) return false;
+    const polygons = shapePolygons(footprint);
+    if (!polygons.length || polygons.some(({ outer, holes }) => outer.length < 3 || holes.some((hole) => hole.length < 3) || !outer.every(finitePoint) || holes.some((hole) => !hole.every(finitePoint)))) return false;
+    return isValidRegionShape(footprint) && shapePoints(footprint).every(finitePoint);
+  } catch {
+    return false;
+  }
+}
+
+function transitionLevelIds(transition: VerticalTransition) {
+  return [transition.sourceLevelId, transition.targetLevelId, ...(transition.connectedLevelIds ?? [])].filter((id): id is string => Boolean(id));
+}
+
+/**
+ * The single construction-level integrity check for persisted vertical
+ * transitions.  It deliberately skips containment when a legacy document has
+ * neither a room face nor an enclosure: there is no boundary to validate in
+ * that representation.  Once either exists, every footprint must fit it.
+ */
+export function validateVerticalTransitions(document: ConstructionDocument, options: VerticalTransitionValidationOptions = {}) {
+  const issues: VerticalTransitionIssue[] = [];
+  let faces: ReturnType<typeof constructionNetwork>["faces"] = [];
+  try { faces = constructionNetwork(document.walls, document.enclosure).faces; } catch { /* the construction validator reports the network separately */ }
+  const hasContainment = faces.length > 0 || Boolean(document.enclosure);
+  const containingFace = (footprint: RegionShape) => faces.find((face) => assessRegionConstraint(footprint, roomFaceShape(face)).state === "inside");
+  const enclosed = (footprint: RegionShape) => faces.length ? Boolean(containingFace(footprint)) : Boolean(document.enclosure && assessRegionConstraint(footprint, document.enclosure).state === "inside");
+
+  for (const transition of document.transitions) {
+    if (!validTransitionFootprint(transition.footprint)) {
+      issues.push({ code: "invalid-footprint", transitionId: transition.id, message: `Invalid vertical transition footprint: ${transition.id}` });
+      continue;
+    }
+    if (hasContainment && !enclosed(transition.footprint)) issues.push({ code: "outside-room", transitionId: transition.id, message: `Vertical transition is outside a room face or enclosure: ${transition.id}` });
+    const referenced = transitionLevelIds(transition);
+    if (options.levelIds || options.levelKinds) for (const levelId of referenced) {
+      const kind = options.levelKinds?.get(levelId);
+      const known = options.levelKinds ? options.levelKinds.has(levelId) : options.levelIds?.has(levelId);
+      if (!known) issues.push({ code: "invalid-level-reference", transitionId: transition.id, levelId, message: `Vertical connection references a missing level: ${levelId}` });
+      else if (kind && kind !== "level") issues.push({ code: "invalid-level-reference", transitionId: transition.id, levelId, message: `Vertical connection references a place that is not a level: ${levelId} (${kind})` });
+    }
+    if (new Set(transition.connectedLevelIds ?? []).size !== (transition.connectedLevelIds ?? []).length) issues.push({ code: "invalid-level-reference", transitionId: transition.id, message: `Vertical connection repeats a connected level: ${transition.id}` });
+    if (transition.sameLevelRise && transition.sourceLevelId) {
+      const other = referenced.find((levelId) => levelId !== transition.sourceLevelId);
+      if (other) issues.push({ code: "invalid-same-level", transitionId: transition.id, levelId: other, message: `Same-level rise references another level: ${transition.id}` });
+    }
+  }
+  for (let first = 0; first < document.transitions.length; first += 1) for (let second = first + 1; second < document.transitions.length; second += 1) {
+    const left = document.transitions[first]!; const right = document.transitions[second]!;
+    if (validTransitionFootprint(left.footprint) && validTransitionFootprint(right.footprint) && assessRegionConstraint(left.footprint, right.footprint).state !== "outside") issues.push({ code: "overlap", transitionId: left.id, relatedTransitionId: right.id, message: `Vertical transitions overlap: ${left.id} and ${right.id}` });
+  }
+  return issues;
+}
+
+export function findTransitionRoomFace(document: ConstructionDocument, footprint: RegionShape) {
+  return constructionNetwork(document.walls, document.enclosure).faces.find((face) => assessRegionConstraint(footprint, roomFaceShape(face)).state === "inside");
+}
+
+export function transitionsFitRooms(document: ConstructionDocument) {
+  return validateVerticalTransitions(document).length === 0;
+}
 
 type Projection = { wallId: string; position: number; distance: number; wallLength: number };
 
@@ -82,20 +167,23 @@ export function deleteWallOpening(document: ConstructionDocument, id: string) {
   return { state: "deleted" as const, document: withRevision(document, { openings: document.openings.filter((opening) => opening.id !== id) }) };
 }
 
-export function placeVerticalTransition(document: ConstructionDocument, input: { id: string; kind?: VerticalTransition["kind"]; footprint: RegionShape; enclosure: RegionShape; sourceLevelId?: string; targetLevelId?: string; connectedLevelIds?: string[]; style?: VerticalTransition["style"]; direction?: number; sameLevelRise?: boolean }) {
+export function placeVerticalTransition(document: ConstructionDocument, input: { id: string; kind?: VerticalTransition["kind"]; footprint: RegionShape; enclosure: RegionShape; sourceLevelId?: string; targetLevelId?: string; connectedLevelIds?: string[]; style?: VerticalTransition["style"]; direction?: number; sameLevelRise?: boolean }, validationOptions: VerticalTransitionValidationOptions = {}) {
   if (assessRegionConstraint(input.footprint, input.enclosure).state !== "inside") {
     return { state: "outside-room" as const, document };
   }
-  const overlaps = document.transitions.some(({ footprint }) => assessRegionConstraint(input.footprint, footprint).state !== "outside");
-  if (overlaps) return { state: "blocked" as const, document };
   const transition: VerticalTransition = { id: input.id, kind: input.kind ?? "stairs", footprint: input.footprint, ...(input.sourceLevelId ? { sourceLevelId: input.sourceLevelId } : {}), ...(input.targetLevelId ? { targetLevelId: input.targetLevelId } : {}), ...(input.connectedLevelIds?.length ? { connectedLevelIds: [...new Set(input.connectedLevelIds)] } : {}), ...(input.style ? { style: input.style } : {}), ...(input.direction !== undefined ? { direction: input.direction } : {}), ...(input.sameLevelRise !== undefined ? { sameLevelRise: input.sameLevelRise } : {}) };
-  return { state: "placed" as const, document: withRevision(document, { transitions: [...document.transitions, transition] }), transition };
+  const candidate = withRevision(document, { transitions: [...document.transitions, transition] });
+  if (validateVerticalTransitions(candidate, validationOptions).some(({ code }) => code === "invalid-footprint" || code === "overlap" || code === "invalid-level-reference" || code === "invalid-same-level")) return { state: "blocked" as const, document };
+  return { state: "placed" as const, document: candidate, transition };
 }
 
-export function updateVerticalTransition(document: ConstructionDocument, id: string, details: Partial<Pick<VerticalTransition, "kind" | "sourceLevelId" | "targetLevelId" | "connectedLevelIds" | "style" | "direction" | "sameLevelRise">>) {
+export function updateVerticalTransition(document: ConstructionDocument, id: string, details: Partial<Pick<VerticalTransition, "kind" | "sourceLevelId" | "targetLevelId" | "connectedLevelIds" | "style" | "direction" | "sameLevelRise">>, validationOptions: VerticalTransitionValidationOptions = {}) {
   const current = document.transitions.find((transition) => transition.id === id); if (!current) return { state: "not-found" as const, document };
   const transition = { ...current, ...details, connectedLevelIds: details.connectedLevelIds ? [...new Set(details.connectedLevelIds)] : current.connectedLevelIds };
-  return { state: "updated" as const, document: withRevision(document, { transitions: document.transitions.map((candidate) => candidate.id === id ? transition : candidate) }), transition };
+  const candidateDocument = withRevision(document, { transitions: document.transitions.map((candidate) => candidate.id === id ? transition : candidate) });
+  const issues = validateVerticalTransitions(candidateDocument, validationOptions);
+  if (issues.some(({ code }) => code === "invalid-footprint" || code === "outside-room" || code === "overlap" || code === "invalid-level-reference" || code === "invalid-same-level")) return { state: "blocked" as const, document, reason: issues.some(({ code }) => code === "outside-room") ? "outside-room" as const : "collision" as const };
+  return { state: "updated" as const, document: candidateDocument, transition };
 }
 
 export function deleteVerticalTransition(document: ConstructionDocument, id: string) {

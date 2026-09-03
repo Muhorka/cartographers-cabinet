@@ -3,6 +3,8 @@ import type { MapAppearance } from "../model/project-model";
 import type { VerticalTransition } from "../construction/wall-features";
 import type { InstrumentId, WorkLayerId } from "../toolbox/toolbox-model";
 
+export type AgentLocale = "pl" | "en";
+
 export type AgentObjectRef = {
   type: "place" | "room" | "element" | "surface" | "wall" | "opening" | "transition";
   id: string;

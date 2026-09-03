@@ -133,6 +133,16 @@ describe("story view typed collection adapter", () => {
     expect(next.memberships).toEqual([]);
   });
 
+  it("uses the domain deletion guard when a worldbook collection removes a route actor", () => {
+    const story = { ...emptyStoryData(), world: [{ id: "alice", kind: "character" as const, name: "Alice", tags: [], properties: {} }], routes: [{ id: "route", name: "Route", query: { from: { placeId: "room", point: { x: 0, y: 0 } }, to: { placeId: "room", point: { x: 1, y: 1 } }, actorId: "alice" }, result: { status: "ready" as const, revision: 0, sourceRevision: "rev", routes: [], missingFacts: [], reasons: [] }, sourceRevision: "rev" }] };
+    expect(() => replaceStoryCollection(story, "characters", [])).toThrow(/saved route/i);
+  });
+
+  it("uses the domain deletion guard when the worldbook removes a saved route scenario", () => {
+    const story = { ...emptyStoryData(), scenarios: [{ id: "night", name: "Night", patches: [], steps: [] }], routes: [{ id: "route", name: "Route", query: { from: { placeId: "room", point: { x: 0, y: 0 } }, to: { placeId: "room", point: { x: 1, y: 1 } }, scenarioId: "night" }, result: { status: "ready" as const, revision: 0, sourceRevision: "rev", routes: [], missingFacts: [], reasons: [] }, sourceRevision: "rev" }] };
+    expect(() => replaceStoryCollection(story, "scenarios", [])).toThrow(/saved route/i);
+  });
+
   it("creates a relation with selected endpoints that passes the canonical schema", () => {
     const story = emptyStoryData();
     const next = replaceStoryCollection(story, "relations", [{ id: "r", name: "Watch", fromRefs: "entryId:keeper", toRefs: "entryId:gate", kind: "guards", source: "chronicle" }]);

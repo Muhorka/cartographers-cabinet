@@ -26,6 +26,21 @@ describe("selection visibility and lock state", () => {
     expect(resizeTransitionFootprint(withTransition, "transition-1", "south-east", { x: 3, y: 3 })).toMatchObject({ state: "blocked", reason: "locked-outline" });
   });
 
+  it("blocks resizing a transition outside its room", () => {
+    const base = createStarterProject("project", "Project", "en");
+    const withTransition = { ...base, constructions: base.constructions.map((document) => ({ ...document, transitions: [{ id: "transition-1", kind: "stairs" as const, footprint: { kind: "rectangle" as const, x: -5, y: -3, width: 2, height: 2 } }] })) };
+    expect(resizeTransitionFootprint(withTransition, "transition-1", "south-east", { x: 20, y: 20 })).toMatchObject({ state: "blocked", reason: "outside-outline" });
+  });
+
+  it("blocks resizing a transition over another transition", () => {
+    const base = createStarterProject("project", "Project", "en");
+    const withTransitions = { ...base, constructions: base.constructions.map((document) => ({ ...document, transitions: [
+      { id: "transition-1", kind: "stairs" as const, footprint: { kind: "rectangle" as const, x: -5, y: -3, width: 2, height: 2 } },
+      { id: "transition-2", kind: "stairs" as const, footprint: { kind: "rectangle" as const, x: 0, y: -3, width: 3, height: 2 } },
+    ] })) };
+    expect(resizeTransitionFootprint(withTransitions, "transition-1", "south-east", { x: 4, y: -1 })).toMatchObject({ state: "blocked", reason: "collision" });
+  });
+
   it.each(["place", "room", "wall"] as const)("blocks deleting a locked %s", (kind) => {
     const base = createStarterProject("project", "Project", "en");
     const id = kind === "place" ? "project:place" : kind === "room" ? base.constructions[0].rooms[0].id : base.constructions[0].walls[0].id;

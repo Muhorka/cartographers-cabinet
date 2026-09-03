@@ -41,12 +41,12 @@ describe("checkpoint contents load on demand", () => {
     await act(async () => root.render(<Probe project={project}/>)); await act(async () => { await hook.preserve("c"); });
     expect(hook.items[0]).toEqual(summary("c")); expect(hook.items[0]).not.toHaveProperty("snapshot");
     storage.load.mockRejectedValue(new Error("Checkpoint missing")); await act(async () => hook.setActiveId("c"));
-    expect(hook.error).toContain("Checkpoint missing"); expect(hook.tracingProject).toBeUndefined();
+    expect(hook.error).toBe("The change could not be saved to local storage."); expect(hook.error).not.toContain("Checkpoint missing"); expect(hook.tracingProject).toBeUndefined();
   });
 
   it("does not add a checkpoint when saving fails and clears an earlier error after success", async () => {
     const project = emptyProject("p", "Current"); storage.list.mockRejectedValueOnce(new Error("Storage unavailable")); storage.save.mockRejectedValueOnce(new Error("Write failed"));
-    await act(async () => root.render(<Probe project={project}/>)); expect(hook.error).toContain("Storage unavailable");
+    await act(async () => root.render(<Probe project={project}/>)); expect(hook.error).toBe("The change could not be saved to local storage."); expect(hook.error).not.toContain("Storage unavailable");
     await act(async () => { expect(await hook.preserve("failed")).toBeUndefined(); });
     expect(hook.error).toBe("Nie udało się zachować tej wersji. Bieżący projekt pozostaje bez zmian."); expect(hook.items).toHaveLength(0);
     const checkpoint = { ...summary("saved"), snapshot: project }; storage.save.mockResolvedValueOnce(checkpoint);

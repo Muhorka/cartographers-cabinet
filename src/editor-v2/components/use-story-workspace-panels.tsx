@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { current as immerCurrent } from "immer";
 import type { EditorProject } from "../model/project-model";
 import type { ProjectTransaction } from "../state/editor-session";
 import type { EditorStoryView } from "../webmcp/editor-context";
@@ -11,6 +12,7 @@ import type { StoryCollection, StoryRecord } from "../story/components/story-typ
 import { removeScenarioEffect, replaceScenario, replaceProjectScenarios } from "../story/scenario-commands";
 import type { StoryObjectRef, StoryViewContext } from "../story/types";
 import type { StoryRouteRecord } from "../story/routes/types";
+import { mergeStoryRecordUpdate } from "../story/components/story-record-update";
 import { storyWorkspaceCopy } from "../story/i18n/workspace-copy";
 import styles from "./workbench-story.module.css";
 
@@ -44,10 +46,20 @@ export function useStoryWorkspacePanels({ project, controller, locale, context, 
     const active = context.scenarioId === scenario.id;
     const stepId = active && scenario.steps.some(({ id }) => id === context.stepId) ? context.stepId : undefined;
     const activate = (activeStepId?: string) => setContext({ scenarioId: scenario.id, stepId: activeStepId, editTarget: "scenario" });
+    const updateScenario = (next: Parameters<typeof replaceScenario>[1]) => apply((current) => {
+      const liveDraft = current.story.scenarios.find(({ id }) => id === scenario.id);
+      if (!liveDraft) return current;
+      // Structural transactions receive Immer drafts. Materialize the live
+      // record before the merge so unchanged nested arrays are not proxies
+      // passed to scenario validation's structuredClone boundary.
+      const live = immerCurrent(liveDraft) as unknown as StoryRecord;
+      const merged = mergeStoryRecordUpdate(live, scenario as unknown as StoryRecord, next as unknown as StoryRecord) as typeof next;
+      return replaceScenario(current, merged);
+    });
     return <div className={styles.scenarioEntry}>
       {!active && <p>{c.inactiveScenario}</p>}
       <StoryScenarioEditor project={project} scenarioId={scenario.id} activeStepId={stepId} locale={locale} selectionCount={refs.length}
-        onActivate={activate} onChange={(next) => apply((current) => replaceScenario(current, next))}
+        onActivate={activate} onChange={updateScenario}
         onInspect={(ref, currentStep) => { if (focus([ref])) { activate(currentStep); onOpenDetails(); } }}
         onAddSelection={(currentStep) => { if (refs.length) { activate(currentStep); onOpenDetails(); setNotice(c.selectionHint); } }}
         onRemoveEffect={(patchId, currentStep) => apply((current) => removeScenarioEffect(current, scenario.id, patchId, currentStep))}/>

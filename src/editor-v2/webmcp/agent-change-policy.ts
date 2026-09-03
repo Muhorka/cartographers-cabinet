@@ -12,11 +12,11 @@ export function assertAgentEditableTarget(project: EditorProject, ref: StoryObje
 
 function records(project: EditorProject) {
   return [
-    ...project.places.map((value) => ({ key: `place:${value.id}`, value })),
-    ...project.elements.map((value) => ({ key: `element:${value.id}`, value })),
-    ...project.surfaces.map((value) => ({ key: `surface:${value.id}`, value })),
+    ...project.places.map((value) => ({ key: JSON.stringify(["place", null, value.id]), value })),
+    ...project.elements.map((value) => ({ key: JSON.stringify(["element", null, value.id]), value })),
+    ...project.surfaces.map((value) => ({ key: JSON.stringify(["surface", null, value.id]), value })),
     ...project.constructions.flatMap((document) => (["walls", "rooms", "openings", "transitions"] as const)
-      .flatMap((kind) => document[kind].map((value) => ({ key: `${kind}:${document.id}:${value.id}`, value })))),
+      .flatMap((kind) => document[kind].map((value) => ({ key: JSON.stringify([kind, document.id, value.id]), value })))),
   ];
 }
 
@@ -59,9 +59,24 @@ export function assertAgentLocks(before: EditorProject, after: EditorProject) {
   }
 }
 
-export function agentSafetyReasons(before: EditorProject, after: EditorProject, targetCount = 0): string[] {
+export type AgentSafetyOptions = {
+  /** The coordinator computes this from the before/after snapshots. */
+  changedRecordCount?: number;
+  /** Clearing a layer is intentionally safety-traced even when it has few records. */
+  clearLayer?: boolean;
+};
+
+/** Counts map records whose identity or serialized value changed between snapshots. */
+export function changedAgentRecordCount(before: EditorProject, after: EditorProject) {
+  const previous = new Map(records(before).map(({ key, value }) => [key, stableJsonStringify(value)]));
+  const next = new Map(records(after).map(({ key, value }) => [key, stableJsonStringify(value)]));
+  return new Set([...previous.keys(), ...next.keys()]).size - [...previous].filter(([key, value]) => next.get(key) === value).length;
+}
+
+export function agentSafetyReasons(before: EditorProject, after: EditorProject, options: AgentSafetyOptions = {}): string[] {
   const reasons = new Set<string>();
-  if (targetCount >= 5) reasons.add("many-targets");
+  if ((options.changedRecordCount ?? changedAgentRecordCount(before, after)) >= 5) reasons.add("many-targets");
+  if (options.clearLayer) reasons.add("clear-layer");
   for (const old of before.places) {
     const next = after.places.find(({ id }) => id === old.id);
     if (!next && (before.places.some(({ parentId }) => parentId === old.id)

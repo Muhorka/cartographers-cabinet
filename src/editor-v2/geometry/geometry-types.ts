@@ -8,6 +8,8 @@ export type BezierNode = {
 
 export type CanonicalWall = {
   id: string;
+  /** Immediate wall record from which this segment was derived. */
+  sourceWallId?: string;
   start: KernelPoint;
   end: KernelPoint;
   thickness: number;

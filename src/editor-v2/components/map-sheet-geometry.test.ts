@@ -20,6 +20,15 @@ describe("map sheet viewport context", () => {
     expect(constructionPlaceForView(project, "room")?.id).toBe("level");
   });
 
+  it("does not show an arbitrary floor construction for a multi-level building", () => {
+    let project = createPlace(emptyProject("p", "P"), { id: "building", name: "Building", kind: "building" });
+    project = createPlace(project, { id: "ground", parentId: "building", name: "Ground", kind: "level", constructionId: "ground-plan" });
+    project = createPlace(project, { id: "upper", parentId: "building", name: "Upper", kind: "level", constructionId: "upper-plan" });
+
+    expect(constructionPlaceForView(project, "building")).toBeUndefined();
+    expect(constructionPlaceForView(project, "ground")?.id).toBe("ground");
+  });
+
   it("shows terrain across nearby hierarchy levels without exposing unrelated branches", () => {
     let project = createPlace(emptyProject("p", "P"), { id: "world", name: "World", kind: "world" });
     project = createPlace(project, { id: "place", parentId: "world", name: "Place", kind: "location" });

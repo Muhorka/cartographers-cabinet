@@ -1,15 +1,16 @@
 import { reshapeRoad } from "../roads/road-editing";
 import { reshapeRibbon } from "../geometry/ribbon-editing";
 import { commitRibbonEdit } from "../geometry/ribbon-commit";
-import { resizeWallOpening, updateVerticalTransition, type VerticalTransition } from "../construction/wall-features";
+import { deleteVerticalTransition, findTransitionRoomFace, placeVerticalTransition, resizeWallOpening, updateVerticalTransition, type VerticalTransition } from "../construction/wall-features";
 import { assessRegionConstraint, repairRegionShape } from "../geometry/region-constraints";
 import { resizeRegionFromCorner, type ResizeCorner } from "../geometry/region-resize";
+import { roomFaceShape } from "../geometry/room-face-shape";
 import type { KernelPoint } from "../geometry/geometry-types";
 import { changeElementOwnership, syncConstructionRooms } from "../model/hierarchy-operations";
 import type { DrawingElement, EditorProject, MapAppearance } from "../model/project-model";
 import type { SelectionOperationResult } from "./selection-operations";
 import { moveRegionVertex } from "../geometry/region-vertex-edit";
-import { selectionIsLocked } from "./selection-locks";
+import { constructionForSelection, selectionIsLocked } from "./selection-locks";
 import { movePathAnchor } from "../geometry/path-anchor-edit";
 import { geometryFitsBoundary } from "./geometry-containment";
 import { isFlowingWater, isRibbonElement } from "../geometry/ribbon-geometry";
@@ -44,12 +45,9 @@ export function updateSelectionState(project: EditorProject, selection: { kind: 
   if (selection.kind === "element") return updateElementDetails(project, selection.id, details);
   if (selection.kind === "place") return { ...project, places: project.places.map((place) => place.id === selection.id ? { ...place, ...details } : place) };
   if (selection.kind === "surface") return { ...project, surfaces: project.surfaces.map((surface) => surface.id === selection.id ? { ...surface, ...details } : surface) };
-  const constructions = project.constructions.map((document) => {
-    if (selection.scopeId && document.id !== selection.scopeId && !project.places.some(({ id, constructionId }) => id === selection.scopeId && constructionId === document.id)) return document;
-    const key = selection.kind === "wall" ? "walls" : selection.kind === "opening" ? "openings" : selection.kind === "transition" ? "transitions" : selection.kind === "room" ? "rooms" : undefined;
-    if (!key || !document[key].some(({ id }) => id === selection.id)) return document;
-    return { ...document, revision: document.revision + 1, [key]: document[key].map((item) => item.id === selection.id ? { ...item, ...details } : item) };
-  });
+  const key = selection.kind === "wall" ? "walls" : selection.kind === "opening" ? "openings" : selection.kind === "transition" ? "transitions" : selection.kind === "room" ? "rooms" : undefined;
+  const owner = key ? constructionForSelection(project, selection as Parameters<typeof constructionForSelection>[1]) : undefined;
+  const constructions = owner && key ? project.constructions.map((document) => document.id === owner.id ? { ...document, revision: document.revision + 1, [key]: document[key].map((item) => item.id === selection.id ? { ...item, ...details } : item) } : document) : project.constructions;
   const places = selection.kind === "room" ? project.places.map((place) => place.id === selection.id ? { ...place, ...details } : place) : project.places;
   return { ...project, constructions, places };
 }
@@ -61,8 +59,8 @@ export function updateRoomName(project: EditorProject, activePlaceId: string, id
   return syncConstructionRooms({ ...project, constructions: project.constructions.map((candidate) => candidate.id === document.id ? changed : candidate) }, changed);
 }
 
-export function updateOpeningWidth(project: EditorProject, activePlaceId: string, id: string, width: number): SelectionOperationResult {
-  const document = activeConstruction(project, activePlaceId); if (!document) return { state: "blocked", project, reason: "not-found" };
+export function updateOpeningWidth(project: EditorProject, activePlaceId: string, id: string, width: number, scopeId?: string): SelectionOperationResult {
+  const document = constructionForSelection(project, { kind: "opening", id, ...(scopeId ? { scopeId } : {}) }); if (!document) return { state: "blocked", project, reason: "not-found" };
   const opening = document.openings.find(({ id: openingId }) => openingId === id); const wall = opening && document.walls.find(({ id: wallId }) => wallId === opening.wallId);
   if (opening?.locked || wall?.locked) return { state: "blocked", project, reason: "locked-outline" };
   const resized = resizeWallOpening(document, id, width);
@@ -72,22 +70,35 @@ export function updateOpeningWidth(project: EditorProject, activePlaceId: string
 }
 
 export function updateTransitionDetails(project: EditorProject, id: string, details: Partial<Pick<VerticalTransition, "kind" | "sourceLevelId" | "targetLevelId" | "connectedLevelIds" | "style" | "direction" | "sameLevelRise">>, scopeId?: string): SelectionOperationResult {
-  const document = project.constructions.find((candidate) => (!scopeId || candidate.id === scopeId || project.places.some(({ id: placeId, constructionId }) => placeId === scopeId && constructionId === candidate.id)) && candidate.transitions.some((transition) => transition.id === id));
+  const document = constructionForSelection(project, { kind: "transition", id, ...(scopeId ? { scopeId } : {}) });
   const transition = document?.transitions.find((candidate) => candidate.id === id);
   if (transition?.locked) return { state: "blocked", project, reason: "locked-outline" };
   if (!document) return { state: "blocked", project, reason: "not-found" };
-  const updated = updateVerticalTransition(document, id, details); if (updated.state !== "updated") return { state: "blocked", project, reason: "not-found" };
+  const updated = updateVerticalTransition(document, id, details, { levelKinds: new Map(project.places.map(({ id: placeId, kind }) => [placeId, kind])) });
+  if (updated.state !== "updated") return { state: "blocked", project, reason: updated.state === "not-found" ? "not-found" : updated.reason === "outside-room" ? "outside-outline" : "collision" };
   return { state: "applied", project: syncConstructionRooms({ ...project, constructions: project.constructions.map((candidate) => candidate.id === document.id ? updated.document : candidate) }, updated.document) };
 }
 
-export function resizeTransitionFootprint(project: EditorProject, id: string, corner: ResizeCorner, point: KernelPoint): SelectionOperationResult {
-  const document = project.constructions.find((candidate) => candidate.transitions.some((transition) => transition.id === id));
+export function resizeTransitionFootprint(project: EditorProject, id: string, corner: ResizeCorner, point: KernelPoint, scopeId?: string): SelectionOperationResult {
+  const document = constructionForSelection(project, { kind: "transition", id, ...(scopeId ? { scopeId } : {}) });
   const transition = document?.transitions.find((candidate) => candidate.id === id);
-  if (selectionIsLocked(project, { kind: "transition", id })) return { state: "blocked", project, reason: "locked-outline" };
+  if (selectionIsLocked(project, { kind: "transition", id, ...(scopeId ? { scopeId } : {}) })) return { state: "blocked", project, reason: "locked-outline" };
   if (!document || !transition) return { state: "blocked", project, reason: "not-found" };
   const footprint = resizeRegionFromCorner(transition.footprint, corner, point);
   if (!footprint) return { state: "blocked", project, reason: "collision" };
-  const changed = { ...document, revision: document.revision + 1, transitions: document.transitions.map((candidate) => candidate.id === id ? { ...candidate, footprint } : candidate) };
+  const face = findTransitionRoomFace(document, footprint);
+  if (!face) return { state: "blocked", project, reason: "outside-outline" };
+  const without = deleteVerticalTransition(document, id).document;
+  const result = placeVerticalTransition(without, { ...transition, footprint, enclosure: roomFaceShape(face) }, { levelKinds: new Map(project.places.map(({ id: placeId, kind }) => [placeId, kind])) });
+  if (result.state !== "placed") return { state: "blocked", project, reason: result.state === "outside-room" ? "outside-outline" : "collision" };
+  const changed = {
+    ...result.document,
+    transitions: result.document.transitions.map((candidate) => candidate.id === id ? {
+      ...candidate,
+      ...(transition.visible === undefined ? {} : { visible: transition.visible }),
+      ...(transition.locked === undefined ? {} : { locked: transition.locked }),
+    } : candidate),
+  };
   return { state: "applied", project: syncConstructionRooms({ ...project, constructions: project.constructions.map((candidate) => candidate.id === document.id ? changed : candidate) }, changed) };
 }
 

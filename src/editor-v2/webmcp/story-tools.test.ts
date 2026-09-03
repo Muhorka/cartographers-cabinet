@@ -104,6 +104,19 @@ describe("Story WebMCP integration", () => {
     expect(session.getState().project.story.scenarios[0].patches).toEqual(before.scenarios[0].patches);
   });
 
+  it("blocks deleting an actor still used by a saved route through WebMCP", async () => {
+    const { tools, session } = setup();
+    session.executeTransaction({ id: "fixture-route-actor", apply: (project) => ({ ...project, story: {
+      ...project.story,
+      world: [...project.story.world, { id: "alice", kind: "character", name: "Alice", tags: [], properties: {} }],
+      routes: [{ id: "route", name: "Route", query: { from: { placeId: "room", point: { x: 0, y: 0 } }, to: { placeId: "room", point: { x: 1, y: 1 } }, actorId: "alice" }, result: { status: "ready", revision: 0, sourceRevision: "rev", routes: [], missingFacts: [], reasons: [] }, sourceRevision: "rev" }],
+    } }) });
+    const before = session.getState().project.story;
+    const blocked = await structured<{ status: string; message?: string }>(tool(tools, "prepare_edit_story").execute({ collection: "world", action: "remove", ids: ["alice"] }));
+    expect(blocked.status).toBe("blocked");
+    expect(session.getState().project.story).toEqual(before);
+  });
+
   it("uses the shared prepared-token apply boundary for metadata", async () => {
     const { tools, session } = setup(); const prepare = await structured<{ status: string; token: string }>(tool(tools, "prepare_set_story_metadata").execute({ refs: [{ type: "place", id: "room" }], metadata: { tags: ["secret"] }, action: "add", target: "base" }));
     expect(prepare.status).toBe("prepared"); expect(session.getState().project.story.objects[0]?.metadata.tags).toBeUndefined();

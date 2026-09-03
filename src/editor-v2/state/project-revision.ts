@@ -1,10 +1,17 @@
 import type { EditorProject } from "../model/project-model";
 import { normalizeStoryZones } from "../story/migration";
+import { isImmutableSnapshot } from "./immutable-snapshot";
+
+const immutableProjectRevisions = new WeakMap<EditorProject, string>();
 
 /** Autosave timestamps and legacy group-to-zone normalization are not authored changes. */
 export function projectRevision(project: EditorProject): string {
+  const retained = isImmutableSnapshot(project) ? immutableProjectRevisions.get(project) : undefined;
+  if (retained) return retained;
   const story = normalizeStoryZones(project.story);
-  return `${project.id}:${valueRevision({ ...project, story, updatedAt: undefined })}`;
+  const revision = `${project.id}:${valueRevision({ ...project, story, updatedAt: undefined })}`;
+  if (isImmutableSnapshot(project)) immutableProjectRevisions.set(project, revision);
+  return revision;
 }
 
 export function valueRevision(value: unknown): string {

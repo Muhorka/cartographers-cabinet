@@ -5,13 +5,23 @@ import { shapePoints } from "./region-constraints";
 
 export type RegionBounds = { minX: number; minY: number; maxX: number; maxY: number };
 
+export function pointBounds(points: readonly KernelPoint[]): RegionBounds | undefined {
+  const first = points[0]; if (!first) return undefined;
+  let minX = first.x; let minY = first.y; let maxX = first.x; let maxY = first.y;
+  for (let index = 1; index < points.length; index += 1) {
+    const point = points[index]!;
+    if (point.x < minX) minX = point.x; else if (point.x > maxX) maxX = point.x;
+    if (point.y < minY) minY = point.y; else if (point.y > maxY) maxY = point.y;
+  }
+  return { minX, minY, maxX, maxY };
+}
+
 export function regionBounds(shape: RegionShape): RegionBounds {
   if (shape.kind === "rectangle") return { minX: shape.x, minY: shape.y, maxX: shape.x + shape.width, maxY: shape.y + shape.height };
   if (shape.kind === "circle") return { minX: shape.cx - shape.radius, minY: shape.cy - shape.radius, maxX: shape.cx + shape.radius, maxY: shape.cy + shape.radius };
   if (shape.kind === "ellipse") return { minX: shape.cx - shape.rx, minY: shape.cy - shape.ry, maxX: shape.cx + shape.rx, maxY: shape.cy + shape.ry };
   const points = shape.kind === "bezier" ? sampleBezier(shape.nodes, true) : shapePoints(shape);
-  const xs = points.map(({ x }) => x); const ys = points.map(({ y }) => y);
-  return { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) };
+  return pointBounds(points)!;
 }
 
 export function regionBoundsCenter(shape: RegionShape): KernelPoint {

@@ -6,8 +6,10 @@ import type { WorkLayerId } from "../toolbox/toolbox-model";
 import type { MapGesture, MapGestureDraft, MapSheetInteraction } from "./map-sheet-gesture";
 import type { SheetViewport } from "./map-sheet-geometry";
 import type { SelectionRotationControl } from "./selection-rotation-handle";
+import type { SelectionReference } from "../drawing/selection-reference";
+export { selectionKey } from "../drawing/selection-reference";
 
-export type MapSelection = { kind: "place" | "element" | "surface" | "room" | "wall" | "opening" | "transition"; id: string };
+export type MapSelection = SelectionReference;
 export type MapSheetCopy = { ariaLabel: string; empty: string; compass: string; zoomIn: string; zoomOut: string; resetView: string; back: string; northMark?: string; measurements?: { title: string; grid: string; axes?: string; opacity: string; spacing: string; cell?: string; snap: string; units: string; metric: string; imperial: string; roomAreas: string }; openingLabel?(kind: "door" | "window" | "gate" | "passage", id: string, index: number): string; transitionLabel?(id: string, kind: "stairs" | "elevator" | undefined, index: number): string };
 
 export type MapSheetProps = {
@@ -28,9 +30,9 @@ export type MapSheetProps = {
   onMeasureSettingsChange?(settings: ProjectMeasureSettings): void;
   onNoteTextChange?(id: string, text: string): void;
   onMoveSelection?(selection: MapSelection, delta: KernelPoint): void;
-  onMoveWallEndpoint?(wallId: string, endpoint: "start" | "end", point: KernelPoint): void;
-  onResizeOpening?(openingId: string, width: number): void;
-  onResizeTransition?(transitionId: string, corner: ResizeCorner, point: KernelPoint): void;
+  onMoveWallEndpoint?(selection: MapSelection, endpoint: "start" | "end", point: KernelPoint): void;
+  onResizeOpening?(selection: MapSelection, width: number): void;
+  onResizeTransition?(selection: MapSelection, corner: ResizeCorner, point: KernelPoint): void;
   onResizeElement?(elementId: string, corner: ResizeCorner, point: KernelPoint): void;
   onResizeSurface?(surfaceId: string, corner: ResizeCorner, point: KernelPoint): void;
   onResizePlace?(placeId: string, corner: ResizeCorner, point: KernelPoint): void;

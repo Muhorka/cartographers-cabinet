@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { EditorSession } from "../state/editor-session";
 import type { ProjectCheckpoint, ProjectCheckpointSummary } from "../persistence/project-checkpoint";
 import { readProjectCheckpoint } from "../persistence/project-library";
@@ -10,6 +10,7 @@ import { registerEditorV2Tools } from "./register-editor-tools";
 import { reportWebMcpDiagnostics } from "./diagnostics";
 import type { EditorLiveContext, EditorStoryView, StoryViewUpdateResult } from "./editor-context";
 import type { CommandBridge } from "./editor-command-coordinator";
+import type { EditorLocale } from "../i18n/workbench-copy";
 
 export function useEditorV2Tools(session: EditorSession | undefined, activePlaceId: string | undefined, actions: {
   getEditorContext?(): EditorLiveContext; setStoryView?(view: EditorStoryView): StoryViewUpdateResult | void;
@@ -21,13 +22,14 @@ export function useEditorV2Tools(session: EditorSession | undefined, activePlace
   getProjects(): EditorProject[]; createProject(name: string, scale: StartingScale): Promise<EditorProject | undefined>;
   openProject(id: string): Promise<boolean>; duplicateProject(id: string): Promise<EditorProject | undefined>;
   renameProject(id: string, name: string): Promise<EditorProject | undefined>; deleteProject(id: string): Promise<boolean>;
-}) {
-  const sessionRef = useRef(session); const activePlaceRef = useRef(activePlaceId); const actionsRef = useRef(actions);
+}, locale: EditorLocale = "en") {
+  const sessionRef = useRef(session); const activePlaceRef = useRef(activePlaceId); const actionsRef = useRef(actions); const localeRef = useRef(locale);
   const [diagnosticAttempt, setDiagnosticAttempt] = useState(0);
   useEffect(() => { const retry = () => setDiagnosticAttempt((attempt) => attempt + 1); window.addEventListener("cartographer-webmcp-retry", retry); return () => window.removeEventListener("cartographer-webmcp-retry", retry); }, []);
-  useEffect(() => { sessionRef.current = session; }, [session]);
-  useEffect(() => { activePlaceRef.current = activePlaceId; }, [activePlaceId]);
-  useEffect(() => { actionsRef.current = actions; }, [actions]);
+  useLayoutEffect(() => { sessionRef.current = session; }, [session]);
+  useLayoutEffect(() => { activePlaceRef.current = activePlaceId; }, [activePlaceId]);
+  useLayoutEffect(() => { actionsRef.current = actions; }, [actions]);
+  useLayoutEffect(() => { localeRef.current = locale; }, [locale]);
   useEffect(() => {
     reportWebMcpDiagnostics({ state: "checking", registered: 0, total: 0, errors: [] });
     let active = true; let attempts = 0; let retry: ReturnType<typeof setTimeout> | undefined; let dispose: () => void = () => undefined;
@@ -37,7 +39,8 @@ export function useEditorV2Tools(session: EditorSession | undefined, activePlace
       preserveAgentChange: (before, after, summary, kind) => actionsRef.current.preserveAgentChange?.(before, after, summary, kind) ?? Promise.resolve(undefined),
       reportAgentChange: (change) => actionsRef.current.reportAgentChange?.(change),
       getSession: () => { if (!sessionRef.current) throw new Error("No editor session is open yet."); return sessionRef.current; },
-      getProject: () => { if (!sessionRef.current) throw new Error("No project is open yet."); return sessionRef.current.getState().project; },
+      getLocale: () => localeRef.current,
+      getProject: () => { if (!sessionRef.current) throw new Error("No project is open yet."); return sessionRef.current.getViewState().project; },
       getActivePlaceId: () => { if (!activePlaceRef.current) throw new Error("No map is open yet."); return activePlaceRef.current; },
       refresh: () => actionsRef.current.refresh(), openPlace: (placeId) => actionsRef.current.openPlace(placeId),
       focusObjects: (refs) => actionsRef.current.focusObjects(refs), clearFocus: () => actionsRef.current.clearFocus(),

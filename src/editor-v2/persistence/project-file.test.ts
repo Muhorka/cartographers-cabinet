@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createStarterProject } from "../model/starter-project";
+import { emptyProject } from "../model/project-model";
 import type { DrawingElement } from "../model/project-model";
 import { MAX_PROJECT_FILE_BYTES, PROJECT_FILE_FORMAT, PROJECT_FILE_VERSION, cloneImportedProject, parseProjectFile, projectExportFileName, renameProject, serializeProjectFile } from "./project-file";
 
@@ -29,6 +30,14 @@ describe("editor v2 project files", () => {
     expect(parseProjectFile(serializeProjectFile(zoneProject)).project.story.zones[0]).toMatchObject({ color: "#445566", metadata: { narrativeLabel: "Court", properties: { mood: "quiet" } } });
   });
 
+  it("migrates an early Story payload before enforcing the current Story schema", () => {
+    const legacy = structuredClone(project) as unknown as Record<string, unknown>;
+    legacy.schemaVersion = 7;
+    legacy.story = { characters: [{ id: "legacy-character", name: "Legacy character", description: "Imported from an early Story card." }] };
+    const restored = parseProjectFile({ format: PROJECT_FILE_FORMAT, fileVersion: PROJECT_FILE_VERSION, exportedAt: project.updatedAt, project: legacy }).project;
+    expect(restored.story.world).toContainEqual(expect.objectContaining({ id: "legacy-character", kind: "character", name: "Legacy character" }));
+  });
+
   it("round-trips an optional note rotation while retaining legacy notes", () => {
     const note = { id: "note", belongsToId: project.places[0]!.id, name: "Note", layerId: "sketch" as const, subjectId: "sketch.note", geometry: { kind: "note" as const, at: { x: 1, y: 2 }, width: 12, height: 8, rotation: 37, text: "Rotated" }, visible: true, locked: false, tags: [], access: [], properties: {} };
     const roundTrip = parseProjectFile(serializeProjectFile({ ...project, elements: [note] })).project.elements[0]!.geometry;
@@ -41,6 +50,11 @@ describe("editor v2 project files", () => {
     expect(() => parseProjectFile(project)).toThrow();
     expect(() => parseProjectFile({ format: PROJECT_FILE_FORMAT, fileVersion: 99, exportedAt: project.updatedAt, project })).toThrow();
     expect(() => parseProjectFile({ format: PROJECT_FILE_FORMAT, fileVersion: PROJECT_FILE_VERSION, exportedAt: project.updatedAt, project, executable: "no" })).toThrow();
+  });
+
+  it("rejects an empty persisted project instead of leaving the workbench loading forever", () => {
+    const empty = emptyProject("empty", "Empty");
+    expect(() => parseProjectFile({ format: PROJECT_FILE_FORMAT, fileVersion: PROJECT_FILE_VERSION, exportedAt: empty.updatedAt, project: empty })).toThrow(/at least one map/);
   });
 
   it("rejects broken ownership and cyclic hierarchies", () => {
@@ -79,8 +93,15 @@ describe("editor v2 project files", () => {
   it("allows the same local construction ids in separate constructions", () => {
     const broken = structuredClone(project);
     const first = broken.constructions[0]!;
-    broken.constructions.push({ ...structuredClone(first), id: "second-plan" });
+    broken.constructions.push({ ...structuredClone(first), id: "second-plan", rooms: [] });
     expect(() => parseProjectFile(envelope(broken))).not.toThrow();
+  });
+
+  it("requires room ids to stay global because they are navigable place ids", () => {
+    const broken = structuredClone(project);
+    const first = broken.constructions[0]!;
+    broken.constructions.push({ ...structuredClone(first), id: "second-plan" });
+    expect(() => parseProjectFile(envelope(broken))).toThrow(/Duplicate room id across constructions/);
   });
 
   it.each([
@@ -135,7 +156,24 @@ describe("editor v2 project files", () => {
     expect(parseProjectFile(serializeProjectFile(withRoad, project.updatedAt)).project.elements[0]?.ribbonCutouts).toEqual(road.ribbonCutouts);
     const invalidGeometry = { ...withRoad, elements: [{ ...road, geometry: { kind: "point", at: { x: 0, y: 0 } } }] };
     expect(() => parseProjectFile({ format: PROJECT_FILE_FORMAT, fileVersion: PROJECT_FILE_VERSION, exportedAt: project.updatedAt, project: invalidGeometry })).toThrow(/path or bezier/);
+    const onePoint = { ...withRoad, elements: [{ ...road, geometry: { kind: "path", points: [{ x: 0, y: 0 }], closed: false } }] };
+    expect(() => parseProjectFile({ format: PROJECT_FILE_FORMAT, fileVersion: PROJECT_FILE_VERSION, exportedAt: project.updatedAt, project: onePoint })).toThrow(/at least two distinct points/);
+    const repeatedPoint = { ...withRoad, elements: [{ ...road, geometry: { kind: "bezier", nodes: [{ anchor: { x: 1, y: 1 } }, { anchor: { x: 1, y: 1 } }], closed: false } }] };
+    expect(() => parseProjectFile({ format: PROJECT_FILE_FORMAT, fileVersion: PROJECT_FILE_VERSION, exportedAt: project.updatedAt, project: repeatedPoint })).toThrow(/at least two distinct points/);
     const invalidProfile = { ...withRoad, elements: [{ ...road, widthProfile: [{ t: 0, left: 1, right: 1 }, { t: 0, left: 1, right: 1 }] }] };
     expect(() => parseProjectFile({ format: PROJECT_FILE_FORMAT, fileVersion: PROJECT_FILE_VERSION, exportedAt: project.updatedAt, project: invalidProfile })).toThrow(/strictly increasing/);
+  });
+
+  it("rejects road junctions with broken identity or ownership", () => {
+    const ownerId = project.places[0]!.id;
+    const road = (id: string, points: { x: number; y: number }[]): DrawingElement => ({ id, belongsToId: ownerId, name: id, layerId: "roads", subjectId: "road.paved", geometry: { kind: "path", points, closed: false }, visible: true, locked: false, tags: [], access: [], properties: {} });
+    const roads = [road("horizontal", [{ x: 0, y: 5 }, { x: 10, y: 5 }]), road("vertical", [{ x: 5, y: 0 }, { x: 5, y: 10 }])];
+    const candidate = { ...project, elements: roads, roadJunctions: [{ id: "junction", belongsToId: "missing", point: { x: 5, y: 5 }, roadIds: ["horizontal", "vertical"] }] };
+    expect(() => parseProjectFile(envelope(candidate))).toThrow(/Missing road junction owner/);
+    expect(() => parseProjectFile(envelope({ ...candidate, roadJunctions: [{ ...candidate.roadJunctions[0]!, belongsToId: ownerId, roadIds: ["horizontal", "horizontal"] }] }))).toThrow(/two distinct roads/);
+    expect(() => parseProjectFile(envelope({ ...candidate, roadJunctions: [
+      { ...candidate.roadJunctions[0]!, belongsToId: ownerId },
+      { ...candidate.roadJunctions[0]!, belongsToId: ownerId },
+    ] }))).toThrow(/Duplicate road junction id/);
   });
 });

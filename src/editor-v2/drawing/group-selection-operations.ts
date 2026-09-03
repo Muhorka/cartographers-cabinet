@@ -4,6 +4,7 @@ import { assessRegionConstraint, shapePoints } from "../geometry/region-constrai
 import type { EditorProject, PlaceNode, RegionShape } from "../model/project-model";
 import { deleteSelection, moveSelection, moveWallGroup, type EditableSelection, type SelectionOperationResult } from "./selection-operations";
 import { syncConstructionRooms } from "../model/hierarchy-operations";
+import { constructionForSelection } from "./selection-locks";
 
 type Identity = { createId(): string; createRoomName(index: number): string };
 
@@ -18,7 +19,9 @@ export function moveSelectionGroup(project: EditorProject, input: { activePlaceI
   if (input.selections.length === 1) return moveSelection(project, { ...input, selection: input.selections[0] }, identity);
   if (!input.selections.length) return { state: "blocked", project, reason: "not-found" };
   if (input.selections.every(({ kind }) => kind === "wall")) {
-    return moveWallGroup(project, { activePlaceId: input.activePlaceId, wallIds: input.selections.map(({ id }) => id), delta: input.delta, boundaryEditing: input.boundaryEditing }, identity);
+    const documents = input.selections.map((selection) => constructionForSelection(project, selection));
+    if (documents.some((document) => !document) || new Set(documents.map((document) => document!.id)).size !== 1) return { state: "blocked", project, reason: "not-found" };
+    return moveWallGroup(project, { activePlaceId: input.activePlaceId, wallIds: input.selections.map(({ id }) => id), scopeId: documents[0]!.id, delta: input.delta, boundaryEditing: input.boundaryEditing }, identity);
   }
   if (input.selections.every(({ kind }) => kind === "place")) return movePlaceGroup(project, input);
   return moveMixedGroup(project, input, identity);
@@ -80,9 +83,9 @@ export function deleteSelectionGroup(project: EditorProject, input: { activePlac
 }
 
 function deleteConstructionGroup(project: EditorProject, input: { activePlaceId: string; selections: EditableSelection[]; boundaryEditing: boolean }, identity: Identity): SelectionOperationResult {
-  const active = project.places.find(({ id }) => id === input.activePlaceId);
-  const owner = active?.kind === "room" ? project.places.find(({ id }) => id === active.parentId) : active;
-  const document = project.constructions.find(({ id }) => id === owner?.constructionId);
+  const documents = input.selections.map((selection) => constructionForSelection(project, selection));
+  if (documents.some((candidate) => !candidate) || new Set(documents.map((candidate) => candidate!.id)).size !== 1) return { state: "blocked", project, reason: "not-found" };
+  const document = documents[0];
   if (!document) return { state: "blocked", project, reason: "not-found" };
   const wallIds = new Set(input.selections.filter(({ kind }) => kind === "wall").map(({ id }) => id));
   if ([...wallIds].some((id) => document.walls.find((wall) => wall.id === id)?.role === "boundary")) return { state: "blocked", project, reason: "locked-outline" };

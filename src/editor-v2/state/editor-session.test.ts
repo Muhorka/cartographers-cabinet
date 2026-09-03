@@ -1,26 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { createConstructionDocument } from "../construction/construction-document";
-import type { CanonicalWall } from "../geometry/geometry-types";
 import { buildWallNetwork } from "../geometry/wall-network-kernel";
 import { addElement, createPlace } from "../model/hierarchy-operations";
-import { emptyProject, type EditorProject } from "../model/project-model";
+import { emptyProject } from "../model/project-model";
 import { createStarterProject } from "../model/starter-project";
 import { EditorSession } from "./editor-session";
-
-function squareWalls(role: CanonicalWall["role"] = "boundary"): CanonicalWall[] {
-  return [
-    { id: `${role}-north`, start: { x: 0, y: 0 }, end: { x: 10, y: 0 }, thickness: 0.3, role },
-    { id: `${role}-east`, start: { x: 10, y: 0 }, end: { x: 10, y: 8 }, thickness: 0.3, role },
-    { id: `${role}-south`, start: { x: 10, y: 8 }, end: { x: 0, y: 8 }, thickness: 0.3, role },
-    { id: `${role}-west`, start: { x: 0, y: 8 }, end: { x: 0, y: 0 }, thickness: 0.3, role },
-  ];
-}
-
-function projectWithPlaces(): EditorProject {
-  let project = emptyProject("project", "Project");
-  project = createPlace(project, { id: "world", name: "World", kind: "world" });
-  return createPlace(project, { id: "room", parentId: "world", name: "Room", kind: "location" });
-}
+import { projectWithPlaces, squareWalls } from "./editor-session-fixtures";
 
 describe("editor v2 session", () => {
   it("keeps complete project snapshots for undo and redo", () => {
@@ -68,7 +53,19 @@ describe("editor v2 session", () => {
     expect(repaired.places.filter(({ kind }) => kind === "room")).toHaveLength(2);
     expect(repaired.places.some(({ name }) => name === "Named hall")).toBe(true);
     const endpoints = repaired.constructions[0].walls.filter(({ id }) => id.startsWith("partition-")).flatMap(({ start, end }) => [start, end]);
-    expect(endpoints.filter(({ x, y }) => x === 5 && y === 3.99)).toHaveLength(2);
+    expect(endpoints.filter(({ x, y }) => x === 5 && y === 4)).toHaveLength(2);
+  });
+
+  it("falls back to the surviving parent when load repair removes the requested room", () => {
+    const construction = createConstructionDocument("plan", [], { createId: () => "unused", createName: () => "Unused" });
+    let project = createPlace(emptyProject("project", "Project"), { id: "level", name: "Level", kind: "level", constructionId: "plan" });
+    project = createPlace(project, { id: "stale-room", parentId: "level", name: "Stale room", kind: "room" });
+    project = { ...project, constructions: [construction] };
+
+    const session = new EditorSession(project, { initialPlaceId: "stale-room" });
+
+    expect(session.getState().activePlaceId).toBe("level");
+    expect(session.getState().project.places.map(({ id }) => id)).toEqual(["level"]);
   });
 
   it("keeps the active place and blocks navigation with a pending structural transaction", () => {
@@ -253,4 +250,5 @@ describe("editor v2 session", () => {
     expect(session.getState().project.constructions[0].openings.map(({ id }) => id)).toEqual(["right-door"]);
     expect(session.getState().project.constructions[0].transitions.map(({ id }) => id)).toEqual(["right-stairs"]);
   });
+
 });

@@ -1,5 +1,6 @@
 import type { PointerEvent } from "react";
 import type { WorkLayerId } from "../toolbox/toolbox-model";
+import { selectionKey } from "../drawing/selection-reference";
 
 export type SelectableCandidate = SVGElement & { dataset: DOMStringMap };
 
@@ -29,7 +30,9 @@ export function chooseSelectableCandidate(candidates: readonly SelectableCandida
   if (!additive) return ordered[0];
   const unselected = (candidate: SelectableCandidate) => {
     const id = candidate.dataset.selectionId;
-    return Boolean(id && !selected.has(id));
+    const kind = candidate.dataset.selectionKind;
+    const scopeId = candidate.dataset.selectionScope;
+    return Boolean(id && kind && !selected.has(selectionKey({ kind: kind as Parameters<typeof selectionKey>[0]["kind"], id, ...(scopeId ? { scopeId } : {}) })));
   };
   return ordered.find(unselected) ?? ordered[0];
 }

@@ -138,7 +138,18 @@ export type StoryMetadataBulkCommand = { kind: "bulk-metadata"; refs: StoryObjec
 export type StoryDiagnostic = { code: string; message: string; refs?: StoryObjectRef[]; ids?: string[] };
 export type StoryCommandResult = { story: StoryData; changed: boolean; diagnostics: StoryDiagnostic[] };
 
-export function storyRefKey(ref: StoryObjectRef) { return `${ref.kind}:${ref.scopeId ?? ""}:${ref.id}`; }
+function storyRefKeyPart(value: string) {
+  return value.replaceAll("%", "%25").replaceAll(":", "%3A");
+}
+
+/**
+ * Builds an injective key without treating punctuation inside user/imported
+ * identifiers as structure. Common UUID-like ids retain their historical
+ * representation, while reserved separators are escaped.
+ */
+export function storyRefKey(ref: StoryObjectRef) {
+  return `${ref.kind}:${storyRefKeyPart(ref.scopeId ?? "")}:${storyRefKeyPart(ref.id)}`;
+}
 export function sameStoryRef(first: StoryObjectRef, second: StoryObjectRef) { return storyRefKey(first) === storyRefKey(second); }
 /** Room ids are only stable within their owning construction/place. */
 export function canonicalStoryRef(ref: StoryObjectRef, ownerScopeId?: string): StoryObjectRef {

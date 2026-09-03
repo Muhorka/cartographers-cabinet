@@ -7,7 +7,7 @@ import { reviewFixture } from "./review-test-fixture";
 const roomA: StoryObjectRef = { kind: "room", id: "room-0", scopeId: "construction" };
 const roomAAlias: StoryObjectRef = { kind: "room", id: "room-0", scopeId: "level" };
 const roomB: StoryObjectRef = { kind: "room", id: "room-1", scopeId: "construction" };
-const roomCollision: StoryObjectRef = { kind: "room", id: "room-0", scopeId: "construction-b" };
+const scopedCollision: StoryObjectRef = { kind: "opening", id: "door", scopeId: "construction-b" };
 
 function access(lock: "none" | "locked" = "none") {
   return { ...defaultStoryAccessPolicy(), lock };
@@ -18,13 +18,14 @@ function proposalPair() {
   before.story.world.push({ id: "bob", kind: "character", name: "Bob", tags: [], properties: {} });
   const secondConstruction = structuredClone(before.constructions[0]!);
   secondConstruction.id = "construction-b";
+  secondConstruction.rooms = secondConstruction.rooms.map((room) => ({ ...room, id: `construction-b-${room.id}` }));
   before.constructions.push(secondConstruction);
   before.places.push({ id: "level-b", name: "Second level", kind: "level", constructionId: "construction-b", transform: { x: 0, y: 0, rotation: 0 }, access: [], tags: [], properties: {} });
   before.places.push({ id: "room-0", parentId: "level", name: "Room 1", kind: "room", transform: { x: 0, y: 0, rotation: 0 }, access: [], tags: [], properties: {} });
   before.story.objects = [
     { ref: roomA, metadata: { owners: ["alice"], access: access() } },
     { ref: roomB, metadata: { owners: ["alice"], properties: {} } },
-    { ref: roomCollision, metadata: { owners: ["alice"] } },
+    { ref: scopedCollision, metadata: { owners: ["alice"] } },
   ];
   before.story.groups = [{ id: "inherited", name: "Inherited owners", memberRefs: [roomB], entryIds: [], metadata: { owners: ["bob"] } }];
   before.story.scenarios = [{ id: "night", name: "Night before", patches: [], steps: [{ id: "lock", name: "Lock before", patches: [{ id: "room-step", target: roomA, metadata: { owners: ["alice"], access: access() } }] }] }];
@@ -36,7 +37,7 @@ function proposalPair() {
   after.story.scenarios[0]!.name = "Night after";
   after.story.scenarios[0]!.steps[0]!.name = "Lock after";
   after.story.scenarios[0]!.steps[0]!.patches[0]!.metadata = { owners: ["bob"], access: access("locked") };
-  after.story.objects.find(({ ref }) => ref.scopeId === roomCollision.scopeId)!.metadata.owners = ["bob"];
+  after.story.objects.find(({ ref }) => ref.scopeId === scopedCollision.scopeId)!.metadata.owners = ["bob"];
   delete after.story.objects[1]!.metadata.owners;
   after.story.objects[1]!.metadata.properties = { empty: [], flag: false, score: 0 };
   return { before, after };
@@ -97,13 +98,13 @@ describe("proposal change review", () => {
     expect(result.rows.find(({ fieldKey }) => fieldKey === "access.knownBy")?.display.pl).toMatchObject({ field: "Kto zna przejście", authoredAfter: "Alice" });
   });
 
-  it("keeps scoped room references separate and preserves historical names", () => {
+  it("keeps scoped construction references separate and preserves historical room names", () => {
     const { before, after } = proposalPair();
     const saved = checkpoint(before, after);
-    const result = readProposalChanges(saved, before, { checkpointId: "proposal", refs: [roomA, roomCollision] });
+    const result = readProposalChanges(saved, before, { checkpointId: "proposal", refs: [roomA, scopedCollision] });
     expect(result.status).toBe("ready");
     if (result.status !== "ready") return;
-    expect(result.rows.some(({ ref }) => ref.scopeId === "construction-b" && ref.id === roomA.id)).toBe(true);
+    expect(result.rows.some(({ ref }) => ref.scopeId === "construction-b" && ref.id === scopedCollision.id)).toBe(true);
     const aliasResult = readProposalChanges(saved, before, { checkpointId: "proposal", refs: [roomAAlias] });
     expect(aliasResult.status).toBe("ready");
     if (aliasResult.status !== "ready") return;

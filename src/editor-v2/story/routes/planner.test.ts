@@ -86,7 +86,7 @@ describe("story route planner", () => {
     ground.constructions[0]!.transitions = [{ id: "stairs", kind: "stairs", footprint: { kind: "rectangle", x: 6, y: 4, width: 1, height: 2 }, sourceLevelId: "level", targetLevelId: "upper", connectedLevelIds: ["level", "upper"] }];
     const project = { ...ground, places: [...ground.places, ...upper.places], constructions: [...ground.constructions, ...upper.constructions] };
     const result = findStoryRoutes(project, { from: { placeId: "level", point: { x: 2, y: 5 } }, to: { placeId: "upper", point: { x: 8, y: 5 } } });
-    expect(result.status).toBe("ready"); expect(result.route?.usedTransitionIds).toContain("stairs"); const reverse = findStoryRoutes(project, { from: { placeId: "upper", point: { x: 8, y: 5 } }, to: { placeId: "level", point: { x: 2, y: 5 } } }); expect(reverse.status).toBe("ready"); expect(reverse.route?.usedTransitionIds).toContain("stairs");
+    expect(result.status).toBe("ready"); expect(result.route?.usedTransitionIds).toContain("stairs"); expect(result.route!.distance).toBeGreaterThan(polylineDistance(result.route!.points)); const reverse = findStoryRoutes(project, { from: { placeId: "upper", point: { x: 8, y: 5 } }, to: { placeId: "level", point: { x: 2, y: 5 } } }); expect(reverse.status).toBe("ready"); expect(reverse.route?.usedTransitionIds).toContain("stairs");
   });
 
   it("keeps an actorless stair route conditional on room access", () => {

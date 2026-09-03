@@ -13,6 +13,45 @@ describe("editor session transaction failures", () => {
     expect(session.getHistoryState()).toEqual({ canUndo: false, canRedo: false });
   });
 
+  it("rejects a transaction that would publish broken project relations", () => {
+    let project = emptyProject("project", "Project");
+    project = createPlace(project, { id: "world", name: "World", kind: "world" });
+    const session = new EditorSession(project, { initialPlaceId: "world" });
+    const before = session.getViewState().project;
+    const result = session.executeTransaction({
+      id: "orphan-root",
+      isolation: "structural",
+      apply: (current) => ({ ...current, places: current.places.map((place) => ({ ...place, parentId: "missing" })) }),
+    });
+    expect(result).toEqual({ code: "transaction-failed", changed: false, reason: "Missing parent place: missing" });
+    expect(session.getViewState().project).toBe(before);
+    expect(session.getHistoryState()).toEqual({ canUndo: false, canRedo: false });
+  });
+
+  it.each([
+    ["replace project identity", (project: ReturnType<typeof emptyProject>) => ({ ...project, id: "another-project" }), "Project identity cannot change"],
+    ["remove the last map", (project: ReturnType<typeof emptyProject>) => ({ ...project, places: [] }), "at least one map"],
+  ])("rejects a transaction that would %s", (_label, apply, reason) => {
+    let project = emptyProject("project", "Project");
+    project = createPlace(project, { id: "world", name: "World", kind: "world" });
+    const session = new EditorSession(project, { initialPlaceId: "world" });
+    expect(session.executeTransaction({ id: "invalid-project", isolation: "structural", apply })).toEqual({ code: "transaction-failed", changed: false, reason: expect.stringContaining(reason) });
+    expect(session.getViewState().project).toMatchObject({ id: "project", places: [{ id: "world" }] });
+  });
+
+  it("rejects malformed isolated output before it reaches session state", () => {
+    const project = createPlace(emptyProject("project", "Project"), { id: "world", name: "World", kind: "world" });
+    const session = new EditorSession(project);
+    const before = session.getViewState().project;
+    const result = session.executeTransaction({
+      id: "invalid-measure-settings",
+      apply: (project) => ({ ...project, measureSettings: { ...project.measureSettings, gridSpacingMeters: -1 } }),
+    });
+    expect(result).toMatchObject({ code: "transaction-failed", changed: false, reason: expect.stringContaining("measureSettings.gridSpacingMeters") });
+    expect(session.getViewState().project).toBe(before);
+    expect(session.getHistoryState()).toEqual({ canUndo: false, canRedo: false });
+  });
+
   it("prepares the canonical snapshot without publishing it and commits that exact snapshot once", () => {
     const session = new EditorSession(emptyProject("project", "Before"));
     const before = session.getViewState().project;

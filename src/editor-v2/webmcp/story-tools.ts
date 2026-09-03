@@ -15,6 +15,7 @@ import { storyCollectionEntryId } from "../story/collection-identity";
 import { legacyStoryGroups, migrateStoryData, replaceLegacyStoryGroups } from "../story/migration";
 import { effectiveWorldEntry } from "../story/world-entry-effective";
 import { invalidMemberOfIds } from "../story/membership-semantics";
+import { applyStoryCommand } from "../story/operations";
 
 type Bridge = EditorAgentBridge & EditorContextBridge;
 const response = <T,>(value: T) => ({ content: [{ type: "text", text: JSON.stringify(value) }], structuredContent: value });
@@ -36,7 +37,7 @@ export function createStoryAgentTools(bridge: Bridge, coordinator: EditorCommand
   const currentContext = () => { const view = bridge.getEditorContext?.().view; return { scenarioId: view?.scenarioId, stepId: view?.stepId, lensId: view?.lensId }; };
   return [
     { name: "inspect_story_catalog", description: "Read counts/schemas before edits. Zones group objects and share traits without replacing local properties; groups is a legacy alias, not a separate store. Actor access-groups are separate. No paid embedded model.", inputSchema: z.toJSONSchema(readSchema, { io: "input" }), annotations: { readOnlyHint: true }, execute: async (raw) => {
-      const input = readSchema.parse(raw); const project = bridge.getSession().getState().project;
+      const input = readSchema.parse(raw); const project = bridge.getSession().getViewState().project;
       const story = migrateStoryData(project.story);
       if (!input.collection) return response({ revision: projectRevision(project), collections: collections.filter((name) => name !== "groups").map((name) => ({ name, count: story[name].length })), legacyAliases: { groups: "zones" }, context: currentContext() });
       const items = input.collection === "groups" ? legacyStoryGroups(story) : story[input.collection]; const entries = items.slice(input.offset, input.offset + input.limit);
@@ -44,7 +45,7 @@ export function createStoryAgentTools(bridge: Bridge, coordinator: EditorCommand
       return response({ collection: input.collection, schema: z.toJSONSchema(storyCollectionSchemas[input.collection], { io: "input" }), total: items.length, offset: input.offset, entries, ...(effectiveEntries ? { effectiveEntries } : {}), entryIds: entries.map((entry) => storyCollectionEntryId(entry as unknown as Record<string, unknown>)) });
     } },
     { name: "inspect_story_objects", description: "Read canonical text, effective traits, sources, conflicts and lens explanations. Paginated refs; omit for all. Query is lexical, not embeddings. Defaults to active scenario/step. Distinguish facts from suggestions.", inputSchema: z.toJSONSchema(inspectSchema, { io: "input" }), annotations: { readOnlyHint: true }, execute: async (raw) => {
-      const input = inspectSchema.parse(raw); const project = bridge.getSession().getState().project; const context = input.context ?? currentContext();
+      const input = inspectSchema.parse(raw); const project = bridge.getSession().getViewState().project; const context = input.context ?? currentContext();
       const refs = input.refs?.map(storyRef) ?? allStoryObjectRefs(project);
       const liveView = input.context ? undefined : bridge.getEditorContext?.().view;
       const activeLenses = visibleStoryLenses(project.story.lenses, { activeLensId: context.lensId, activeLensIds: liveView?.lensIds, previewLens: liveView?.previewLens ?? undefined });
@@ -60,6 +61,13 @@ export function createStoryAgentTools(bridge: Bridge, coordinator: EditorCommand
       if (input.action === "upsert" && input.collection === "routes") throw new Error("Use prepare_save_story_route to calculate a verified route from an explicit query.");
       return response(coordinator.prepare(`story:${crypto.randomUUID()}`, (project) => {
         const canonical = migrateStoryData(project.story);
+        if (input.action === "remove" && input.collection === "world") {
+          if (!input.ids?.length) throw new Error("Removal requires explicit ids from the inspected collection.");
+          const removal = applyStoryCommand(canonical, { kind: "bulk", commands: input.ids.map((id) => ({ kind: "remove", collection: "world", id })) });
+          const failure = removal.diagnostics.find(({ code }) => code === "blocked" || code === "invalid" || code === "not-found");
+          if (failure) throw new Error(failure.message);
+          return { project: { ...project, story: removal.story }, summary: `Opowieść: ${input.collection} (${input.action}).` };
+        }
         const before = (input.collection === "groups" ? legacyStoryGroups(canonical) : canonical[input.collection]) as unknown as Record<string, unknown>[];
         const identity = storyCollectionEntryId;
         let next = [...before];
@@ -75,12 +83,12 @@ export function createStoryAgentTools(bridge: Bridge, coordinator: EditorCommand
         return { project: changed, summary: `Opowieść: ${input.collection} (${input.action}).` };
       }));
     } },
-    { name: "prepare_set_story_metadata", description: "Prepare scoped owners, typed traits, access/keys/guards, tags or text. Hidden passages use hidden=true with knownBy containing characters, factions or people groups; knownBy=[] means nobody knows. secretKnowledge is accepted only for compatibility with earlier saves. Defaults to active scenario; target=base overrides. replace changes supplied fields/property keys; owners is exact ([]=none). remove deletes supplied values/keys. resetOwnership=true, metadata={} restores inheritance. Keys grant no permission; editor locks apply. narrativeLabel/narrativeDescription also update supported native text.", inputSchema: z.toJSONSchema(metadataSchema, { io: "input" }), annotations: { readOnlyHint: false }, execute: async (raw) => {
+    { name: "prepare_set_story_metadata", description: "Prepare scoped story owners, traits, access, keys, guards, tags or text. Hidden passages use hidden=true and knownBy; [] means nobody knows. Defaults to the active scenario; target=base overrides. replace updates supplied fields, remove deletes them, owners is exact, and resetOwnership=true with metadata={} restores inheritance. Keys grant no permission; editor locks still apply. Native labels/descriptions are updated when supported.", inputSchema: z.toJSONSchema(metadataSchema, { io: "input" }), annotations: { readOnlyHint: false }, execute: async (raw) => {
       const input = metadataSchema.parse(raw); const refs = input.refs.map(storyRef); const context = input.context ?? currentContext(); const target = input.target ?? bridge.getEditorContext?.().view.editTarget;
       return response(coordinator.prepare(`story-metadata:${crypto.randomUUID()}`, (project) => ({ project: applyProjectStoryMetadata(project, { ...input, metadata: input.metadata as StoryObjectMetadata, refs, context, target }), summary: `Zmieniono właściwości opowieści: ${refs.length}.` })));
     } },
     { name: "set_story_view", description: "Show lensIds (several) or lensId, scenario/step/route. previewLens uses the lenses catalog schema without saving; null clears it. neutral=true clears all view filters, not data. Deferred for unfinished drawings/overlaps.", inputSchema: z.toJSONSchema(viewSchema, { io: "input" }), annotations: { readOnlyHint: false }, execute: async (raw) => {
-      const input = viewSchema.parse(raw); const project = bridge.getSession().getState().project;
+      const input = viewSchema.parse(raw); const project = bridge.getSession().getViewState().project;
       if (!bridge.setStoryView) throw new Error("This host did not expose Story view controls.");
       const { neutral, previewLens, ...fields } = input;
       const patch: EditorStoryView = { ...fields };

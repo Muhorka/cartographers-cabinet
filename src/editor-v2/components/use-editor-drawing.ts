@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type MapGesture, type MapGestureDraft } from "./map-sheet-gesture";
 import type { MapSelection } from "./map-sheet";
 import type { DrawingNoticeModel } from "./drawing-notice";
@@ -10,11 +10,12 @@ import { applyMapGesture, saveGestureDraftAsSketch, savePendingDraftAsPath, save
 import { deletePlaceSubtree } from "../model/hierarchy-operations";
 import { proposeDraftClosure } from "../draft/auto-close-draft";
 import { drawingIdentity, drawingNaming } from "./drawing-naming";
-import { closableGesture, gestureWithoutLastPoint } from "./drawing-gesture-helpers";
+import { closableGesture } from "./drawing-gesture-helpers";
 import { editorDrawingNotice, type DrawingNoticeActionId } from "./editor-drawing-notice";
 import { applyOutlineGesture } from "./drawing-outline-gesture";
 import { finishAutomaticClosure, finishCorrectedDraft, type ClosureReview } from "./drawing-draft-completion";
 import { useEditorTransaction } from "./use-editor-transaction";
+import { createDrawingDraftHistory } from "./drawing-draft-history";
 type Continuation = () => void;
 export type TransitionPlacementConfig = NonNullable<MapGestureCommandInput["transition"]>;
 type TransitionRequest = { gesture: MapGesture; input: MapGestureCommandInput };
@@ -39,13 +40,22 @@ export function useEditorDrawing({ session, snapshot, locale, copy, refresh, onS
   const [closureReview, setClosureReview] = useState<ClosureReview>();
   const [transitionRequest, setTransitionRequest] = useState<TransitionRequest>();
   const continuation = useRef<Continuation | undefined>(undefined);
+  const [drawingSession, setDrawingSession] = useState(session);
   const identity = useMemo(() => drawingIdentity(locale), [locale]);
-  const naming = useMemo(() => drawingNaming(locale, snapshot?.project), [locale, snapshot?.project]);
   const { commit: transact } = useEditorTransaction(session, refresh, setBlockedReason);
+  function resetDrawingUiState() {
+    setWaitingToLeave(false); setPendingDraft(undefined); setRedoStrokes([]); setGestureDraft(undefined);
+    setRedoGestureDrafts([]); setDeleteCandidateIds([]); setBlockedReason(undefined); setClosureReview(undefined); setTransitionRequest(undefined);
+  }
+  function resetDrawingState() { continuation.current = undefined; resetDrawingUiState(); }
+  useEffect(() => { continuation.current = undefined; }, [session]);
+  if (drawingSession !== session) { setDrawingSession(session); resetDrawingUiState(); }
+  const { undoDraft, redoDraft, cancelCurrentDrawing } = createDrawingDraftHistory({ pendingDraft, setPendingDraft, redoStrokes, setRedoStrokes, gestureDraft, setGestureDraft, redoGestureDrafts, setRedoGestureDrafts, setClosureReview, setBlockedReason });
   const applyGesture = useCallback((gesture: MapGesture, override?: MapGestureCommandInput) => {
-    if (!session || !snapshot?.activePlaceId) return;
+    if (!session) return;
+    const current = session.getViewState(); if (!current.activePlaceId) return;
     if (addOutlineActive || cutoutActive) {
-      const result = applyOutlineGesture(snapshot.project, snapshot.activePlaceId, cutoutTarget, gesture, identity, addOutlineActive ? "add" : "cut");
+      const result = applyOutlineGesture(current.project, current.activePlaceId, cutoutTarget, gesture, identity, addOutlineActive ? "add" : "cut");
       setClosureReview(undefined); setBlockedReason(result.state === "blocked" ? result.reason : undefined);
       if (result.state === "applied") {
         if (!transact(result.transactionId, result.project)) return;
@@ -54,12 +64,13 @@ export function useEditorDrawing({ session, snapshot, locale, copy, refresh, onS
       }
       return;
     }
-    const memory = snapshot.toolbox.byLayer[snapshot.toolbox.activeLayerId];
-    const input = override ?? { activePlaceId: snapshot.activePlaceId, layerId: snapshot.toolbox.activeLayerId, subjectId: memory.subjectId, widthMeters: memory.widthMeters, gesture, boundaryEditing: snapshot.boundaryEditing, pendingDraft };
+    const memory = current.toolbox.byLayer[current.toolbox.activeLayerId];
+    const input = override ?? { activePlaceId: current.activePlaceId, layerId: current.toolbox.activeLayerId, subjectId: memory.subjectId, widthMeters: memory.widthMeters, gesture, boundaryEditing: current.boundaryEditing, pendingDraft };
     setClosureReview(undefined);
-    let result = applyMapGesture(snapshot.project, input, identity, naming);
+    const currentNaming = drawingNaming(locale, current.project);
+    let result = applyMapGesture(current.project, input, identity, currentNaming);
     if (result.state === "clip-review") {
-      result = applyMapGesture(snapshot.project, { ...input, acceptClip: true }, identity, naming);
+      result = applyMapGesture(current.project, { ...input, acceptClip: true }, identity, currentNaming);
     }
     setBlockedReason(undefined);
     if (result.state === "applied") {
@@ -79,7 +90,7 @@ export function useEditorDrawing({ session, snapshot, locale, copy, refresh, onS
     if (result.state === "review-required") { setDeleteCandidateIds(result.candidateIds); return; }
     if (result.state === "transition-config-required") { setTransitionRequest({ gesture: input.gesture, input }); setGestureDraft(undefined); return; }
     if (result.state === "blocked") setBlockedReason(result.reason);
-  }, [addOutlineActive, cutoutActive, cutoutTarget, identity, naming, onSelection, pendingDraft, session, snapshot, transact]);
+  }, [addOutlineActive, cutoutActive, cutoutTarget, identity, locale, onSelection, pendingDraft, session, transact]);
   function runContinuation() {
     const action = continuation.current;
     continuation.current = undefined;
@@ -107,12 +118,15 @@ export function useEditorDrawing({ session, snapshot, locale, copy, refresh, onS
     runContinuation();
   }
   function keepAsSketch() {
-    if (!session || !snapshot?.activePlaceId) return;
-    const project = gestureDraft
-      ? saveGestureDraftAsSketch(snapshot.project, snapshot.activePlaceId, gestureDraft, identity, locale === "pl" ? "Szkic" : "Sketch")
-      : pendingDraft
-        ? savePendingDraftAsSketch(snapshot.project, pendingDraft, identity, (index) => locale === "pl" ? `Szkic ${index}` : `Sketch ${index}`)
-        : snapshot.project;
+    if (!session) return;
+    const activePlaceId = session.getViewState().activePlaceId;
+    if (!activePlaceId) return;
+    const gesture = gestureDraft; const pending = pendingDraft;
+    const project = (current: EditorSessionState["project"]) => gesture
+      ? saveGestureDraftAsSketch(current, activePlaceId, gesture, identity, locale === "pl" ? "Szkic" : "Sketch")
+      : pending
+        ? savePendingDraftAsSketch(current, pending, identity, (index) => locale === "pl" ? `Szkic ${index}` : `Sketch ${index}`)
+        : current;
     if (!transact("draft:keep-as-sketch", project)) { continuation.current = undefined; setWaitingToLeave(false); return; }
     setPendingDraft(undefined);
     setRedoStrokes([]);
@@ -122,8 +136,9 @@ export function useEditorDrawing({ session, snapshot, locale, copy, refresh, onS
     runContinuation();
   }
   function keepAsPath() {
-    if (!session || !snapshot || !pendingDraft) return;
-    const project = savePendingDraftAsPath(snapshot.project, pendingDraft, identity, naming);
+    if (!session || !pendingDraft) return;
+    const pending = pendingDraft;
+    const project = (current: EditorSessionState["project"]) => savePendingDraftAsPath(current, pending, identity, drawingNaming(locale, current));
     if (!transact("draft:keep-as-path", project)) { continuation.current = undefined; setWaitingToLeave(false); return; }
     setPendingDraft(undefined);
     setRedoStrokes([]);
@@ -144,13 +159,22 @@ export function useEditorDrawing({ session, snapshot, locale, copy, refresh, onS
   }
 
   function confirmAutomaticClosure() {
-    if (!closureReview || !snapshot || !session) return;
-    const completed = finishAutomaticClosure(snapshot.project, closureReview, identity, { ...naming, roomName: identity.createRoomName });
-    if (completed.state === "gesture") { setClosureReview(undefined); setGestureDraft(undefined); if (completed.gesture) applyGesture(completed.gesture); return; }
-    if (completed.state === "blocked") { setClosureReview(undefined); setBlockedReason("geometry-conflict"); return; }
-    if (!transact("draft:auto-close", completed.result.project)) { setClosureReview(undefined); return; }
-    const id = completed.result.createdIds[0];
-    if (id) onSelection(completed.result.project.places.some((place) => place.id === id) ? { kind: "place", id } : completed.result.project.surfaces.some((surface) => surface.id === id) ? { kind: "surface", id } : { kind: "element", id });
+    if (!closureReview || !session) return;
+    const review = closureReview; let completed: ReturnType<typeof finishAutomaticClosure> | undefined;
+    if (review.kind === "gesture") {
+      completed = finishAutomaticClosure(session.getViewState().project, review, identity, { ...drawingNaming(locale, session.getViewState().project), roomName: identity.createRoomName });
+      if (completed.state === "gesture") { setClosureReview(undefined); setGestureDraft(undefined); if (completed.gesture) applyGesture(completed.gesture); return; }
+      setClosureReview(undefined); setBlockedReason("geometry-conflict"); return;
+    }
+    const accepted = transact("draft:auto-close", (current) => {
+      completed = finishAutomaticClosure(current, review, identity, { ...drawingNaming(locale, current), roomName: identity.createRoomName });
+      return completed.state === "created" ? completed.result.project : current;
+    });
+    if (!accepted) { setClosureReview(undefined); return; }
+    const created = completed?.state === "created" ? completed.result : undefined;
+    if (!created) { setClosureReview(undefined); setBlockedReason("geometry-conflict"); return; }
+    const id = created.createdIds[0];
+    if (id) onSelection(created.project.places.some((place) => place.id === id) ? { kind: "place", id } : created.project.surfaces.some((surface) => surface.id === id) ? { kind: "surface", id } : { kind: "element", id });
     setPendingDraft(undefined);
     setRedoStrokes([]);
     setClosureReview(undefined);
@@ -167,62 +191,26 @@ export function useEditorDrawing({ session, snapshot, locale, copy, refresh, onS
   function cancelTransition() { setTransitionRequest(undefined); runContinuation(); }
 
   function confirmDelete() {
-    if (!snapshot || !deleteCandidateIds.length) return;
-    const project = deleteCandidateIds.reduce((next, id) => next.places.some((place) => place.id === id) ? deletePlaceSubtree(next, id) : next, snapshot.project);
+    if (!session || !deleteCandidateIds.length) return;
+    const ids = deleteCandidateIds;
+    const project = (current: EditorSessionState["project"]) => ids.reduce((next, id) => next.places.some((place) => place.id === id) ? deletePlaceSubtree(next, id) : next, current);
     if (!transact("eraser:delete-places", project)) return;
     setDeleteCandidateIds([]);
     onSelection(undefined);
   }
 
   function correctPendingDraft(tolerance: number) {
-    if (!pendingDraft || !snapshot || !session) return;
-    const { corrected, analysis, result } = finishCorrectedDraft(snapshot.project, pendingDraft, tolerance, identity, { ...naming, roomName: identity.createRoomName });
+    if (!pendingDraft || !session) return;
+    const draft = pendingDraft; let completed: ReturnType<typeof finishCorrectedDraft> | undefined;
+    const accepted = transact("draft:correct-gaps", (current) => {
+      completed = finishCorrectedDraft(current, draft, tolerance, identity, { ...drawingNaming(locale, current), roomName: identity.createRoomName });
+      return completed.result.state === "created" ? completed.result.project : current;
+    });
+    if (!accepted || !completed) return;
+    const { corrected, analysis, result } = completed;
     if (result.state !== "created") { setPendingDraft(result.state === "incomplete" ? analysis.length ? { ...corrected, strokes: analysis } : undefined : corrected); return; }
-    if (!transact("draft:correct-gaps", result.project)) return;
     setPendingDraft(analysis.length ? { ...corrected, id: identity.createId(), strokes: analysis } : undefined); setRedoStrokes([]);
     const id = result.createdIds[0]; if (id) onSelection(result.project.places.some((place) => place.id === id) ? { kind: "place", id } : result.project.surfaces.some((surface) => surface.id === id) ? { kind: "surface", id } : { kind: "element", id });
-  }
-
-  function undoDraft() {
-    if (gestureDraft?.points.length) {
-      setRedoGestureDrafts((current) => [gestureDraft, ...current]);
-      setGestureDraft(gestureWithoutLastPoint(gestureDraft));
-      return true;
-    }
-    if (!pendingDraft?.strokes.length) return false;
-    const removed = pendingDraft.strokes.at(-1)!;
-    const strokes = pendingDraft.strokes.slice(0, -1);
-    setPendingDraft({ ...pendingDraft, strokes });
-    setRedoStrokes((current) => [removed, ...current]);
-    return true;
-  }
-
-  function redoDraft() {
-    const gesture = redoGestureDrafts[0];
-    if (gesture) {
-      setGestureDraft(gesture);
-      setRedoGestureDrafts((current) => current.slice(1));
-      return true;
-    }
-    const restored = redoStrokes[0];
-    if (!pendingDraft || !restored) return false;
-    setPendingDraft({ ...pendingDraft, strokes: [...pendingDraft.strokes, restored] });
-    setRedoStrokes((current) => current.slice(1));
-    return true;
-  }
-
-  function cancelCurrentDrawing() {
-    setClosureReview(undefined);
-    setBlockedReason(undefined);
-    if (gestureDraft?.points.length) {
-      setGestureDraft(undefined);
-      setRedoGestureDrafts([]);
-      return;
-    }
-    if (!pendingDraft?.strokes.length) return;
-    const strokes = pendingDraft.strokes.slice(0, -1);
-    setPendingDraft(strokes.length ? { ...pendingDraft, strokes } : undefined);
-    setRedoStrokes([]);
   }
 
   const canSavePath = pendingDraft?.layerId === "terrain" && ["terrain.water", "terrain.custom"].includes(pendingDraft.subjectId);
@@ -249,6 +237,6 @@ export function useEditorDrawing({ session, snapshot, locale, copy, refresh, onS
     canRedoDraft: redoStrokes.length > 0 || redoGestureDrafts.length > 0,
     hasGestureDraft: Boolean(gestureDraft?.points.length),
     leaveDrawing,
-    reset: () => { continuation.current = undefined; setWaitingToLeave(false); setPendingDraft(undefined); setRedoStrokes([]); setGestureDraft(undefined); setRedoGestureDrafts([]); setDeleteCandidateIds([]); setBlockedReason(undefined); setClosureReview(undefined); setTransitionRequest(undefined); },
+    reset: resetDrawingState,
   };
 }

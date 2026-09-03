@@ -3,7 +3,7 @@ import { reconcileRooms, roomsForFaces, type RoomRecord } from "../geometry/room
 import { moveJunction, offsetWall } from "../geometry/wall-edit-operations";
 import { pointsEqual, translate } from "../geometry/line-geometry";
 import { materializeWallSegments } from "../geometry/wall-network-kernel";
-import { wallFeatureIssues, type VerticalTransition, type WallOpening } from "./wall-features";
+import { validateVerticalTransitions, wallFeatureIssues, type VerticalTransition, type WallOpening } from "./wall-features";
 import type { RegionShape } from "../model/project-model";
 import { constructionNetwork } from "./construction-network";
 export { constructionNetwork } from "./construction-network";
@@ -59,17 +59,19 @@ function pointSegmentDistance(point: KernelPoint, wall: CanonicalWall) {
   return { position, distance: Math.hypot(point.x - wall.start.x - dx * position, point.y - wall.start.y - dy * position) };
 }
 
-function belongsToSource(segmentId: string, sourceId: string) {
-  return segmentId === sourceId || segmentId.startsWith(`${sourceId}:`);
+function belongsToSource(wall: CanonicalWall, sourceId: string) {
+  return wall.id === sourceId || wall.sourceWallId === sourceId;
 }
 
 function remapOpenings(before: ConstructionDocument, rawWalls: CanonicalWall[], walls: CanonicalWall[]) {
   return before.openings.flatMap((opening) => {
     const original = before.walls.find(({ id }) => id === opening.wallId); const source = rawWalls.find(({ id }) => id === opening.wallId);
-    const replacementPieces = rawWalls.some(({ id }) => id !== opening.wallId && belongsToSource(id, opening.wallId));
-    if (!source && !replacementPieces) return [];
-    const at = replacementPieces && original ? pointOnWall(original, opening.position) : source ? pointOnWall(source, opening.position) : pointOnWall(original!, opening.position);
-    const candidates = walls.filter(({ id }) => belongsToSource(id, opening.wallId)).map((wall) => ({ wall, ...pointSegmentDistance(at, wall) })).toSorted((first, second) => first.distance - second.distance);
+    const replacementPieces = rawWalls.filter((wall) => wall.id !== opening.wallId && belongsToSource(wall, opening.wallId));
+    if (!source && !replacementPieces.length) return [];
+    const at = replacementPieces.length && original ? pointOnWall(original, opening.position) : source ? pointOnWall(source, opening.position) : pointOnWall(original!, opening.position);
+    const candidateSourceIds = new Set([opening.wallId, ...replacementPieces.map(({ id }) => id)]);
+    const candidates = walls.filter((wall) => candidateSourceIds.has(wall.id) || !!wall.sourceWallId && candidateSourceIds.has(wall.sourceWallId))
+      .map((wall) => ({ wall, ...pointSegmentDistance(at, wall) })).toSorted((first, second) => first.distance - second.distance);
     const match = candidates[0];
     return match && match.distance < 1e-5 ? [{ ...opening, wallId: match.wall.id, position: match.position }] : [];
   });
@@ -182,5 +184,8 @@ export function previewRoomRemoval(document: ConstructionDocument, roomId: strin
 export function commitConstructionTransaction(document: ConstructionDocument, candidate: ConstructionTransaction) {
   if (candidate.before.id !== document.id || candidate.before.revision !== document.revision) return { state: "stale" as const, document };
   if (candidate.effects.some(({ kind }) => kind === "geometry-conflict")) return { state: "blocked" as const, document };
+  // Wall/enclosure rebuilds retain transitions. Validate the retained records
+  // against the rebuilt room faces before the candidate becomes canonical.
+  if (validateVerticalTransitions(candidate.after).length) return { state: "blocked" as const, document };
   return { state: "committed" as const, document: candidate.after };
 }

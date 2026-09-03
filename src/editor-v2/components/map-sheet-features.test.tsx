@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { ConstructionDocument } from "../construction/construction-document";
 import { MapSheetFeatures } from "./map-sheet-features";
+import { selectionKey } from "../drawing/selection-reference";
 
 const document: ConstructionDocument = {
   id: "plan", revision: 0,
@@ -13,12 +14,12 @@ const document: ConstructionDocument = {
 
 describe("map feature editing handles", () => {
   it("renders two direct width handles for a selected opening", () => {
-    const html = renderToStaticMarkup(<svg><MapSheetFeatures document={document} prefix="test" selectedIds={new Set(["door"])} copy={{}} viewportZoom={2} selectionEnabled/></svg>);
+    const html = renderToStaticMarkup(<svg><MapSheetFeatures document={document} prefix="test" selectedIds={new Set([selectionKey({ kind: "opening", id: "door", scopeId: document.id })])} copy={{}} viewportZoom={2} selectionEnabled/></svg>);
     expect(html.match(/data-opening-resize="door"/g)).toHaveLength(2);
   });
 
   it("renders four footprint handles for selected stairs", () => {
-    const html = renderToStaticMarkup(<svg><MapSheetFeatures document={document} prefix="test" selectedIds={new Set(["stairs"])} copy={{}} viewportZoom={2} selectionEnabled/></svg>);
+    const html = renderToStaticMarkup(<svg><MapSheetFeatures document={document} prefix="test" selectedIds={new Set([selectionKey({ kind: "transition", id: "stairs", scopeId: document.id })])} copy={{}} viewportZoom={2} selectionEnabled/></svg>);
     expect(html.match(/data-transition-id="stairs"/g)).toHaveLength(4);
     expect(html).toContain('data-resize-corner="north-west"');
   });

@@ -28,7 +28,7 @@ import { smoothPencilGesture } from "../geometry/pencil-smoothing";
 export { saveGestureDraftAsSketch, savePendingDraftAsPath, savePendingDraftAsSketch } from "./gesture-draft-save";
 export type { Identity, Naming } from "./map-gesture-command-types";
 
-type Selection = { kind: "place" | "element" | "surface" | "room" | "wall" | "opening" | "transition"; id: string };
+type Selection = { kind: "place" | "element" | "surface" | "room" | "wall" | "opening" | "transition"; id: string; scopeId?: string };
 import type { Identity, Naming } from "./map-gesture-command-types";
 export type MapGestureCommandInput = {
   activePlaceId: string;
@@ -171,7 +171,7 @@ function applyConstruction(project: EditorProject, input: MapGestureCommandInput
   const preview = previewWallAddition(document, walls, { createId: identity.createId, createName: identity.createRoomName });
   const committed = commitConstructionTransaction(document, preview);
   if (committed.state !== "committed") return { state: "blocked", project, reason: "geometry-conflict" };
-  return { state: "applied", project: updateConstruction(project, constructionId, committed.document), selection: walls[0] ? { kind: "wall", id: walls[0].id } : undefined };
+  return { state: "applied", project: updateConstruction(project, constructionId, committed.document), selection: walls[0] ? { kind: "wall", id: walls[0].id, scopeId: constructionId } : undefined };
 }
 
 function applyOpening(project: EditorProject, input: MapGestureCommandInput, targetPlaceId: string, constructionId: string, identity: Identity): MapGestureCommandResult {
@@ -194,9 +194,9 @@ function applyOpening(project: EditorProject, input: MapGestureCommandInput, tar
       ? [sourceLevel?.id].filter((levelId): levelId is string => Boolean(levelId))
       : [...new Set([sourceLevel?.id, ...(input.transition.connectedLevelIds ?? []), input.transition.targetLevelId].filter((levelId): levelId is string => Boolean(levelId)))];
     if (!input.transition.sameLevelRise && connectedLevelIds.length < 2) return { state: "transition-config-required", project };
-    const placed = placeVerticalTransition(document, { id, kind: input.subjectId === "opening.elevator" ? "elevator" : "stairs", footprint, enclosure: roomFaceShape(face), sourceLevelId: sourceLevel?.id, targetLevelId: input.transition.targetLevelId ?? connectedLevelIds.find((levelId) => levelId !== sourceLevel?.id), connectedLevelIds, style: input.transition.style ?? "straight", direction: input.transition.direction ?? 0, sameLevelRise: input.transition.sameLevelRise ?? false });
+    const placed = placeVerticalTransition(document, { id, kind: input.subjectId === "opening.elevator" ? "elevator" : "stairs", footprint, enclosure: roomFaceShape(face), sourceLevelId: sourceLevel?.id, targetLevelId: input.transition.targetLevelId ?? connectedLevelIds.find((levelId) => levelId !== sourceLevel?.id), connectedLevelIds, style: input.transition.style ?? "straight", direction: input.transition.direction ?? 0, sameLevelRise: input.transition.sameLevelRise ?? false }, { levelKinds: new Map(project.places.map(({ id: placeId, kind }) => [placeId, kind])) });
     if (placed.state !== "placed") return { state: "blocked", project, reason: "stairs-need-room" };
-    return { state: "applied", project: updateConstruction(project, constructionId, placed.document), selection: { kind: "transition", id } };
+    return { state: "applied", project: updateConstruction(project, constructionId, placed.document), selection: { kind: "transition", id, scopeId: constructionId } };
   }
   const kind = input.subjectId.split(".").at(-1) as WallOpening["kind"];
   if (!(["door", "window", "gate", "passage"] as string[]).includes(kind)) return { state: "blocked", project, reason: "unavailable-here" };
@@ -206,7 +206,7 @@ function applyOpening(project: EditorProject, input: MapGestureCommandInput, tar
   if (placed.state === "no-wall") return { state: "blocked", project, reason: "no-wall" };
   if (placed.state !== "placed") return { state: "blocked", project, reason: "geometry-conflict" };
   if (roomFace && !roomFace.wallIds.includes(placed.opening.wallId)) return { state: "blocked", project, reason: "outside-outline" };
-  return { state: "applied", project: updateConstruction(project, constructionId, placed.document), selection: { kind: "opening", id } };
+  return { state: "applied", project: updateConstruction(project, constructionId, placed.document), selection: { kind: "opening", id, scopeId: constructionId } };
 }
 
 function applyPoint(project: EditorProject, input: MapGestureCommandInput, targetPlaceId: string, identity: Identity, naming: Naming): MapGestureCommandResult {

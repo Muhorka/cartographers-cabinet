@@ -154,6 +154,7 @@ describe("cutout operation", () => {
     const changed = result.project.constructions.find(({ id }) => id === document.id)!; const opening = changed.openings.find(({ id }) => id === "kept")!; const wall = changed.walls.find(({ id }) => id === opening.wallId)!;
     expect(changed.openings.map(({ id }) => id)).toEqual(["kept"]);
     expect(pointAt(wall, opening.position).x).toBeCloseTo(preservedPoint.x); expect(pointAt(wall, opening.position).y).toBeCloseTo(preservedPoint.y);
-    expect(opening.wallId).toMatch(new RegExp(`^${east.id}:outline:`));
+    expect(wall.sourceWallId).toBe(east.id);
+    expect(opening.wallId).not.toBe(east.id);
   });
 });

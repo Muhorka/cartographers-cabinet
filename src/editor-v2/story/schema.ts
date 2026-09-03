@@ -1,6 +1,7 @@
 import { z } from "zod";
-import type { StoryData, StoryGroup, StoryLensExpression, StoryObjectMetadata, StoryPropertyValue } from "./types";
+import { storyRefKey, type StoryData, type StoryGroup, type StoryLensExpression, type StoryObjectMetadata, type StoryPropertyValue } from "./types";
 import { routeRecordSchema } from "./routes/schema";
+import { isLensExpressionWithinComplexity } from "./lens-expression-complexity";
 
 const id = z.string().trim().min(1).max(512);
 const text = z.string().max(100_000);
@@ -40,12 +41,13 @@ const predicate = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("owner"), entryId: id }).strict(),
   z.object({ kind: z.literal("zone"), zoneId: id }).strict(),
 ]);
-const expression: z.ZodType<StoryLensExpression> = z.lazy(() => z.union([
-  z.object({ kind: z.literal("all"), items: z.array(expression).max(100) }).strict(),
-  z.object({ kind: z.literal("any"), items: z.array(expression).max(100) }).strict(),
-  z.object({ kind: z.literal("not"), item: expression }).strict(),
+const expressionNode: z.ZodType<StoryLensExpression> = z.lazy(() => z.union([
+  z.object({ kind: z.literal("all"), items: z.array(expressionNode).max(100) }).strict(),
+  z.object({ kind: z.literal("any"), items: z.array(expressionNode).max(100) }).strict(),
+  z.object({ kind: z.literal("not"), item: expressionNode }).strict(),
   z.object({ kind: z.literal("predicate"), predicate }).strict(),
 ]));
+const expression = z.preprocess((input) => isLensExpressionWithinComplexity(input) ? input : { kind: "lens-expression-complexity-limit" }, expressionNode) as z.ZodType<StoryLensExpression>;
 const lens = z.object({ id, name: shortText, color: z.string().max(64), expression, favorite: z.boolean().optional() }).strict();
 const patch = z.object({ id, target: ref, title: shortText.optional(), description: text.optional(), properties: properties.optional(), metadata: z.object({ owners: z.array(id).max(10_000).optional(), tags: z.array(shortText).max(10_000).optional(), access: access.optional() }).strict().optional() }).strict().superRefine((entry, context) => { if (entry.title === undefined && entry.description === undefined && entry.properties === undefined && entry.metadata === undefined) context.addIssue({ code: "custom", message: "A story patch must change text or metadata." }); });
 const step = z.object({ id, name: shortText, description: text.optional(), patches: z.array(patch).max(100_000) }).strict();
@@ -60,9 +62,9 @@ export const storyDataSchema = z.object({
   version: z.literal(1), world: z.array(worldEntry).max(100_000), memberships: z.array(membership).max(200_000), propertyDefinitions: z.array(propertyDefinition).max(100_000), objects: z.array(objectRecord).max(200_000), groups: z.array(group).max(100_000), zones: z.array(zone).max(100_000), lenses: z.array(lens).max(100_000), scenarios: z.array(scenario).max(100_000), relations: z.array(relation).max(200_000), intentions: z.array(intention).max(100_000), evidence: z.array(evidence).max(100_000), routes: z.array(routeRecordSchema).max(100_000).default([]),
 }).strict().superRefine((story, context) => {
   unique(story.world.map(({ id: value }) => value), context, "world id");
-  unique(story.memberships.map(({ subjectId, groupId, kind }) => `${subjectId}:${groupId}:${kind}`), context, "membership");
+  unique(story.memberships.map(({ subjectId, groupId, kind }) => JSON.stringify([subjectId, groupId, kind])), context, "membership");
   unique(story.propertyDefinitions.map(({ id: value }) => value), context, "property definition id");
-  unique(story.objects.map(({ ref: value }) => `${value.kind}:${value.scopeId ?? ""}:${value.id}`), context, "object reference");
+  unique(story.objects.map(({ ref: value }) => storyRefKey(value)), context, "object reference");
   unique(story.groups.map(({ id: value }) => value), context, "group id");
   unique(story.zones.map(({ id: value }) => value), context, "zone id");
   unique(story.lenses.map(({ id: value }) => value), context, "lens id");

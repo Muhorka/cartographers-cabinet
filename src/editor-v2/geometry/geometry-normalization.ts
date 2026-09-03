@@ -21,12 +21,48 @@ export function undirectedEdgeKey(first: KernelPoint, second: KernelPoint) {
   return a < b ? `${a}|${b}` : `${b}|${a}`;
 }
 
+function leastRotationIndex(values: readonly string[]) {
+  const count = values.length;
+  let first = 0; let second = 1; let offset = 0;
+  while (first < count && second < count && offset < count) {
+    const comparison = values[(first + offset) % count]!.localeCompare(values[(second + offset) % count]!);
+    if (comparison === 0) { offset += 1; continue; }
+    if (comparison > 0) {
+      first += offset + 1;
+      if (first <= second) first = second + 1;
+    } else {
+      second += offset + 1;
+      if (second <= first) second = first + 1;
+    }
+    offset = 0;
+  }
+  return Math.min(first, second);
+}
+
+function rotated<T>(values: readonly T[], start: number) {
+  return Array.from({ length: values.length }, (_, index) => values[(start + index) % values.length]!);
+}
+
+function compareRotations(firstValues: readonly string[], first: number, secondValues: readonly string[], second: number) {
+  for (let offset = 0; offset < firstValues.length; offset += 1) {
+    const comparison = firstValues[(first + offset) % firstValues.length]!.localeCompare(secondValues[(second + offset) % secondValues.length]!);
+    if (comparison !== 0) return comparison;
+  }
+  return 0;
+}
+
 export function canonicalRing(points: KernelPoint[]) {
   const open = points.length > 1 && pointKey(points[0]) === pointKey(points.at(-1)!) ? points.slice(0, -1) : [...points];
   if (open.length < 2) return open.map(normalizePoint);
   const normalized = open.map(normalizePoint);
-  const candidates = [normalized, [...normalized].reverse()].flatMap((ring) => ring.map((_, index) => [...ring.slice(index), ...ring.slice(0, index)]));
-  return candidates.toSorted((first, second) => first.map(pointKey).join(";").localeCompare(second.map(pointKey).join(";")))[0];
+  const forwardKeys = normalized.map(pointKey);
+  const reverse = [...normalized].reverse();
+  const reverseKeys = [...forwardKeys].reverse();
+  const forwardStart = leastRotationIndex(forwardKeys);
+  const reverseStart = leastRotationIndex(reverseKeys);
+  return compareRotations(forwardKeys, forwardStart, reverseKeys, reverseStart) <= 0
+    ? rotated(normalized, forwardStart)
+    : rotated(reverse, reverseStart);
 }
 
 export function stableHash(value: string) {

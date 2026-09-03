@@ -7,58 +7,13 @@ import { repairProjectConstructions } from "../model/construction-repair";
 import { visibleLayerId } from "../toolbox/toolbox-model";
 import { immutableSnapshot } from "./immutable-snapshot";
 import { prepareProjectTransaction, type PreparedProjectTransaction, type ProjectTransaction } from "./project-transaction";
-import { reconcileSessionNavigation } from "../model/navigation-fallback";
+import { placeToOpenAfterProjectInstall, reconcileSessionNavigation } from "../model/navigation-fallback";
 import { rebaseCurrentStoryRoutes } from "../story/routes/revision";
+import { reconcileRoadJunctions } from "../roads/road-joining";
+import { assertProjectIntegrity } from "../model/project-integrity";
+import type { EditorSelection, EditorSessionOptions, EditorSessionState, PendingStructuralTransaction, SessionResult } from "./editor-session-types";
+export type { EditorSelection, EditorSessionOptions, EditorSessionState, PendingStructuralTransaction, SessionResult } from "./editor-session-types";
 export type { PreparedProjectTransaction, ProjectTransaction } from "./project-transaction";
-
-/** The only selectable things exposed by the editor session. */
-export type EditorSelection =
-  | { kind: "place"; id: string }
-  | { kind: "element"; id: string }
-  | { kind: "wall"; id: string; constructionId: string }
-  | { kind: "room"; id: string; constructionId: string };
-
-export type PendingStructuralTransaction = {
-  id: string;
-  constructionId: string;
-  beforeRevision: number;
-};
-
-type SessionResultCode =
-  | "committed"
-  | "no-change"
-  | "history-empty"
-  | "place-not-found"
-  | "navigation-blocked-pending-structural"
-  | "selection-target-not-found"
-  | "nothing-to-clear"
-  | "construction-not-found"
-  | "review-required"
-  | "transaction-failed" | "road-obstacle";
-
-export type SessionResult<T = undefined> = {
-  code: SessionResultCode;
-  changed: boolean;
-  value?: T;
-  reason?: string;
-};
-
-export type EditorSessionState = {
-  project: EditorProject;
-  activePlaceId?: string;
-  selection: readonly EditorSelection[];
-  boundaryEditing: boolean;
-  toolbox: ToolboxState;
-  pendingStructuralTransaction?: PendingStructuralTransaction;
-  roadConflict?: boolean;
-};
-
-export type EditorSessionOptions = {
-  createId?: () => string;
-  createRoomName?: (index: number) => string;
-  initialPlaceId?: string;
-  initialToolbox?: ToolboxState;
-};
 
 type History = {
   past: EditorProject[];
@@ -94,6 +49,7 @@ export class EditorSession {
   private readonly preparedTransactions = new WeakSet<PreparedProjectTransaction>();
   private readonly createId: () => string;
   private readonly createRoomName: (index: number) => string;
+  private readonly historyLimit: number;
   private state: EditorSessionState;
   private viewState?: { source: EditorSessionState; value: EditorSessionState };
 
@@ -101,9 +57,17 @@ export class EditorSession {
     if (options.initialPlaceId && !activePlace(project, options.initialPlaceId)) throw new Error("initial-place-not-found");
     this.createId = options.createId ?? (() => crypto.randomUUID());
     this.createRoomName = options.createRoomName ?? ((index) => `room-${index}`);
+    this.historyLimit = Number.isFinite(options.historyLimit) ? Math.max(0, Math.floor(options.historyLimit!)) : 100;
+    const canonicalProject = reconcileRoadJunctions(repairProjectConstructions(normalizeEditorProject(project), { createId: this.createId, createName: this.createRoomName }));
+    assertProjectIntegrity(canonicalProject);
+    const initialPlaceId = options.initialPlaceId && activePlace(canonicalProject, options.initialPlaceId)
+      ? options.initialPlaceId
+      : options.initialPlaceId
+        ? placeToOpenAfterProjectInstall(project, canonicalProject, options.initialPlaceId)
+        : undefined;
     this.state = {
-      project: immutableSnapshot(rebaseCurrentStoryRoutes(repairProjectConstructions(normalizeEditorProject(project), { createId: this.createId, createName: this.createRoomName }))),
-      activePlaceId: options.initialPlaceId,
+      project: immutableSnapshot(rebaseCurrentStoryRoutes(canonicalProject)),
+      activePlaceId: initialPlaceId,
       selection: [],
       boundaryEditing: false,
       toolbox: clone(options.initialToolbox ?? createToolboxState()),
@@ -185,7 +149,7 @@ export class EditorSession {
     }
     this.state = { ...this.state, roadConflict: undefined };
     if (prepared.status === "no-change") return { code: "no-change", changed: false };
-    this.history.past.push(this.state.project);
+    this.pushHistory(this.history.past, this.state.project);
     this.history.future = [];
     this.installProject(prepared.project);
     return { code: "committed", changed: true };
@@ -225,7 +189,7 @@ export class EditorSession {
   undo(): SessionResult {
     const previous = this.history.past.pop();
     if (!previous) return { code: "history-empty", changed: false };
-    this.history.future.push(this.state.project);
+    this.pushHistory(this.history.future, this.state.project);
     this.installProject(previous);
     return { code: "committed", changed: true };
   }
@@ -233,9 +197,16 @@ export class EditorSession {
   redo(): SessionResult {
     const next = this.history.future.pop();
     if (!next) return { code: "history-empty", changed: false };
-    this.history.past.push(this.state.project);
+    this.pushHistory(this.history.past, this.state.project);
     this.installProject(next);
     return { code: "committed", changed: true };
+  }
+
+  /** Appends a snapshot and drops the oldest entry when the configured bound is exceeded. */
+  private pushHistory(stack: EditorProject[], snapshot: EditorProject) {
+    if (!this.historyLimit) return;
+    stack.push(snapshot);
+    if (stack.length > this.historyLimit) stack.splice(0, stack.length - this.historyLimit);
   }
 
   /** Installs a canonical document and keeps session navigation valid across snapshots. */

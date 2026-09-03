@@ -56,10 +56,26 @@ describe("editor v2 construction transactions", () => {
     const base = createConstructionDocument("plan", [...shell, wall("horizontal", 0, 5, 10, 5)], identity);
     const document = { ...base, openings: [{ id: "door", kind: "door" as const, wallId: "horizontal", position: .2, width: .8 }] };
     const preview = previewWallAddition(document, [wall("vertical", 5, 0, 5, 10)], identity);
-    expect(preview.after.walls.filter(({ id }) => id.startsWith("horizontal:"))).toHaveLength(2);
+    const horizontal = preview.after.walls.filter(({ sourceWallId }) => sourceWallId === "horizontal");
+    expect(horizontal).toHaveLength(2);
     expect(preview.after.openings).toHaveLength(1);
-    expect(preview.after.openings[0].wallId).toBe("horizontal:1");
+    expect(preview.after.openings[0].wallId).toBe(horizontal[0].id);
     expect(preview.after.openings[0].position).toBeCloseTo(.4);
+  });
+
+  it("does not infer wall ancestry from a colon in an unrelated identifier", () => {
+    const identity = identities();
+    const unrelated = wall("horizontal:1", 2, 2, 2, 4);
+    const base = createConstructionDocument("plan", [...shell, wall("horizontal", 0, 5, 10, 5), unrelated], identity);
+    const document = { ...base, openings: [
+      { id: "crossing-door", kind: "door" as const, wallId: "horizontal", position: .2, width: .8 },
+      { id: "unrelated-door", kind: "door" as const, wallId: "horizontal:1", position: .5, width: .5 },
+    ] };
+
+    const preview = previewWallAddition(document, [wall("vertical", 5, 0, 5, 10)], identity);
+    expect(new Set(preview.after.walls.map(({ id }) => id)).size).toBe(preview.after.walls.length);
+    expect(preview.after.openings.find(({ id }) => id === "unrelated-door")?.wallId).toBe("horizontal:1");
+    expect(preview.after.openings.find(({ id }) => id === "crossing-door")?.wallId).not.toBe("horizontal:1");
   });
 
   it("rejects stale previews instead of applying them to another revision", () => {

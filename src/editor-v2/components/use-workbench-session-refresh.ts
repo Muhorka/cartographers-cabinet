@@ -8,14 +8,10 @@ import type { SheetViewport } from "./map-sheet-geometry";
 import type { MapSelection } from "./map-sheet-types";
 import { activatePreferredLayer, viewportFor } from "./workbench-helpers";
 import { reconcileInspectorFocus, type InspectorFocus } from "./workbench-inspector-focus";
+import { constructionForSelection } from "../drawing/selection-locks";
 
 function constructionSelectionExists(project: EditorProject, selection: MapSelection) {
-  return project.constructions.some((construction) => {
-    if (selection.kind === "wall") return construction.walls.some(({ id }) => id === selection.id);
-    if (selection.kind === "room") return construction.rooms.some(({ id }) => id === selection.id);
-    if (selection.kind === "opening") return construction.openings.some(({ id }) => id === selection.id);
-    return selection.kind === "transition" && construction.transitions.some(({ id }) => id === selection.id);
-  });
+  return Boolean(constructionForSelection(project, selection));
 }
 
 function mapSelectionExists(project: EditorProject, selection: MapSelection) {

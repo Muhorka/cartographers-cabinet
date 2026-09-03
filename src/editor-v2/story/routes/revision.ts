@@ -1,5 +1,9 @@
 import type { VerticalTransition } from "../../construction/wall-features";
 import type { EditorProject } from "../../model/project-model";
+import GeometryFactory from "jsts/org/locationtech/jts/geom/GeometryFactory.js";
+import GeoJSONReader from "jsts/org/locationtech/jts/io/GeoJSONReader.js";
+import InteriorPoint from "jsts/org/locationtech/jts/algorithm/InteriorPoint.js";
+import { pointInRegion, regionGeoJson } from "../../geometry/region-constraints";
 import { projectRevision, valueRevision } from "../../state/project-revision";
 import { projectStoryData } from "../project-effective";
 import { defaultStoryAccessPolicy, storyRefKey, type StoryAccessPolicy, type StoryData, type StoryObjectMetadata, type StoryObjectRef, type StoryTextPatch } from "../types";
@@ -7,6 +11,7 @@ import { outdoorElementSemantics, routeElementWidthCap } from "./outdoor-element
 import type { StoryRouteRecord } from "./types";
 
 const REVISION_PREFIX = "story-route:v1:";
+const geometryReader = new GeoJSONReader(new GeometryFactory());
 const has = (value: object, key: PropertyKey) => Object.prototype.hasOwnProperty.call(value, key);
 const ids = (values: readonly string[] = []) => [...new Set(values)].toSorted((first, second) => first.localeCompare(second));
 const ref = ({ kind, id, scopeId }: StoryObjectRef) => ({ kind, id, ...(scopeId ? { scopeId } : {}) });
@@ -32,20 +37,20 @@ function semanticMetadata(metadata: StoryObjectMetadata | undefined, override = 
   return { ...(meaningfulAccess ? { access: meaningfulAccess } : {}), ...(owners === undefined ? {} : { owners }) };
 }
 
-/** Routing uses only the representative landing point, not transition decoration. */
+/**
+ * Routing uses a representative landing point, not transition decoration.
+ * JTS's interior-point algorithm is important here: the arithmetic mean of a
+ * concave footprint's vertices can be outside the footprint (or in a hole).
+ */
 export function routeTransitionPoint(transition: VerticalTransition) {
-  const shape = transition.footprint;
-  if (shape.kind === "rectangle") return { x: shape.x + shape.width / 2, y: shape.y + shape.height / 2 };
-  if (shape.kind === "circle" || shape.kind === "ellipse") return { x: shape.cx, y: shape.cy };
-  if (shape.kind === "polygon") {
-    if (!shape.points.length) return undefined;
-    const sum = shape.points.reduce((result, point) => ({ x: result.x + point.x, y: result.y + point.y }), { x: 0, y: 0 });
-    return { x: sum.x / shape.points.length, y: sum.y / shape.points.length };
+  try {
+    const coordinate = InteriorPoint.getInteriorPoint(geometryReader.read(regionGeoJson(transition.footprint)));
+    if (!coordinate) return undefined;
+    const point = { x: coordinate.x, y: coordinate.y };
+    return pointInRegion(point, transition.footprint) ? point : undefined;
+  } catch {
+    return undefined;
   }
-  const points = shape.kind === "compound" ? shape.polygons[0]?.outer : shape.nodes.map(({ anchor }) => anchor);
-  if (!points?.length) return undefined;
-  const sum = points.reduce((result, point) => ({ x: result.x + point.x, y: result.y + point.y }), { x: 0, y: 0 });
-  return { x: sum.x / points.length, y: sum.y / points.length };
 }
 
 function routeRef(refValue: StoryObjectRef, roadIds: ReadonlySet<string>) {

@@ -5,7 +5,8 @@ import { emptyProject, type EditorProject } from "../../model/project-model";
 import { EditorSession } from "../../state/editor-session";
 import { zoneMatchesProject } from "../project-adapter";
 import { defaultStoryAccessPolicy, type StoryAccessPolicy } from "../types";
-import { isStoryRouteCurrent, legacyStoryRouteRevision, rebaseCurrentStoryRoutes, storyRouteRevision } from "./revision";
+import { isStoryRouteCurrent, legacyStoryRouteRevision, rebaseCurrentStoryRoutes, routeTransitionPoint, storyRouteRevision } from "./revision";
+import { pointInRegion } from "../../geometry/region-constraints";
 import type { StoryRouteRecord } from "./types";
 
 const wall = (id: string, x1: number, y1: number, x2: number, y2: number, role: CanonicalWall["role"] = "boundary"): CanonicalWall => ({
@@ -59,6 +60,14 @@ function route(sourceRevision: string): StoryRouteRecord {
 }
 
 describe("story route semantic revision", () => {
+  it("chooses a point guaranteed inside a concave transition footprint", () => {
+    const transition = { id: "concave", kind: "stairs" as const, footprint: { kind: "polygon" as const, points: [{ x: 0, y: 0 }, { x: 6, y: 0 }, { x: 6, y: 2 }, { x: 2, y: 2 }, { x: 2, y: 6 }, { x: 0, y: 6 }] } };
+    const point = routeTransitionPoint(transition);
+    expect(point).toBeDefined();
+    expect(pointInRegion(point!, transition.footprint)).toBe(true);
+    expect(point).not.toEqual({ x: 16 / 6, y: 16 / 6 });
+  });
+
   it("ignores narrative, presentation and unrelated project data", () => {
     const project = fixture(); const expected = storyRouteRevision(project); const changed = copy(project);
     changed.name = "Renamed project"; changed.updatedAt = "2030-01-01T00:00:00.000Z";

@@ -5,6 +5,7 @@ import { checkpointCopy } from "../i18n/checkpoint-copy";
 import type { EditorProject } from "../model/project-model";
 import { checkpointSummary, type ProjectCheckpointSummary } from "../persistence/project-checkpoint";
 import { listProjectCheckpoints, loadProjectCheckpoint, removeProjectCheckpoint, saveProjectCheckpoint } from "../persistence/project-library";
+import { safePersistenceError } from "../persistence/persistence-errors";
 
 export function useProjectCheckpoints(project: EditorProject | undefined, locale: EditorLocale) {
   const projectId = project?.id;
@@ -13,11 +14,11 @@ export function useProjectCheckpoints(project: EditorProject | undefined, locale
   const [tracing, setTracing] = useState<{ id: string; projectId: string; project: EditorProject }>();
   const projectItems = items.filter(({ projectId: ownerId }) => ownerId === projectId); const effectiveActiveId = projectItems.some(({ id }) => id === activeId) ? activeId : undefined;
   function setActiveId(id?: string) { setError(undefined); setTracing(undefined); chooseActiveId(id); }
-  useEffect(() => { let cancelled = false; if (!projectId) return; void listProjectCheckpoints(projectId).then((next) => { if (!cancelled) setItems(next); }).catch((cause) => { if (!cancelled) setError(String(cause)); }); return () => { cancelled = true; }; }, [projectId]);
+  useEffect(() => { let cancelled = false; if (!projectId) return; void listProjectCheckpoints(projectId).then((next) => { if (!cancelled) setItems(next); }).catch((cause) => { if (!cancelled) setError(safePersistenceError(cause).reason); }); return () => { cancelled = true; }; }, [projectId]);
   useEffect(() => {
     let cancelled = false;
     if (!effectiveActiveId || !projectId) return;
-    void loadProjectCheckpoint(effectiveActiveId, projectId).then((loaded) => { if (!cancelled) setTracing({ id: effectiveActiveId, projectId, project: loaded }); }).catch((cause) => { if (!cancelled) setError(String(cause)); });
+    void loadProjectCheckpoint(effectiveActiveId, projectId).then((loaded) => { if (!cancelled) setTracing({ id: effectiveActiveId, projectId, project: loaded }); }).catch((cause) => { if (!cancelled) setError(safePersistenceError(cause).reason); });
     return () => { cancelled = true; };
   }, [effectiveActiveId, projectId]);
   async function preserve(name: string) {

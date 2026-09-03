@@ -56,18 +56,14 @@ describe("road handles and canonical history", () => {
     expect(session.getState().project.places).toHaveLength(1);
     expect(session.getHistoryState().canUndo).toBe(false);
   });
-  it("keeps metadata-only edits on an existing malformed road without rerouting", () => {
+  it("rejects an existing malformed road before it can enter the editing session", () => {
     const malformed = { ...road, geometry: { kind: "path" as const, points: [{ x: 0, y: 0 }], closed: false } };
     const project = { ...fixture(), elements: [malformed] };
-    const session = new EditorSession(project);
-    const result = session.executeTransaction({ id: "rename-road", apply: (current) => ({ ...current, elements: current.elements.map((element) => element.id === road.id ? { ...element, name: "Renamed" } : element) }) });
-    expect(result).toMatchObject({ code: "committed", changed: true });
-    expect(session.getState().project.elements[0]?.name).toBe("Renamed");
-    expect(session.getState().project.elements[0]?.geometry).toEqual(malformed.geometry);
+    expect(() => new EditorSession(project)).toThrow("Ribbon needs at least two distinct points: road");
   });
   it("still validates a real geometry change after a metadata-only edit", () => {
-    const malformed = { ...road, locked: true, geometry: { kind: "path" as const, points: [{ x: 0, y: 0 }], closed: false } };
-    const withBuilding = createPlace({ ...fixture(), elements: [malformed] }, { id: "house", parentId: "world", name: "House", kind: "building", boundary: { kind: "rectangle", x: 40, y: -5, width: 10, height: 10 } });
+    const clear = { ...road, locked: true, geometry: { kind: "path" as const, points: [{ x: 0, y: 20 }, { x: 100, y: 20 }], closed: false } };
+    const withBuilding = createPlace({ ...fixture(), elements: [clear] }, { id: "house", parentId: "world", name: "House", kind: "building", boundary: { kind: "rectangle", x: 40, y: -5, width: 10, height: 10 } });
     const session = new EditorSession(withBuilding);
     expect(session.executeTransaction({ id: "rename-road", apply: (current) => ({ ...current, elements: current.elements.map((element) => ({ ...element, name: "Renamed" })) }) }).changed).toBe(true);
     const geometryChange = { ...session.getState().project, elements: session.getState().project.elements.map((element) => ({ ...element, geometry: { kind: "path" as const, points: [{ x: 0, y: 0 }, { x: 100, y: 0 }], closed: false } })) };

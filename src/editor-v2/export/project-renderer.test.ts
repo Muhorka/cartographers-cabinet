@@ -3,6 +3,12 @@ import { createStarterProject } from "../model/starter-project";
 import { emptyProject, type DrawingElement } from "../model/project-model";
 import { createPlace } from "../model/hierarchy-operations";
 import { projectThumbnailSvg, renderProjectViewSvg } from "./project-renderer";
+import { stableHash } from "../geometry/geometry-normalization";
+
+const svgId = (value: string) => {
+  const sanitized = value.replaceAll(/[^a-zA-Z0-9_-]/g, "-");
+  return value.length <= 80 && sanitized === value ? value : `${sanitized.slice(0, 64) || "id"}-${stableHash(value)}`;
+};
 
 describe("editor v2 export renderer", () => {
   it("keeps the exported narrow region clip outside rotated lettering", () => {
@@ -28,6 +34,19 @@ describe("editor v2 export renderer", () => {
     expect(svg).not.toContain("data-resize-corner");
     expect(svg).not.toContain("foreignObject");
     expect(renderProjectViewSvg({ project, activePlaceId: project.places[0]!.id, viewport: { center: { x: 0, y: 0 }, zoom: 6, rotation: 0 } })).toContain('stroke-width="0.3"');
+  });
+
+  it("keeps authored ids distinct after SVG-safe encoding", () => {
+    const project = emptyProject("svg-ids", "SVG IDs");
+    project.places.push({ id: "world", name: "World", kind: "world", transform: { x: 0, y: 0, rotation: 0 }, tags: [], access: [], properties: {} });
+    const road = (id: string, y: number): DrawingElement => ({ id, belongsToId: "world", name: id, layerId: "roads", subjectId: "road.paved", geometry: { kind: "path", points: [{ x: 0, y }, { x: 10, y }], closed: false }, widthMeters: 2, visible: true, locked: false, tags: [], access: [], properties: {} });
+    project.elements.push(road("road:a", 0), road("road-a", 4));
+
+    const svg = renderProjectViewSvg({ project, activePlaceId: "world", viewport: { center: { x: 5, y: 2 }, zoom: 2, rotation: 0 } });
+    const filterIds = [...svg.matchAll(/<filter id="(road-soft-[^"]+)"/g)].map((match) => match[1]);
+
+    expect(filterIds).toHaveLength(2);
+    expect(new Set(filterIds).size).toBe(2);
   });
 
   it("keeps note rotation in the exported SVG", () => {
@@ -80,8 +99,6 @@ describe("editor v2 export renderer", () => {
 
     const svg = renderProjectViewSvg({ project, viewport: { center: { x: 0, y: 0 }, zoom: 2, rotation: 0 } });
     const roomId = groundDocument.rooms[0]!.id;
-    const svgId = (value: string) => value.replaceAll(/[^a-zA-Z0-9_-]/g, "-");
-
     expect(svg).toMatch(new RegExp(`id="room-${svgId(groundDocument.id)}-${svgId(roomId)}-label-(?:clip|path)"`));
     expect(svg).toMatch(new RegExp(`id="room-${svgId(upperDocument.id)}-${svgId(roomId)}-label-(?:clip|path)"`));
   });
@@ -130,7 +147,7 @@ describe("editor v2 export renderer", () => {
     project.places.push({ ...groundLevel, id: "upper-level", name: "Upper level", constructionId: upperDocument.id });
 
     const svg = renderProjectViewSvg({ project, viewport: { center: { x: 0, y: 0 }, zoom: 2, rotation: 0 } });
-    const groundId = `transition-${groundDocument.id.replaceAll(/[^a-zA-Z0-9_-]/g, "-")}-shared-stairs`;
+    const groundId = `transition-${svgId(groundDocument.id)}-shared-stairs`;
     const upperId = "transition-upper-plan-shared-stairs";
 
     expect(svg).toContain(`id="${groundId}-clip"`);

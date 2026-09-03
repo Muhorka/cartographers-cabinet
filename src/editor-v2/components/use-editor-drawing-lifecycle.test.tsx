@@ -78,4 +78,29 @@ describe("drawing notice lifecycle", () => {
     expect(drawingRef.current!.canUndoDraft).toBe(true);
     expect(drawingRef.current!.notice?.message).toBe(workbenchCopy.en.drawingStatus.blocked["transaction-failed"]);
   });
+
+  it("saves a sketch on top of the live project even when the rendered snapshot is stale", () => {
+    const draft = { instrumentId: "polygon" as const, points: [{ x: 1, y: 1 }, { x: 2, y: 2 }] };
+    act(() => drawingRef.current!.setGestureDraft(draft));
+    act(() => drawingRef.current!.requestAfterDraft(() => undefined));
+    session.executeTransaction({ id: "live-change", apply: (project) => ({ ...project, name: "Live project" }) });
+    const save = drawingRef.current!.notice?.actions.find(({ label }) => label === workbenchCopy.en.drawingStatus.saveAsSketch);
+    expect(save).toBeDefined();
+    act(() => save!.onClick());
+    expect(session.getViewState().project.name).toBe("Live project");
+    expect(session.getViewState().project.elements.some(({ layerId }) => layerId === "sketch")).toBe(true);
+  });
+
+  it("clears drawing confirmations and drafts when the session changes", () => {
+    const draft = { instrumentId: "polygon" as const, points: [{ x: 1, y: 1 }, { x: 2, y: 2 }] };
+    act(() => drawingRef.current!.setGestureDraft(draft));
+    act(() => drawingRef.current!.requestAfterDraft(() => undefined));
+    expect(drawingRef.current!.canUndoDraft).toBe(true);
+    const nextProject = createStarterProject("next", "Next project", "en");
+    const nextLevel = nextProject.places.find(({ kind }) => kind === "level")!;
+    const nextSession = new EditorSession(nextProject, { initialPlaceId: nextLevel.id });
+    act(() => root.render(<Probe ref={drawingRef} session={nextSession}/>));
+    expect(drawingRef.current!.canUndoDraft).toBe(false);
+    expect(drawingRef.current!.notice).toBeUndefined();
+  });
 });

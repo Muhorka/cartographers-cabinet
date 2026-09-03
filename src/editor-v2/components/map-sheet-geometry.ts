@@ -113,7 +113,10 @@ export function constructionPlaceForView(project: EditorProject, activePlaceId: 
     const level = project.places.find(({ id }) => id === active.parentId);
     if (level?.constructionId) return level;
   }
-  if (active?.kind === "building") return project.places.find(({ parentId, kind, constructionId }) => parentId === active.id && kind === "level" && constructionId);
+  if (active?.kind === "building") {
+    const levels = project.places.filter(({ parentId, kind, constructionId }) => parentId === active.id && kind === "level" && constructionId);
+    return levels.length === 1 ? levels[0] : undefined;
+  }
   return active?.constructionId ? active : undefined;
 }
 

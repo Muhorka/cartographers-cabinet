@@ -21,8 +21,12 @@ export { storyRouteRevision } from "./revision";
 type Face = ReturnType<typeof constructionNetwork>["faces"][number];
 type LevelSpace = { place: PlaceNode; document: ConstructionDocument; faces: Face[] };
 type Node = { id: string; levelId: string; faceId: string; point: { x: number; y: number }; openingId?: string; transitionId?: string; transitionKey?: string; portalPoint?: { x: number; y: number }; conditions?: string[] };
-type Edge = { from: string; to: string; distance: number; openingId?: string; transitionId?: string; transitionKey?: string; conditions?: string[]; path?: { x: number; y: number }[] };
+type Edge = { from: string; to: string; distance: number; openingId?: string; transitionId?: string; transitionKey?: string; resourceKey?: string; conditions?: string[]; path?: { x: number; y: number }[] };
 type RoutePathFinder = ReturnType<typeof createRoutePathFinder>;
+
+const routeResourceKey = (kind: "opening" | "transition", scopeId: string, id: string) => JSON.stringify([kind, scopeId, id]);
+/** A vertical transfer is not free travel: retain a small explicit penalty in route distance. */
+const transitionCost = (kind: "stairs" | "elevator") => kind === "elevator" ? 2 : 4;
 
 function context(request: StoryRouteRequest): StoryAccessContext { return { actorId: request.actorId, scenarioId: request.scenarioId, stepId: request.stepId }; }
 
@@ -74,7 +78,7 @@ function buildLevelGraph(project: EditorProject, space: LevelSpace, request: Sto
     const put = (point: { x: number; y: number }, suffix: string, extra: Partial<Node> = {}) => { const conditions = [...new Set([...roomAccess.conditions, ...(extra.conditions ?? [])])]; const node = { id: `${space.place.id}:${face.id}:${suffix}`, levelId: space.place.id, faceId: face.id, point, ...extra, ...(conditions.length ? { conditions } : {}) }; nodes.push(node); candidates.push(node); return node; };
     for (const opening of space.document.openings.toSorted(({ id: first }, { id: second }) => first.localeCompare(second))) {
       if (opening.kind === "window" && !request.preferences?.allowWindows) continue;
-      const centre = openingCentre(space.document, opening); if (!centre || blocked.has(opening.id)) continue;
+      const centre = openingCentre(space.document, opening); if (!centre || blocked.has(routeResourceKey("opening", space.document.id, opening.id))) continue;
       if (opening.width < width) { reasons.add(`Opening ${opening.id} is narrower than the requested ${width} m route.`); continue; }
       const adjacent = openingFaces(space, opening, centre); if (!adjacent.some(({ id }) => id === face.id) || adjacent.length !== 2) continue;
       const access = accessResult(decision(project, options, { kind: "opening", id: opening.id, scopeId: space.document.id, locked: false }, request), missing, reasons, `Opening ${opening.id} is not available.`);
@@ -94,13 +98,14 @@ function buildLevelGraph(project: EditorProject, space: LevelSpace, request: Sto
     }
   }
   for (const opening of space.document.openings.toSorted(({ id: first }, { id: second }) => first.localeCompare(second))) {
-    const centre = openingCentre(space.document, opening); if (!centre || blocked.has(opening.id) || opening.kind === "window" && !request.preferences?.allowWindows) continue;
+    const centre = openingCentre(space.document, opening); if (!centre || blocked.has(routeResourceKey("opening", space.document.id, opening.id)) || opening.kind === "window" && !request.preferences?.allowWindows) continue;
     const adjacent = openingFaces(space, opening, centre); if (adjacent.length !== 2) continue;
     const [first, second] = adjacent; const from = `${space.place.id}:${first!.id}:opening:${opening.id}`; const to = `${space.place.id}:${second!.id}:opening:${opening.id}`;
     if (!nodes.some(({ id }) => id === from) || !nodes.some(({ id }) => id === to)) continue;
     const firstNode = nodes.find(({ id }) => id === from); const secondNode = nodes.find(({ id }) => id === to); if (!firstNode || !secondNode) continue;
     const conditions = [...new Set([...(firstNode.conditions ?? []), ...(secondNode.conditions ?? [])])]; const path = [firstNode.point, firstNode.portalPoint ?? centre, secondNode.point];
-    addEdge(adjacency, { from, to, distance: polylineDistance(path), openingId: opening.id, conditions, path }); addEdge(adjacency, { from: to, to: from, distance: polylineDistance(path), openingId: opening.id, conditions, path: [...path].reverse() });
+    const resourceKey = routeResourceKey("opening", space.document.id, opening.id);
+    addEdge(adjacency, { from, to, distance: polylineDistance(path), openingId: opening.id, resourceKey, conditions, path }); addEdge(adjacency, { from: to, to: from, distance: polylineDistance(path), openingId: opening.id, resourceKey, conditions, path: [...path].reverse() });
   }
   return { adjacency, nodes };
 }
@@ -130,14 +135,15 @@ function routeGraph(project: EditorProject, spaces: LevelSpace[], request: Story
     if (local) addEdge(allEdges, { from: start.id, to: goal.id, distance: local.distance, path: local.points, conditions: roomAccess.conditions });
   }
   for (const graph of graphs) for (const transition of graph.space.document.transitions.toSorted(({ id: first }, { id: second }) => first.localeCompare(second))) {
-    if (transition.sameLevelRise || blocked.has(transition.id)) continue;
+    const resourceKey = routeResourceKey("transition", graph.space.document.id, transition.id);
+    if (transition.sameLevelRise || blocked.has(resourceKey)) continue;
     if (request.profile === "vehicle") { reasons.add(`Vehicle profile cannot use transition ${transition.id}.`); continue; }
     if (transition.sourceLevelId && transition.sourceLevelId !== graph.space.place.id) continue;
     const targets = [...new Set(transition.connectedLevelIds ?? [transition.sourceLevelId, transition.targetLevelId].filter((value): value is string => Boolean(value)))].filter((id) => id !== graph.space.place.id);
     const point = routeTransitionPoint(transition); if (!point) continue;
     const face = faceForPoint(graph.space, point); if (!face) { reasons.add(`Transition ${transition.id} has no valid landing on ${graph.space.place.id}.`); continue; }
     if (!faceAccess(project, graph.space, face, request, options, missing, reasons).allowed) continue;
-    const transitionKey = `${graph.space.document.id}:${transition.id}`;
+    const transitionKey = resourceKey;
     const fromNode = graph.nodes.find(({ faceId, transitionKey: nodeTransitionKey }) => faceId === face.id && nodeTransitionKey === transitionKey) ?? { id: `${graph.space.place.id}:${face.id}:transition:${transitionKey}`, levelId: graph.space.place.id, faceId: face.id, point, transitionId: transition.id, transitionKey };
     if (!graph.nodes.some(({ id }) => id === fromNode.id)) graph.nodes.push(fromNode);
     for (const targetId of targets) {
@@ -149,8 +155,9 @@ function routeGraph(project: EditorProject, spaces: LevelSpace[], request: Story
       if (!targetGraph.nodes.some(({ id }) => id === targetNode.id)) targetGraph.nodes.push(targetNode);
       const access = accessResult(decision(project, options, { kind: "transition", id: transition.id, scopeId: graph.space.document.id, locked: false }, request), missing, reasons, `Transition ${transition.id} is not available.`);
       if (!access.allowed) continue;
-      addEdge(allEdges, { from: fromNode.id, to: targetNode.id, distance: 0, transitionId: transition.id, transitionKey, conditions: access.conditions });
-      addEdge(allEdges, { from: targetNode.id, to: fromNode.id, distance: 0, transitionId: transition.id, transitionKey, conditions: access.conditions });
+      const cost = transitionCost(transition.kind);
+      addEdge(allEdges, { from: fromNode.id, to: targetNode.id, distance: cost, transitionId: transition.id, transitionKey, resourceKey, conditions: access.conditions });
+      addEdge(allEdges, { from: targetNode.id, to: fromNode.id, distance: cost, transitionId: transition.id, transitionKey, resourceKey, conditions: access.conditions });
     }
   }
   // A landing is a real point in a face; connect it to that face's free-space graph.
@@ -165,7 +172,7 @@ function routeGraph(project: EditorProject, spaces: LevelSpace[], request: Story
   const connectStartGoal = (node: Node) => { const graph = byLevel.get(node.levelId)!; const face = graph.space.faces.find(({ id }) => id === node.faceId)!; const roomAccess = faceAccess(project, graph.space, face, request, options, missing, reasons); if (!roomAccess.allowed) return; for (const candidate of graph.nodes.filter(({ faceId }) => faceId === face.id)) { const local = findPath(roomFaceShape(face), node.point, candidate.point, routeWidth(request) / 2); if (!local) continue; const conditions = [...new Set([...roomAccess.conditions, ...(candidate.conditions ?? [])])]; addEdge(allEdges, { from: node.id, to: candidate.id, distance: local.distance, path: local.points, conditions }); addEdge(allEdges, { from: candidate.id, to: node.id, distance: local.distance, path: [...local.points].reverse(), conditions }); } };
   connectStartGoal(start); connectStartGoal(goal);
   const distances = new Map<string, number>([[start.id, 0]]); const previous = new Map<string, Edge>(); const visited = new Set<string>();
-  while (true) { const current = [...distances.keys()].filter((id) => !visited.has(id)).toSorted((a, b) => (distances.get(a)! - distances.get(b)!) || a.localeCompare(b))[0]; if (!current) break; visited.add(current); if (current === goal.id) break; for (const edge of allEdges.get(current) ?? []) { if (edge.openingId && blocked.has(edge.openingId) || edge.transitionId && blocked.has(edge.transitionId)) continue; const next = (distances.get(edge.to) ?? Infinity); const candidate = distances.get(current)! + edge.distance; if (candidate < next - 1e-7) { distances.set(edge.to, candidate); previous.set(edge.to, edge); } } }
+  while (true) { const current = [...distances.keys()].filter((id) => !visited.has(id)).toSorted((a, b) => (distances.get(a)! - distances.get(b)!) || a.localeCompare(b))[0]; if (!current) break; visited.add(current); if (current === goal.id) break; for (const edge of allEdges.get(current) ?? []) { if (edge.resourceKey && blocked.has(edge.resourceKey)) continue; const next = (distances.get(edge.to) ?? Infinity); const candidate = distances.get(current)! + edge.distance; if (candidate < next - 1e-7) { distances.set(edge.to, candidate); previous.set(edge.to, edge); } } }
   if (!distances.has(goal.id)) {
     if (!blocked.size) reasons.add(`No path with ${routeWidth(request)} m clearance was found between the requested endpoints.`);
     return undefined;
@@ -180,12 +187,13 @@ function mergeDiagnostics(targetMissing: Set<string>, targetReasons: Set<string>
 }
 
 function graphAlternatives(project: EditorProject, spaces: LevelSpace[], request: StoryRouteRequest, options: StoryRouteOptions, missing: Set<string>, reasons: Set<string>, findPath: RoutePathFinder) {
-  return collectRouteAlternatives((blocked, captureDiagnostics) => {
+  const alternatives = collectRouteAlternatives((blocked, captureDiagnostics) => {
     const attemptMissing = new Set<string>(); const attemptReasons = new Set<string>();
     const graph = routeGraph(project, spaces, request, options, blocked, attemptMissing, attemptReasons, findPath);
     if (captureDiagnostics) mergeDiagnostics(missing, reasons, attemptMissing, attemptReasons);
     return graph ? alternativeFromGraph(graph, request) : undefined;
   }, request.alternativeLimit);
+  return alternatives.map(({ resourceKeys, ...result }) => { void resourceKeys; return result; });
 }
 
 function buildingEntryRoute(project: EditorProject, spaces: LevelSpace[], request: StoryRouteRequest, options: StoryRouteOptions, missing: Set<string>, reasons: Set<string>, findPath: RoutePathFinder) {

@@ -64,6 +64,16 @@ function validAreaGeometry(shape: RegionShape) {
   return IsValidOp.isValid(geometry) ? geometry : BufferOp.bufferOp(geometry, 0) as AreaGeometry;
 }
 
+/** Raw validity check for callers that must reject, rather than repair, input geometry. */
+export function isValidRegionShape(shape: RegionShape) {
+  try {
+    const geometry = reader.read(regionGeoJson(shape)) as AreaGeometry;
+    return !geometry.isEmpty() && IsValidOp.isValid(geometry) && geometry.getArea() > AREA_EPSILON;
+  } catch {
+    return false;
+  }
+}
+
 export function repairRegionShape(shape: RegionShape) {
   return regionShapesFromGeoJson(writer.write(validAreaGeometry(shape)) as ResultJson)[0];
 }

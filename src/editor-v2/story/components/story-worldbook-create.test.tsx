@@ -23,6 +23,28 @@ describe("worldbook creation uses the same live object catalogue as editing", ()
     expect(entry.children[0]).toMatchObject({ tagName: "STRONG", textContent: "Anna" });
     expect(entry.children[1]).toMatchObject({ tagName: "SMALL", textContent: "Keeper of the eastern archive" });
     expect((entry.children[1] as HTMLElement).className).toContain("worldbookEntryDescription");
+    expect(host.textContent).toContain("Include any important information about this character, faction, or group here.");
+    expect(host.textContent).not.toContain("Who or what does");
+    await act(async () => root.unmount()); host.remove();
+  });
+
+  it("keeps two quick edits from one rendered entry", async () => {
+    const initial: StoryData = { ...emptyStoryData(), world: [{ id: "anna", kind: "character", name: "Anna", description: "Before", tags: [], properties: {} }] };
+    let latest = initial;
+    function Harness() {
+      const [story, setStory] = useState(latest);
+      const controller = useStoryView(story, (update) => { latest = storyDataSchema.parse(typeof update === "function" ? update(latest) : update); setStory(latest); });
+      return <StoryWorldbook story={story} copy={storyCopy.en} controller={controller}/>;
+    }
+    const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+    await act(async () => root.render(<Harness/>));
+    const name = host.querySelector("input[required]") as HTMLInputElement;
+    const description = host.querySelector("textarea") as HTMLTextAreaElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(name, "Archivist"); name.dispatchEvent(new Event("input", { bubbles: true }));
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(description, "After"); description.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(latest.world[0]).toMatchObject({ name: "Archivist", description: "After" });
     await act(async () => root.unmount()); host.remove();
   });
 

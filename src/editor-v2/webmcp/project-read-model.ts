@@ -1,5 +1,5 @@
 import { constructionNetwork } from "../construction/construction-network";
-import { wallFeatureIssues } from "../construction/wall-features";
+import { validateVerticalTransitions, wallFeatureIssues } from "../construction/wall-features";
 
 import type { EditorProject } from "../model/project-model";
 import { editorProjectSchema } from "../persistence/project-file";
@@ -146,12 +146,18 @@ export function projectConsistencyReport(project: EditorProject) {
   const issues: Array<{ severity: "error" | "warning"; code: string; message: string; refs: string[] }> = [];
   const parsed = editorProjectSchema.safeParse(project);
   if (!parsed.success) for (const issue of parsed.error.issues) issues.push({ severity: "error", code: "schema", message: issue.message, refs: [issue.path.join(".")] });
+  const placeKinds = new Map(project.places.map(({ id, kind }) => [id, kind]));
+  const knownMessages = new Set(issues.map(({ message }) => message));
   for (const construction of project.constructions) {
     try {
       const network = constructionNetwork(construction.walls, construction.enclosure); const faceIds = new Set(network.faces.map(({ id }) => id));
       for (const diagnostic of network.diagnostics) issues.push({ severity: diagnostic.kind === "dangling-edge" || diagnostic.kind === "cut-edge" ? "warning" : "error", code: diagnostic.kind, message: `Construction ${construction.id}: ${diagnostic.kind}`, refs: [construction.id, ...diagnostic.wallIds] });
       for (const room of construction.rooms) if (!faceIds.has(room.faceId)) issues.push({ severity: "error", code: "missing-room-face", message: `Room ${room.name} references a missing closed face.`, refs: [construction.id, room.id, room.faceId] });
-      for (const issue of wallFeatureIssues(construction)) issues.push({ severity: "error", code: "invalid-wall-feature", message: issue, refs: [construction.id, issue.split(":").at(-1)!] });
+      for (const issue of wallFeatureIssues(construction)) issues.push({ severity: "error", code: "invalid-wall-feature", message: issue, refs: [construction.id, issue.slice(issue.indexOf(":") + 1)] });
+      for (const issue of validateVerticalTransitions(construction, { levelKinds: placeKinds })) if (!knownMessages.has(issue.message)) {
+        knownMessages.add(issue.message);
+        issues.push({ severity: "error", code: "invalid-transition", message: issue.message, refs: [construction.id, issue.transitionId, ...(issue.relatedTransitionId ? [issue.relatedTransitionId] : []), ...(issue.levelId ? [issue.levelId] : [])] });
+      }
     } catch (error) { issues.push({ severity: "error", code: "geometry-kernel", message: error instanceof Error ? error.message : String(error), refs: [construction.id] }); }
   }
   return { valid: !issues.some(({ severity }) => severity === "error"), issueCount: issues.length, issues };

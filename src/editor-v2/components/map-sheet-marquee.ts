@@ -1,6 +1,7 @@
 import type { KernelPoint } from "../geometry/geometry-types";
 import type { WorkLayerId } from "../toolbox/toolbox-model";
 import type { MapSelection } from "./map-sheet";
+import { selectionKey } from "../drawing/selection-reference";
 
 export type MarqueeDraft = {
   pointerId: number;
@@ -30,8 +31,8 @@ export function selectionsInMarquee(svg: SVGSVGElement, start: KernelPoint, end:
     if (layerId && candidate.dataset.selectionLayer !== layerId) continue;
     const bounds = candidate.getBoundingClientRect();
     const intersects = bounds.right >= box.left && bounds.left <= box.right && bounds.bottom >= box.top && bounds.top <= box.bottom;
-    const kind = candidate.dataset.selectionKind as MapSelection["kind"] | undefined; const id = candidate.dataset.selectionId;
-    if (intersects && kind && id) selections.set(`${kind}:${id}`, { kind, id });
+    const kind = candidate.dataset.selectionKind as MapSelection["kind"] | undefined; const id = candidate.dataset.selectionId; const scopeId = candidate.dataset.selectionScope;
+    if (intersects && kind && id) { const selection = { kind, id, ...(scopeId ? { scopeId } : {}) } as MapSelection; selections.set(selectionKey(selection), selection); }
   }
   return [...selections.values()];
 }

@@ -4,6 +4,8 @@ import PrecisionModel from "jsts/org/locationtech/jts/geom/PrecisionModel.js";
 import MCIndexSnapRounder from "jsts/org/locationtech/jts/noding/snapround/MCIndexSnapRounder.js";
 import NodedSegmentString from "jsts/org/locationtech/jts/noding/NodedSegmentString.js";
 import Polygonizer from "jsts/org/locationtech/jts/operation/polygonize/Polygonizer.js";
+import Envelope from "jsts/org/locationtech/jts/geom/Envelope.js";
+import STRtree from "jsts/org/locationtech/jts/index/strtree/STRtree.js";
 import ArrayList from "jsts/java/util/ArrayList.js";
 import { canonicalRing, GEOMETRY_PRECISION, normalizePoint, pointKey, stableHash, undirectedEdgeKey } from "./geometry-normalization";
 import type { CanonicalWall, GeometryDiagnostic, KernelPoint, NodedWallSegment, RoomFace, WallNetworkResult } from "./geometry-types";
@@ -49,40 +51,68 @@ function segmentProjection(point: KernelPoint, wall: CanonicalWall) {
 // part of the drawing gesture instead of the geometry kernel.
 const JUNCTION_TOLERANCE = .125;
 
+function searchEnvelope(first: KernelPoint, second = first, padding = JUNCTION_TOLERANCE) {
+  return new Envelope(
+    Math.min(first.x, second.x) - padding,
+    Math.max(first.x, second.x) + padding,
+    Math.min(first.y, second.y) - padding,
+    Math.max(first.y, second.y) + padding,
+  );
+}
+
 function snapNearEndpoints(walls: CanonicalWall[]) {
   const endpoints = walls.flatMap((wall, wallIndex) => [
-    { wallIndex, endpoint: "start" as const, point: wall.start, role: wall.role },
-    { wallIndex, endpoint: "end" as const, point: wall.end, role: wall.role },
+    { wallIndex, wallId: wall.id, endpoint: "start" as const, point: wall.start, role: wall.role },
+    { wallIndex, wallId: wall.id, endpoint: "end" as const, point: wall.end, role: wall.role },
   ]);
   const parent = endpoints.map((_, index) => index);
+  const members = endpoints.map((_, index) => new Set([index]));
   const root = (index: number): number => parent[index] === index ? index : (parent[index] = root(parent[index]));
-  const join = (first: number, second: number) => { const a = root(first); const b = root(second); if (a !== b) parent[b] = a; };
+  const join = (first: number, second: number) => {
+    const a = root(first); const b = root(second);
+    if (a === b) return;
+    const combinedIsSafe = [...members[a]].every((left) => [...members[b]].every((right) => endpoints[left].wallIndex !== endpoints[right].wallIndex && distanceSquared(endpoints[left].point, endpoints[right].point) <= JUNCTION_TOLERANCE ** 2));
+    if (!combinedIsSafe) return;
+    parent[b] = a;
+    members[b].forEach((index) => members[a].add(index));
+  };
+  const candidates: Array<{ first: number; second: number; distance: number; key: string }> = [];
+  const endpointIndex = new STRtree();
+  endpoints.forEach(({ point }, index) => endpointIndex.insert(searchEnvelope(point, point, 0), index));
   for (let first = 0; first < endpoints.length; first += 1) {
-    for (let second = first + 1; second < endpoints.length; second += 1) {
-      if (distanceSquared(endpoints[first].point, endpoints[second].point) <= JUNCTION_TOLERANCE ** 2) join(first, second);
+    for (const second of collect<number>(endpointIndex.query(searchEnvelope(endpoints[first].point)))) {
+      if (second <= first) continue;
+      if (endpoints[first].wallIndex === endpoints[second].wallIndex) continue;
+      const distance = distanceSquared(endpoints[first].point, endpoints[second].point);
+      if (distance <= JUNCTION_TOLERANCE ** 2) candidates.push({ first, second, distance, key: JSON.stringify([[endpoints[first].wallId, endpoints[first].endpoint], [endpoints[second].wallId, endpoints[second].endpoint]].toSorted(([firstId], [secondId]) => firstId.localeCompare(secondId))) });
     }
   }
+  candidates.toSorted((first, second) => first.distance - second.distance || first.key.localeCompare(second.key)).forEach(({ first, second }) => join(first, second));
   const groups = new Map<number, number[]>();
   endpoints.forEach((_, index) => { const key = root(index); groups.set(key, [...(groups.get(key) ?? []), index]); });
   const representative = new Map<number, KernelPoint>();
   for (const [key, indexes] of groups) {
-    const chosen = indexes.toSorted((first, second) => {
-      const priority = rolePriority(endpoints[second].role) - rolePriority(endpoints[first].role);
-      return priority || endpoints[first].wallIndex - endpoints[second].wallIndex;
-    })[0];
-    representative.set(key, normalizePoint(endpoints[chosen].point));
+    const priority = Math.max(...indexes.map((index) => rolePriority(endpoints[index].role)));
+    const anchors = indexes.filter((index) => rolePriority(endpoints[index].role) === priority);
+    representative.set(key, normalizePoint({
+      x: anchors.reduce((sum, index) => sum + endpoints[index].point.x, 0) / anchors.length,
+      y: anchors.reduce((sum, index) => sum + endpoints[index].point.y, 0) / anchors.length,
+    }));
   }
   const snapped = walls.map((wall) => ({ ...wall }));
   endpoints.forEach((entry, index) => { snapped[entry.wallIndex][entry.endpoint] = representative.get(root(index))!; });
   const endpointSnapped = snapped.map((wall) => ({ ...wall }));
-  for (let wallIndex = 0; wallIndex < snapped.length; wallIndex += 1) {
+  const wallSpatialIndex = new STRtree();
+  snapped.forEach((wall, index) => wallSpatialIndex.insert(searchEnvelope(wall.start, wall.end), index));
+  for (let currentWallIndex = 0; currentWallIndex < snapped.length; currentWallIndex += 1) {
     for (const endpoint of ["start", "end"] as const) {
-      const source = snapped[wallIndex][endpoint];
-      const nearest = snapped
-        .flatMap((candidate, candidateIndex) => candidateIndex === wallIndex ? [] : [{ ...segmentProjection(source, candidate), role: candidate.role }])
+      const source = snapped[currentWallIndex][endpoint];
+      const nearest = collect<number>(wallSpatialIndex.query(searchEnvelope(source, source, 0)))
+        .flatMap((candidateIndex) => candidateIndex === currentWallIndex ? [] : [{ ...segmentProjection(source, snapped[candidateIndex]), role: snapped[candidateIndex].role, candidateIndex }])
         .filter((candidate) => candidate.distanceSquared <= JUNCTION_TOLERANCE ** 2)
-        .toSorted((first, second) => first.distanceSquared - second.distanceSquared || rolePriority(second.role) - rolePriority(first.role))[0];
-      if (nearest) endpointSnapped[wallIndex][endpoint] = nearest.point;
+        .toSorted((first, second) => first.distanceSquared - second.distanceSquared || rolePriority(second.role) - rolePriority(first.role) || first.candidateIndex - second.candidateIndex)[0];
+      const otherEndpoint = endpoint === "start" ? "end" : "start";
+      if (nearest && distanceSquared(nearest.point, endpointSnapped[currentWallIndex][otherEndpoint]) > 1e-12) endpointSnapped[currentWallIndex][endpoint] = nearest.point;
     }
   }
   return endpointSnapped;
@@ -93,6 +123,14 @@ function sourcePosition(wall: CanonicalWall, segment: Omit<NodedWallSegment, "id
   const lengthSquared = dx * dx + dy * dy || 1;
   const midpoint = { x: (segment.start.x + segment.end.x) / 2, y: (segment.start.y + segment.end.y) / 2 };
   return ((midpoint.x - wall.start.x) * dx + (midpoint.y - wall.start.y) * dy) / lengthSquared;
+}
+
+function allocatedSegmentId(sourceId: string, index: number, reserved: Set<string>, allocated: Set<string>) {
+  const stem = `@cc-wall-segment:${stableHash(sourceId)}:${index + 1}`;
+  let candidate = stem; let suffix = 1;
+  while (reserved.has(candidate) || allocated.has(candidate)) candidate = `${stem}:${++suffix}`;
+  allocated.add(candidate);
+  return candidate;
 }
 
 function nodeWalls(walls: CanonicalWall[]) {
@@ -119,10 +157,12 @@ function nodeWalls(walls: CanonicalWall[]) {
     bySource.set(segment.sourceWallId, [...(bySource.get(segment.sourceWallId) ?? []), segment]);
   }
   const sourceById = new Map(snappedWalls.map((wall) => [wall.id, wall]));
+  const reserved = new Set(snappedWalls.map(({ id }) => id)); const allocated = new Set<string>();
   return [...bySource.entries()].flatMap(([sourceWallId, pieces]) => {
     const source = sourceById.get(sourceWallId)!;
     const ordered = pieces.toSorted((first, second) => sourcePosition(source, first) - sourcePosition(source, second));
-    return ordered.map((segment, index) => ({ ...segment, id: ordered.length === 1 ? sourceWallId : `${sourceWallId}:${index + 1}` }));
+    if (ordered.length === 1) { allocated.add(sourceWallId); return [{ ...ordered[0], id: sourceWallId }]; }
+    return ordered.map((segment, index) => ({ ...segment, id: allocatedSegmentId(sourceWallId, index, reserved, allocated) }));
   });
 }
 
@@ -141,8 +181,9 @@ function uniqueSegments(segments: NodedWallSegment[]) {
 
 /**
  * Turns calculated intersections into persistent, independently editable wall
- * records.  A source wall keeps its id while it is a single segment; once it
- * crosses another wall every piece receives a stable source-prefixed id.
+ * records. A source wall keeps its id while it is a single segment. Split
+ * pieces receive collision-checked ids and carry explicit provenance; no
+ * caller has to infer ancestry from punctuation inside an arbitrary id.
  */
 export function materializeWallSegments(walls: CanonicalWall[]): CanonicalWall[] {
   const sourceById = new Map(walls.map((wall) => [wall.id, wall]));
@@ -158,7 +199,8 @@ export function materializeWallSegments(walls: CanonicalWall[]): CanonicalWall[]
       return walls.findIndex(({ id }) => id === first.sourceWallId) - walls.findIndex(({ id }) => id === second.sourceWallId);
     })[0];
     const source = sourceById.get(segment.sourceWallId)!;
-    return { ...source, id: segment.id, start: segment.start, end: segment.end };
+    const sourceWallId = segment.id === source.id ? source.sourceWallId : source.id;
+    return { ...source, ...(sourceWallId ? { sourceWallId } : {}), id: segment.id, start: segment.start, end: segment.end };
   });
 }
 

@@ -71,7 +71,11 @@ export type StorySearchHit = { kind: "object" | "world" | "evidence"; id: string
 export function searchStory(story: StoryData, query: string, limit = 50): StorySearchHit[] {
   const terms = query.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean); if (!terms.length) return [];
   const score = (haystack: string) => terms.reduce((total, term) => total + (haystack.includes(term) ? 1 : 0), 0); const hits: StorySearchHit[] = [];
-  for (const object of story.objects) { const value = `${object.ref.id} ${object.ref.kind} ${(object.metadata.tags ?? []).join(" ")} ${JSON.stringify(object.metadata.properties ?? {})}`.toLocaleLowerCase(); const hit = score(value); if (hit) hits.push({ kind: "object", id: storyRefKey(object.ref), label: object.ref.id, refs: [object.ref], score: hit }); }
+  for (const object of story.objects) {
+    const label = object.metadata.narrativeLabel ?? object.ref.id;
+    const value = `${object.ref.id} ${object.ref.kind} ${object.metadata.narrativeLabel ?? ""} ${object.metadata.narrativeDescription ?? ""} ${(object.metadata.tags ?? []).join(" ")} ${JSON.stringify(object.metadata.properties ?? {})}`.toLocaleLowerCase();
+    const hit = score(value); if (hit) hits.push({ kind: "object", id: storyRefKey(object.ref), label, refs: [object.ref], score: hit });
+  }
   for (const entry of story.world) { const hit = score(`${entry.name} ${entry.description ?? ""} ${entry.tags.join(" ")}`.toLocaleLowerCase()); if (hit) hits.push({ kind: "world", id: entry.id, label: entry.name, refs: [], score: hit }); }
   for (const item of story.evidence) { const hit = score(`${item.text} ${item.locator ?? ""}`.toLocaleLowerCase()); if (hit) hits.push({ kind: "evidence", id: item.id, label: item.text, refs: item.refs, score: hit }); }
   return hits.sort((first, second) => second.score - first.score || first.label.localeCompare(second.label)).slice(0, limit);

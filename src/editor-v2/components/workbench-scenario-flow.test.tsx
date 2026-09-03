@@ -6,6 +6,7 @@ import type { EditorProject } from "../model/project-model";
 import { createStarterProject } from "../model/starter-project";
 import { defaultStoryAccessPolicy } from "../story/types";
 import { EditorWorkbench } from "./editor-workbench";
+import { selectionKey } from "../drawing/selection-reference";
 
 const fixture = vi.hoisted(() => ({ project: undefined as EditorProject | undefined, sheet: undefined as ComponentProps<typeof MapSheet> | undefined }));
 vi.mock("../persistence/project-library", async (original) => ({
@@ -45,7 +46,7 @@ describe("scenario workspace through the real editor session", () => {
     expect(editor().textContent).toContain("Pokój po alarmie");
     click("Edytuj skutek", editor());
     expect(fixture.sheet!.activePlaceId).toBe("p:level");
-    expect(fixture.sheet!.selectedIds).toContain(state().constructions[0].rooms[0].id);
+    expect(fixture.sheet!.selectedIds).toContain(selectionKey({ kind: "room", id: state().constructions[0].rooms[0].id }));
     expect(host.querySelector('aside[aria-label="Opis i powiązania"]')?.textContent).toContain("Pokój po alarmie");
     click("Usuń tylko ten skutek", editor());
     expect(state().story.scenarios[0].steps[0].patches).toEqual([]);

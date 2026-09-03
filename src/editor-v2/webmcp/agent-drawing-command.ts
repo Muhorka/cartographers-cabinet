@@ -4,13 +4,13 @@ import { addElement, updatePlaceDetails } from "../model/hierarchy-operations";
 import { availableWorkSubjects, workLayerAvailability } from "../model/work-context";
 import type { EditorProject } from "../model/project-model";
 import { availableInstruments, getWorkLayer } from "../toolbox/toolbox-model";
-import type { AgentDrawingInput, AgentMetadata } from "./agent-command-types";
+import type { AgentDrawingInput, AgentLocale, AgentMetadata } from "./agent-command-types";
 import type { PreparedChange } from "./editor-command-coordinator";
 import { nextSubjectName } from "../i18n/object-naming";
 import { smoothPencilPoints } from "../geometry/pencil-smoothing";
 import { applyProjectStoryMetadata } from "../story/project-commands";
 
-const identity = { createId: () => crypto.randomUUID(), createRoomName: (index: number) => `Pomieszczenie ${index}` };
+const identity = (locale: AgentLocale) => ({ createId: () => crypto.randomUUID(), createRoomName: (index: number) => locale === "pl" ? `Pomieszczenie ${index}` : `Room ${index}` });
 
 function applyMetadata(project: EditorProject, selection: { kind: string; id: string } | undefined, metadata: AgentMetadata) {
   if (!selection) return project;
@@ -22,17 +22,17 @@ function applyMetadata(project: EditorProject, selection: { kind: string; id: st
   return project;
 }
 
-function openTerrainPath(project: EditorProject, ownerId: string, input: AgentDrawingInput): PreparedChange {
-  const id = crypto.randomUUID(); const name = input.name ?? nextSubjectName(project, input.subjectId, "pl");
+function openTerrainPath(project: EditorProject, ownerId: string, input: AgentDrawingInput, locale: AgentLocale): PreparedChange {
+  const id = crypto.randomUUID(); const name = input.name ?? nextSubjectName(project, input.subjectId, locale);
   const next = addElement(project, {
     id, name, description: input.description, layerId: "terrain", subjectId: input.subjectId,
     geometry: { kind: "path", points: smoothPencilPoints(input.points, project.measureSettings.pencilSmoothing), closed: false }, visible: input.visible ?? true,
     locked: input.locked ?? false, tags: input.tags ?? [], access: [], properties: {}, appearance: input.appearance,
   }, ownerId);
-  return { project: next, summary: `Utworzono ${name}.`, effects: [`created:element:${id}`] };
+  return { project: next, summary: locale === "pl" ? `Utworzono ${name}.` : `Created ${name}.`, effects: [`created:element:${id}`] };
 }
 
-export function buildDrawingChange(project: EditorProject, activePlaceId: string, input: AgentDrawingInput): PreparedChange {
+export function buildDrawingChange(project: EditorProject, activePlaceId: string, input: AgentDrawingInput, locale: AgentLocale = "en"): PreparedChange {
   const ownerId = input.ownerId ?? activePlaceId; const layer = getWorkLayer(input.layerId);
   if (!layer.subjects.some(({ id }) => id === input.subjectId)) throw new Error("subject-is-not-available-on-layer");
   if (!availableWorkSubjects(project, ownerId, input.layerId).some(({ id }) => id === input.subjectId)) throw new Error("subject-is-not-available-in-map-context");
@@ -42,15 +42,15 @@ export function buildDrawingChange(project: EditorProject, activePlaceId: string
   }
   if (input.points.length < 1) throw new Error("geometry-needs-points");
   if (input.layerId === "terrain" && input.instrumentId === "pencil" && !input.closed && ["terrain.water", "terrain.custom"].includes(input.subjectId)) {
-    return openTerrainPath(project, ownerId, input);
+    return openTerrainPath(project, ownerId, input, locale);
   }
-  const naming = { nameFor: () => input.name ?? nextSubjectName(project, input.subjectId, "pl"), levelName: () => input.levelName ?? "Parter" };
+  const naming = { nameFor: () => input.name ?? nextSubjectName(project, input.subjectId, locale), levelName: () => input.levelName ?? (locale === "pl" ? "Parter" : "Ground floor") };
   const result = applyMapGesture(project, {
     activePlaceId: ownerId, layerId: input.layerId, subjectId: input.subjectId, widthMeters: input.widthMeters,
     gesture: { instrumentId: input.instrumentId, points: input.points, bezierNodes: input.bezierNodes, closed: input.closed, snapTolerance: input.snapTolerance, hitRadius: input.hitRadius },
     boundaryEditing: input.boundaryEditing ?? false, acceptClip: input.acceptClip ?? true,
     ...((input.subjectId === "opening.stairs" || input.subjectId === "opening.elevator") ? { transition: { sourceLevelId: input.sourceLevelId, targetLevelId: input.targetLevelId, connectedLevelIds: input.connectedLevelIds, style: input.transitionStyle, direction: input.direction, sameLevelRise: input.sameLevelRise } } : {}),
-  }, identity, naming);
+  }, identity(locale), naming);
   if (result.state === "blocked") throw new Error(result.reason);
   if (result.state === "clip-review") throw new Error("clipping-needs-acceptance");
   if (result.state === "review-required") throw new Error(`ambiguous-erase:${result.candidateIds.join(",")}`);
@@ -71,13 +71,15 @@ export function buildDrawingChange(project: EditorProject, activePlaceId: string
     }
   }
   if (input.openingWidth && result.selection?.kind === "opening") {
-    const resized = updateOpeningWidth(next, ownerId, result.selection.id, input.openingWidth);
+    const resized = updateOpeningWidth(next, ownerId, result.selection.id, input.openingWidth, result.selection.scopeId);
     if (resized.state !== "applied") throw new Error(`opening-width:${resized.state === "blocked" ? resized.reason : "review-required"}`); next = resized.project;
   }
   if (result.selection?.kind === "transition" && (input.sourceLevelId || input.targetLevelId || input.connectedLevelIds || input.transitionStyle || input.direction !== undefined || input.sameLevelRise !== undefined)) {
-    const updated = updateTransitionDetails(next, result.selection.id, { sourceLevelId: input.sourceLevelId, targetLevelId: input.targetLevelId, connectedLevelIds: input.connectedLevelIds, style: input.transitionStyle, direction: input.direction, sameLevelRise: input.sameLevelRise });
+    const updated = updateTransitionDetails(next, result.selection.id, { sourceLevelId: input.sourceLevelId, targetLevelId: input.targetLevelId, connectedLevelIds: input.connectedLevelIds, style: input.transitionStyle, direction: input.direction, sameLevelRise: input.sameLevelRise }, result.selection.scopeId);
     if (updated.state === "blocked") throw new Error(`transition-details:${updated.reason}`); next = updated.state === "review-required" ? updated.accept() : updated.project;
   }
   const reference = result.selection ? `${result.selection.kind}:${result.selection.id}` : input.layerId;
-  return { project: next, summary: `Utworzono ${input.name ?? input.subjectId}.`, effects: [`created:${reference}`] };
+  const createdName = result.selection ? [...next.places, ...next.elements, ...next.surfaces].find(({ id }) => id === result.selection?.id)?.name : undefined;
+  const summaryName = createdName ?? input.name ?? input.subjectId;
+  return { project: next, summary: locale === "pl" ? `Utworzono ${summaryName}.` : `Created ${summaryName}.`, effects: [`created:${reference}`] };
 }

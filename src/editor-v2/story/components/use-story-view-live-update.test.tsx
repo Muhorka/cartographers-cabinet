@@ -24,4 +24,25 @@ describe("live story collection updates", () => {
     expect(live.world.map(({ id, description }) => ({ id, description }))).toEqual([{ id: "anna", description: "First" }, { id: "bea", description: "Second" }]);
     await act(async () => root.unmount());
   });
+
+  it("merges two whole-collection edits from one render by record ID", async () => {
+    const rendered: StoryData = { ...emptyStoryData(), lenses: [
+      { id: "quiet", name: "Quiet", color: "#111111", expression: { kind: "all", items: [] } },
+      { id: "bright", name: "Bright", color: "#222222", expression: { kind: "all", items: [] } },
+    ] };
+    let live = rendered; let controller!: ReturnType<typeof useStoryView>;
+    const apply = (update: StoryDocumentUpdate) => { live = typeof update === "function" ? update(live) : update; };
+    function Harness() { controller = useStoryView(rendered, apply); return null; }
+    const host = document.createElement("div"); const root = createRoot(host);
+    await act(async () => root.render(<Harness/>));
+    await act(async () => {
+      controller.editCollection("lenses", rendered.lenses.map((lens) => lens.id === "quiet" ? { ...lens, favorite: true } : lens), "favorite");
+      controller.editCollection("lenses", rendered.lenses.map((lens) => lens.id === "bright" ? { ...lens, name: "Brighter" } : lens), "rename");
+    });
+    expect(live.lenses).toEqual([
+      { ...rendered.lenses[0], favorite: true },
+      { ...rendered.lenses[1], name: "Brighter" },
+    ]);
+    await act(async () => root.unmount());
+  });
 });

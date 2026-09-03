@@ -55,6 +55,15 @@ describe("place outline editing", () => {
     expect(resizePlaceBoundary(project, "floor", "south-east", { x: 15, y: 10 })).toMatchObject({ state: "blocked", reason: "collision" });
   });
 
+  it("does not shrink a level beyond a retained transition footprint", () => {
+    let project = createBuildingWithDefaultLevel(emptyProject("p", "P"), {
+      id: "house", levelId: "floor", constructionId: "plan", name: "House", levelName: "Floor",
+      boundary: { kind: "rectangle", x: 0, y: 0, width: 20, height: 14 },
+    }, identity());
+    project = { ...project, constructions: project.constructions.map((document) => ({ ...document, transitions: [{ id: "stairs", kind: "stairs" as const, footprint: { kind: "rectangle" as const, x: 12, y: 8, width: 2, height: 2 } }] })) };
+    expect(resizePlaceBoundary(project, "floor", "south-east", { x: 10, y: 7 })).toMatchObject({ state: "blocked", reason: "collision" });
+  });
+
   it("does not treat an independently shaped level as a building collision", () => {
     let project = createBuildingWithDefaultLevel(emptyProject("p", "P"), {
       id: "house", levelId: "floor", constructionId: "plan", name: "House", levelName: "Floor",

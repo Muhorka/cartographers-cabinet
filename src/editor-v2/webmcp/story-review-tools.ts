@@ -22,11 +22,11 @@ export function createStoryReviewTools(bridge: EditorAgentBridge & EditorContext
   const service = createSceneCheckService(suppliedRoutes ?? createStoryRouteCalculationService());
   return [{
     name: "check_story_scene", title: "Check the scene's author intentions",
-    description: "Read bounded intention checks; no status/geometry/story changes. Default selection requires expectedContextVersion; alternatively use canonical refs. scope=all obeys limit. Supply actor and query/saved route, recalculated in current scene. Returns facts, conditions, sources, truncation, failures. must-pass/avoid-zone cover only the calculated route.",
+    description: "Read bounded scene-intention checks without changing data. Selection requires expectedContextVersion; otherwise supply canonical refs. scope=all obeys limit. Actor and query/saved route are recalculated in the current scene. Returns facts, conditions, sources, truncation and failures.",
     inputSchema: z.toJSONSchema(schema, { io: "input" }), annotations: { readOnlyHint: true },
     execute: async (raw) => {
       const input = schema.parse(raw);
-      const session = bridge.getSession(); const project = session.getState().project;
+      const session = bridge.getSession(); const project = session.getViewState().project;
       const inspected = inspectEditorContext(bridge);
       const implicitSelection = input.scope === "selection" && input.refs === undefined;
       if (implicitSelection && (!inspected.selectionAvailable || input.expectedContextVersion !== inspected.contextVersion)) {
@@ -36,7 +36,7 @@ export function createStoryReviewTools(bridge: EditorAgentBridge & EditorContext
       const revision = projectRevision(project);
       const refs = input.refs ?? (input.scope === "selection" ? inspected.selections.map(({ type, id, scopeId }) => ({ kind: type, id, scopeId })) : undefined);
       const context = input.context ?? { scenarioId: inspected.view.scenarioId, stepId: inspected.view.stepId };
-      const isCurrent = () => bridge.getSession() === session && projectRevision(session.getState().project) === revision && inspectEditorContext(bridge).contextVersion === inspected.contextVersion;
+      const isCurrent = () => bridge.getSession() === session && projectRevision(session.getViewState().project) === revision && inspectEditorContext(bridge).contextVersion === inspected.contextVersion;
       return response(await service.check(project, { ...input, refs, context }, isCurrent));
     },
   }];

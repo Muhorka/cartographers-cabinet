@@ -2,6 +2,7 @@ import { z } from "zod";
 
 const point = z.object({ x: z.number().finite(), y: z.number().finite() }).strict();
 const endpoint = z.object({ placeId: z.string().trim().min(1).max(512), point, levelId: z.string().trim().min(1).max(512).optional() }).strict();
+const alternativeLimit = z.number().finite().int().min(1).max(3);
 export const routeRequestSchema = z.object({
   from: endpoint,
   to: endpoint,
@@ -10,6 +11,8 @@ export const routeRequestSchema = z.object({
   actorId: z.string().trim().min(1).max(512).optional(),
   scenarioId: z.string().trim().min(1).max(512).optional(),
   stepId: z.string().trim().min(1).max(512).optional(),
+  /** Keep the search bounded; higher limits multiply graph searches. */
+  alternativeLimit: alternativeLimit.optional(),
   preferences: z.object({ preferRoads: z.boolean().optional(), allowOffroad: z.boolean().optional(), allowWindows: z.boolean().optional() }).strict().optional(),
 }).strict();
 const segment = z.object({ placeId: z.string().trim().min(1).max(512), levelId: z.string().trim().min(1).max(512).optional(), kind: z.enum(["indoor", "outdoor", "road", "transition"]), points: z.array(point).min(1).max(100_000), faceId: z.string().trim().min(1).max(512).optional(), sourceId: z.string().trim().min(1).max(512).optional(), conditions: z.array(z.string().max(2_000)).max(100).optional() }).strict();

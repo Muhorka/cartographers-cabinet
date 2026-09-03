@@ -8,6 +8,7 @@ import { clientPointToMap } from "./map-sheet-gesture";
 import { fitViewportToRegion, panViewport, visiblePlaceGroups, zoomViewport } from "./map-sheet-geometry";
 import { createLevelForBuilding } from "../model/hierarchy-operations";
 import { createStarterProject } from "../model/starter-project";
+import { selectionKey } from "../drawing/selection-reference";
 
 const copy = { ariaLabel: "Story map", empty: "Nothing here", compass: "Rotate map", zoomIn: "Zoom in", zoomOut: "Zoom out", resetView: "Reset view", back: "Back", northMark: "N", openingLabel: (kind: string) => `Opening ${kind}`, transitionLabel: () => "Stairs" };
 const viewport = { center: { x: 50, y: 35 }, zoom: 1, rotation: 30 };
@@ -96,36 +97,36 @@ describe("editor v2 map sheet", () => {
     act(() => root.render(createElement(MapSheet, { project: project(), activePlaceId: "floor", viewport, copy, onSelect, selectionEditing: true, selectionLayerId: "openings" })));
     const svg = container.querySelector("svg")!; Object.defineProperty(svg, "getBoundingClientRect", { value: () => ({ left: 0, top: 0, width: 1000, height: 700 }) }); Object.defineProperty(svg, "setPointerCapture", { value: vi.fn() });
     for (const [id, pointerId] of [["door", 12], ["stairs", 13]] as const) { const target = container.querySelector(`[data-feature-id="${id}"]`)!; act(() => target.dispatchEvent(pointerEvent("pointerdown", 500, 350, pointerId))); act(() => svg.dispatchEvent(pointerEvent("pointerup", 500, 350, pointerId))); }
-    expect(onSelect).toHaveBeenNthCalledWith(1, { kind: "opening", id: "door" }, undefined); expect(onSelect).toHaveBeenNthCalledWith(2, { kind: "transition", id: "stairs" }, undefined);
+    expect(onSelect).toHaveBeenNthCalledWith(1, { kind: "opening", id: "door", scopeId: "plan" }, undefined); expect(onSelect).toHaveBeenNthCalledWith(2, { kind: "transition", id: "stairs", scopeId: "plan" }, undefined);
     act(() => root.unmount()); container.remove();
   });
 
   it("keeps Ctrl selection additive without toggling it twice on pointer down and click", () => {
     const container = document.createElement("div"); document.body.appendChild(container); const root = createRoot(container); const onSelect = vi.fn();
-    act(() => root.render(createElement(MapSheet, { project: project(), activePlaceId: "floor", viewport: { center: { x: 0, y: 0 }, zoom: 1, rotation: 0 }, copy, selectedIds: ["right"], selectionEditing: true, selectionLayerId: "construction", onSelect })));
+    act(() => root.render(createElement(MapSheet, { project: project(), activePlaceId: "floor", viewport: { center: { x: 0, y: 0 }, zoom: 1, rotation: 0 }, copy, selectedIds: [selectionKey({ kind: "wall", id: "right", scopeId: "plan" })], selectionEditing: true, selectionLayerId: "construction", onSelect })));
     const svg = container.querySelector("svg")!; Object.defineProperty(svg, "getBoundingClientRect", { value: () => ({ left: 0, top: 0, width: 1000, height: 700 }) }); Object.defineProperty(svg, "setPointerCapture", { value: vi.fn() });
     const top = container.querySelector('[data-selection-id="top"]')!;
     act(() => top.dispatchEvent(pointerEvent("pointerdown", 500, 350, 3, "mouse", true)));
     act(() => top.dispatchEvent(pointerEvent("pointerup", 500, 350, 3, "mouse", true)));
     act(() => top.dispatchEvent(new MouseEvent("click", { bubbles: true, ctrlKey: true })));
-    expect(onSelect).toHaveBeenCalledTimes(1); expect(onSelect).toHaveBeenCalledWith({ kind: "wall", id: "top" }, true);
+    expect(onSelect).toHaveBeenCalledTimes(1); expect(onSelect).toHaveBeenCalledWith({ kind: "wall", id: "top", scopeId: "plan" }, true);
     act(() => root.unmount()); container.remove();
   });
 
   it("prefers the active layer and lets Ctrl reach an unselected object underneath", () => {
     const container = document.createElement("div"); document.body.appendChild(container); const root = createRoot(container); const onSelect = vi.fn();
-    act(() => root.render(createElement(MapSheet, { project: project(), activePlaceId: "floor", viewport: { center: { x: 0, y: 0 }, zoom: 1, rotation: 0 }, copy, selectedIds: ["door"], selectionEditing: true, selectionLayerId: "openings", onSelect })));
+    act(() => root.render(createElement(MapSheet, { project: project(), activePlaceId: "floor", viewport: { center: { x: 0, y: 0 }, zoom: 1, rotation: 0 }, copy, selectedIds: [selectionKey({ kind: "opening", id: "door", scopeId: "plan" })], selectionEditing: true, selectionLayerId: "openings", onSelect })));
     const svg = container.querySelector("svg")!; Object.defineProperty(svg, "getBoundingClientRect", { value: () => ({ left: 0, top: 0, width: 1000, height: 700 }) }); Object.defineProperty(svg, "setPointerCapture", { value: vi.fn() });
     const door = container.querySelector<SVGElement>('[data-selection-id="door"]')!; const room = container.querySelector<SVGElement>('[data-selection-id="room"]')!;
     const original = document.elementsFromPoint; Object.defineProperty(document, "elementsFromPoint", { configurable: true, value: () => [room, door] });
     act(() => room.dispatchEvent(pointerEvent("pointerdown", 500, 350, 23, "mouse", true)));
-    expect(onSelect).toHaveBeenCalledWith({ kind: "room", id: "room" }, true);
+    expect(onSelect).toHaveBeenCalledWith({ kind: "room", id: "room", scopeId: "plan" }, true);
     Object.defineProperty(document, "elementsFromPoint", { configurable: true, value: original }); act(() => root.unmount()); container.remove();
   });
 
   it("previews a dragged selection continuously and commits it only on pointer release", () => {
     const container = document.createElement("div"); document.body.appendChild(container); const root = createRoot(container); const onMoveSelection = vi.fn();
-    act(() => root.render(createElement(MapSheet, { project: project(), activePlaceId: "floor", viewport: { center: { x: 0, y: 0 }, zoom: 1, rotation: 0 }, copy, selectedIds: ["top"], selectionEditing: true, selectionLayerId: "construction", onMoveSelection })));
+    act(() => root.render(createElement(MapSheet, { project: project(), activePlaceId: "floor", viewport: { center: { x: 0, y: 0 }, zoom: 1, rotation: 0 }, copy, selectedIds: [selectionKey({ kind: "wall", id: "top", scopeId: "plan" })], selectionEditing: true, selectionLayerId: "construction", onMoveSelection })));
     const svg = container.querySelector("svg")!; Object.defineProperty(svg, "getBoundingClientRect", { value: () => ({ left: 0, top: 0, width: 1000, height: 700 }) }); Object.defineProperty(svg, "setPointerCapture", { value: vi.fn() });
     const top = container.querySelector('[data-selection-id="top"]')!;
     act(() => top.dispatchEvent(pointerEvent("pointerdown", 500, 350, 4)));
@@ -133,13 +134,13 @@ describe("editor v2 map sheet", () => {
     expect(container.querySelector('[data-selection-id="top"]')?.parentElement?.getAttribute("transform")).toBe("translate(25 15)");
     expect(onMoveSelection).not.toHaveBeenCalled();
     act(() => svg.dispatchEvent(pointerEvent("pointerup", 525, 365, 4)));
-    expect(onMoveSelection).toHaveBeenCalledWith({ kind: "wall", id: "top" }, { x: 25, y: 15 });
+    expect(onMoveSelection).toHaveBeenCalledWith({ kind: "wall", id: "top", scopeId: "plan" }, { x: 25, y: 15 });
     act(() => root.unmount()); container.remove();
   });
 
   it("deletes the current selection from the keyboard without hiding the inspector action", () => {
     const container = document.createElement("div"); document.body.appendChild(container); const root = createRoot(container); const onDeleteSelected = vi.fn();
-    act(() => root.render(createElement(MapSheet, { project: project(), activePlaceId: "floor", viewport, copy, selectedIds: ["door"], selectionEditing: true, selectionLayerId: "openings", onDeleteSelected })));
+    act(() => root.render(createElement(MapSheet, { project: project(), activePlaceId: "floor", viewport, copy, selectedIds: [selectionKey({ kind: "opening", id: "door", scopeId: "plan" })], selectionEditing: true, selectionLayerId: "openings", onDeleteSelected })));
     act(() => container.querySelector("svg")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Delete", bubbles: true })));
     expect(onDeleteSelected).toHaveBeenCalledOnce();
     act(() => root.unmount()); container.remove();
@@ -153,7 +154,7 @@ describe("editor v2 map sheet", () => {
     Object.defineProperty(top, "getBoundingClientRect", { value: () => ({ left: 20, top: 20, right: 80, bottom: 30, width: 60, height: 10 }) });
     Object.defineProperty(right, "getBoundingClientRect", { value: () => ({ left: 200, top: 20, right: 210, bottom: 80, width: 10, height: 60 }) });
     act(() => svg.dispatchEvent(pointerEvent("pointerdown", 10, 10))); act(() => svg.dispatchEvent(pointerEvent("pointermove", 100, 100))); act(() => svg.dispatchEvent(pointerEvent("pointerup", 100, 100)));
-    expect(onSelectMany).toHaveBeenCalledWith([{ kind: "wall", id: "top" }]);
+    expect(onSelectMany).toHaveBeenCalledWith([{ kind: "wall", id: "top", scopeId: "plan" }]);
     act(() => root.unmount()); container.remove();
   });
 

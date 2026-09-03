@@ -12,7 +12,7 @@ import type { EditorProject } from "../model/project-model";
 import { moveRegionVertex } from "../geometry/region-vertex-edit";
 import { movePathAnchor } from "../geometry/path-anchor-edit";
 
-export type RegionResizeTarget = { kind: "element" | "surface" | "place" | "transition"; id: string; corner: ResizeCorner };
+export type RegionResizeTarget = { kind: "element" | "surface" | "place" | "transition"; id: string; scopeId?: string; corner: ResizeCorner };
 
 export function previewPlaceMatrix(project: EditorProject, activePlaceId: string, placeId: string, delta?: KernelPoint) {
   const matrix = relativePlaceMatrix(project, activePlaceId, placeId);
@@ -25,7 +25,7 @@ export function previewRegionResize(project: EditorProject, activePlaceId: strin
     const element = project.elements.find(({ id }) => id === target.id); if (!element) return project;
     return resizeElementRegion(project, target.id, target.corner, applyAffinePoint(relativePlaceMatrix(project, element.belongsToId, activePlaceId), point)).project;
   }
-  if (target.kind === "transition") return resizeTransitionFootprint(project, target.id, target.corner, point).project;
+  if (target.kind === "transition") return resizeTransitionFootprint(project, target.id, target.corner, point, target.scopeId).project;
   if (target.kind === "place") return resizePlaceBoundary(project, target.id, target.corner, applyAffinePoint(relativePlaceMatrix(project, target.id, activePlaceId), point)).project;
   const surface = project.surfaces.find(({ id }) => id === target.id); if (!surface) return project;
   return resizeConstructionSurface(project, target.id, target.corner, applyAffinePoint(relativePlaceMatrix(project, surface.belongsToId, activePlaceId), point)).project;
@@ -53,8 +53,9 @@ export function previewRegionVertex(project: EditorProject, activePlaceId: strin
   return { ...project, elements: project.elements.map((item) => item.id === element?.id ? { ...item, geometry: { kind: "region", shape: changed } } : item) };
 }
 
-export function previewWallEndpoint(project: EditorProject, wallId: string, endpoint: "start" | "end", point: KernelPoint): EditorProject {
-  const owner = project.constructions.find(({ walls }) => walls.some(({ id }) => id === wallId));
+export function previewWallEndpoint(project: EditorProject, wallId: string, endpoint: "start" | "end", point: KernelPoint, scopeId?: string): EditorProject {
+  const candidates = project.constructions.filter(({ walls }) => walls.some(({ id }) => id === wallId));
+  const owner = scopeId ? candidates.find(({ id }) => id === scopeId) : candidates.length === 1 ? candidates[0] : undefined;
   const before = owner?.walls.find(({ id }) => id === wallId)?.[endpoint]; if (!owner || !before) return project;
   const move = (candidate: KernelPoint) => Math.hypot(candidate.x - before.x, candidate.y - before.y) < 1e-6 ? point : candidate;
   return { ...project, constructions: project.constructions.map((doc) => doc.id === owner.id ? { ...doc, walls: doc.walls.map((wall) => ({ ...wall, start: move(wall.start), end: move(wall.end) })) } : doc) };

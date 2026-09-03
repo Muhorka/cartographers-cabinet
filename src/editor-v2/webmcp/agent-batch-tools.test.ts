@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { EditorSession } from "../state/editor-session";
 import { createProjectAtScale } from "../model/starter-project";
-import { createAgentBatchTools } from "./agent-batch-tools";
+import { createAgentBatchTools, type AgentBatchToolOptions } from "./agent-batch-tools";
 import { createEditorAgentTools } from "./register-agent-tools";
 import { createEditorCommandTools } from "./create-editor-command-tools";
 import type { RouteCalculationOutcome, StoryRouteCalculationService } from "../story/routes/route-service";
@@ -10,7 +10,7 @@ import { emptyProject, type EditorProject } from "../model/project-model";
 import { createConstructionDocument } from "../construction/construction-document";
 import { createProjectCheckpoint, assertProposalCurrent, restoreCheckpointSnapshot } from "../persistence/project-checkpoint";
 
-function setup(routeService?: StoryRouteCalculationService) {
+function setup(routeService?: StoryRouteCalculationService, batchOptions?: AgentBatchToolOptions) {
   const project = createProjectAtScale("batch-test", "Test atlas", "en", "world");
   for (let index = 0; index < 5; index += 1) project.elements.push({ id: `note-${index}`, name: "Note", belongsToId: project.places[0].id, layerId: "sketch", subjectId: "sketch.note", geometry: { kind: "note", at: { x: index, y: 0 }, text: "draft" }, visible: true, locked: false, access: [], tags: [], properties: {} });
   const session = new EditorSession(project, { initialPlaceId: project.places[0].id });
@@ -22,9 +22,9 @@ function setup(routeService?: StoryRouteCalculationService) {
   const tools = createAgentBatchTools(bridge, (shadow) => {
     const shadowBridge = { getSession: () => shadow, getActivePlaceId: bridge.getActivePlaceId, getEditorContext: () => live, refresh: () => undefined };
     return routeService ? createEditorCommandTools(shadowBridge, undefined, routeService) : createEditorAgentTools(shadowBridge);
-  });
+  }, batchOptions);
   const context = () => inspectEditorContext(bridge);
-  const execute = async (input: object) => ((await tools[1].execute(input as Record<string, unknown>)) as { structuredContent: { status: string; reason?: string; alreadyApplied?: boolean; operationIndex?: number; tool?: string; ref?: unknown } }).structuredContent;
+  const execute = async (input: object) => ((await tools[1].execute(input as Record<string, unknown>)) as { structuredContent: { status: string; reason?: string; alreadyApplied?: boolean; alreadyProposed?: boolean; stillCurrent?: boolean; operationIndex?: number; tool?: string; ref?: unknown } }).structuredContent;
   const args = () => ({ requestId: crypto.randomUUID(), expectedRevision: context().projectRevision, summary: "Update test notes", operations: [{ tool: "prepare_update_project_object", input: { ref: { type: "element", id: "note-0" }, description: "A quiet corner" } }] });
   return { session, bridge, context, execute, args, preserved, setLive: (next: EditorLiveContext) => { live = next; },
     replaceSession: () => { liveSession = new EditorSession(session.getState().project, { initialPlaceId: project.places[0].id }); return liveSession; } };
@@ -36,15 +36,56 @@ describe("atomic external agent tasks", () => {
     request.operations.push({ tool: "prepare_update_project_object", input: { ref: { type: "element", id: "note-1" }, description: "Matching style" } });
     const before = session.getState().project;
     expect((await execute(request)).status).toBe("applied");
-    expect((await execute(request)).alreadyApplied).toBe(true);
+    expect(await execute(request)).toMatchObject({ status: "applied", alreadyApplied: true, stillCurrent: true });
     expect(session.getState().project.elements[1].description).toBe("Matching style");
     session.undo(); expect(session.getState().project).toEqual(before);
     expect(session.getHistoryState().canUndo).toBe(false);
+  });
+  it("reports an idempotent retry as historical after the live project changes", async () => {
+    const { session, args, execute } = setup(); const request = args();
+    expect((await execute(request)).status).toBe("applied");
+    session.executeTransaction({ id: "later-user-change", apply: (project) => ({ ...project, name: "A newer title" }) });
+    expect(await execute(request)).toMatchObject({ status: "applied", alreadyApplied: true, stillCurrent: false });
+    expect(session.getState().project.name).toBe("A newer title");
+  });
+  it("does not call an old result current after the editor session is replaced", async () => {
+    const { args, execute, replaceSession } = setup(); const request = args();
+    expect((await execute(request)).status).toBe("applied");
+    replaceSession();
+    expect(await execute(request)).toMatchObject({ status: "applied", alreadyApplied: true, stillCurrent: false });
+  });
+  it("binds the completed retry cache to the session that committed the batch", async () => {
+    const { args, bridge, execute, replaceSession } = setup(); const request = args();
+    bridge.refresh = () => { replaceSession(); };
+    expect((await execute(request)).status).toBe("applied");
+    expect(await execute(request)).toMatchObject({ status: "applied", alreadyApplied: true, stillCurrent: false });
+  });
+  it("rejects an oversized serialized batch input before creating a shadow session", async () => {
+    const { args, execute } = setup(undefined, { maxInputBytes: 100 });
+    const request = args(); request.summary = "x".repeat(200);
+    expect(await execute(request)).toMatchObject({ status: "blocked", reason: "batch-input-too-large" });
+  });
+  it("does not retain a completed result larger than the completed-byte budget", async () => {
+    const { args, execute } = setup(undefined, { maxCompletedBytes: 1 }); const request = args();
+    expect((await execute(request)).status).toBe("applied");
+    expect(await execute(request)).toMatchObject({ status: "stale" });
   });
   it("does not partially apply a failing batch", async () => {
     const { session, args, execute } = setup(); const request = args(); const before = session.getState().project;
     request.operations.push({ tool: "prepare_delete_project", input: {} } as typeof request.operations[number]);
     expect(await execute(request)).toMatchObject({ status: "blocked", operationIndex: 1, tool: "prepare_delete_project" }); expect(session.getState().project).toEqual(before);
+  });
+  it("disposes resources owned by an isolated batch after success and failure", async () => {
+    const { bridge, args } = setup(); const dispose = vi.fn();
+    const tools = createAgentBatchTools(bridge, (shadow) => ({
+      tools: createEditorAgentTools({ ...bridge, getSession: () => shadow }),
+      dispose,
+    }));
+    const execute = async (input: object) => ((await tools[1].execute(input as Record<string, unknown>)) as { structuredContent: { status: string } }).structuredContent;
+    expect((await execute(args())).status).toBe("applied");
+    const failed = args(); failed.operations.push({ tool: "prepare_delete_project", input: {} } as typeof failed.operations[number]);
+    expect((await execute(failed)).status).toBe("blocked");
+    expect(dispose).toHaveBeenCalledTimes(2);
   });
 
   it("reports the failing operation reference without breaking atomic rollback", async () => {

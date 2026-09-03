@@ -71,6 +71,44 @@ describe("story domain", () => {
     expect(result[0]).toMatchObject({ kind: "object", label: "room-1" });
   });
 
+  it("finds map objects by their narrative name and description", () => {
+    const story = fixture(); story.objects[0]!.metadata.narrativeLabel = "Hidden archive"; story.objects[0]!.metadata.narrativeDescription = "Behind the blue door";
+    expect(searchStory(story, "archive")[0]).toMatchObject({ kind: "object", label: "Hidden archive" });
+    expect(searchStory(story, "blue door")[0]).toMatchObject({ kind: "object", label: "Hidden archive" });
+  });
+
+  it("cleans live access references when a world entry is deleted but keeps authored relations", () => {
+    const story = fixture();
+    story.world.push({ id: "guard", kind: "character", name: "Guard", tags: [], properties: {} });
+    story.memberships = [{ subjectId: "guard", groupId: "staff", kind: "member-of", source: "manual" }];
+    story.groups = [{ id: "legacy", name: "Legacy", memberRefs: [], entryIds: ["guard", "brass"], metadata: { owners: ["guard"], access: { allow: ["guard"], deny: [], permission: "restricted", physicalState: "open", lock: "locked", keyIds: ["brass"], guardIds: ["guard"], secretKnowledge: ["guard"] } } }];
+    story.zones = [{ id: "zone", name: "Zone", members: [], tags: [], entryIds: ["guard"], metadata: { owners: ["guard"], access: { allow: ["guard"], deny: [], permission: "restricted", physicalState: "open", lock: "none", keyIds: [], guardIds: ["guard"], secretKnowledge: ["guard"] } } }];
+    story.scenarios = [{ id: "night", name: "Night", patches: [{ id: "patch", target: ref, metadata: { owners: ["guard"], access: { allow: ["guard"], deny: [], permission: "restricted", physicalState: "open", lock: "none", keyIds: [], guardIds: ["guard"], secretKnowledge: ["guard"] } } }], steps: [] }];
+    story.relations = [{ id: "relation", from: { entryId: "guard" }, to: { entryId: "staff" }, kind: "knows", label: "Authored fact" }];
+    const result = applyStoryCommand(story, { kind: "remove", collection: "world", id: "guard" });
+    expect(result.changed).toBe(true);
+    expect(result.story.memberships).toEqual([]);
+    expect(result.story.objects[0]?.metadata.owners).toEqual(["alice"]);
+    expect(result.story.objects[0]?.metadata.access).toMatchObject({ allow: ["staff"], guardIds: [], secretKnowledge: [], keyIds: ["brass"] });
+    expect(result.story.zones.find(({ legacyGroupId }) => legacyGroupId === "legacy")?.entryIds).toEqual(["brass"]);
+    expect(result.story.zones.find(({ id }) => id === "zone")?.entryIds).toEqual([]);
+    expect(result.story.scenarios[0]?.patches[0]?.metadata?.owners).toEqual([]);
+    expect(result.story.relations[0]).toMatchObject({ from: { entryId: "guard" }, label: "Authored fact" });
+  });
+
+  it("atomically blocks deleting world actors or scenario steps used by saved routes", () => {
+    const story = fixture();
+    story.world.push({ id: "guard", kind: "character", name: "Guard", tags: [], properties: {} });
+    story.scenarios = [{ id: "night", name: "Night", patches: [], steps: [{ id: "alarm", name: "Alarm", patches: [] }] }];
+    story.routes = [{ id: "route", name: "Saved", query: { from: { placeId: "room", point: { x: 0, y: 0 } }, to: { placeId: "room", point: { x: 1, y: 1 } }, actorId: "guard", scenarioId: "night", stepId: "alarm" }, result: { status: "ready", revision: 0, sourceRevision: "old", routes: [], missingFacts: [], reasons: [] }, sourceRevision: "old" }];
+    const actor = applyStoryCommand(story, { kind: "remove", collection: "world", id: "guard" });
+    expect(actor).toMatchObject({ changed: false, story });
+    expect(actor.diagnostics[0]?.code).toBe("blocked");
+    const step = applyStoryCommand(story, { kind: "replace", collection: "scenarios", items: [{ id: "night", name: "Night", patches: [], steps: [] }] });
+    expect(step).toMatchObject({ changed: false, story });
+    expect(step.diagnostics[0]?.code).toBe("blocked");
+  });
+
   it("rolls back the whole bulk command when one operation is invalid", () => {
     const story = fixture(); const group = { id: "g", name: "G", memberRefs: [], entryIds: [], metadata: { tags: [], properties: {} } }; const result = applyStoryCommand(story, { kind: "bulk", commands: [{ kind: "add", collection: "groups", item: group }, { kind: "add", collection: "groups", item: { ...group, name: "G2" } }] });
     expect(result.changed).toBe(false); expect(result.story.groups).toHaveLength(0); expect(result.diagnostics[0]?.code).toBe("duplicate");

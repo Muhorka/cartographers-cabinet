@@ -133,13 +133,20 @@ export function reconcileRoadJunctions(project: EditorProject): EditorProject {
   const updated = junctions.flatMap((junction) => {
     if (junction.roadIds.length !== 2) return [];
     const [firstId, secondId] = junction.roadIds; const first = roads.get(firstId); const second = roads.get(secondId);
-    if (!first || !second || first.belongsToId !== second.belongsToId) return [];
+    if (firstId === secondId || !first || !second || first.belongsToId !== second.belongsToId) return [];
     const key = [firstId, secondId].toSorted().join("\u0000"); const intersections = intersectionsByPair.get(key) ?? interiorIntersections(first, second); intersectionsByPair.set(key, intersections);
     const used = usedByPair.get(key) ?? new Set<number>(); let candidateIndex = -1; let candidateDistance = Number.POSITIVE_INFINITY;
     intersections.forEach((point, index) => { if (!used.has(index) && distance(point, junction.point) < candidateDistance) { candidateIndex = index; candidateDistance = distance(point, junction.point); } });
-    if (candidateIndex < 0) return []; used.add(candidateIndex); usedByPair.set(key, used); return [{ ...junction, point: intersections[candidateIndex]! }];
+    if (candidateIndex < 0) return []; used.add(candidateIndex); usedByPair.set(key, used); return [{ ...junction, belongsToId: first.belongsToId, point: intersections[candidateIndex]! }];
   });
-  return updated.length === junctions.length && updated.every((junction, index) => junction.point.x === junctions[index]!.point.x && junction.point.y === junctions[index]!.point.y) ? project : { ...project, roadJunctions: updated };
+  return updated.length === junctions.length && updated.every((junction, index) => {
+    const previous = junctions[index]!;
+    return junction.belongsToId === previous.belongsToId
+      && junction.point.x === previous.point.x
+      && junction.point.y === previous.point.y
+      && junction.roadIds.length === previous.roadIds.length
+      && junction.roadIds.every((id, roadIndex) => id === previous.roadIds[roadIndex]);
+  }) ? project : { ...project, roadJunctions: updated };
 }
 
 function endpointPair(first: RoadGeometry, second: RoadGeometry) {

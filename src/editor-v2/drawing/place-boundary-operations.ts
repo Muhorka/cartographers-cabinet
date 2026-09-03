@@ -8,6 +8,7 @@ import type { SelectionOperationResult } from "./selection-operations";
 import { equipmentFitsBoundaries } from "./geometry-containment";
 import { moveRegionVertex } from "../geometry/region-vertex-edit";
 import { selectionIsLocked } from "./selection-locks";
+import { transitionsFitRooms } from "../construction/wall-features";
 
 function translatedPolygon(shape: RegionShape, transform: PlaceNode["transform"]): RegionShape {
   const radians = transform.rotation * Math.PI / 180; const cosine = Math.cos(radians); const sine = Math.sin(radians);
@@ -89,7 +90,7 @@ function replaceBoundary(project: EditorProject, selected: PlaceNode, boundary: 
   const affectedOwners = new Set([selected.id]);
   if (selected.kind === "level" && selected.constructionId) {
     const rebuilt = rebuildLevel(next, selected, boundary, new Set([...project.places.map(({ id }) => id), ...project.constructions.flatMap(({ rooms }) => rooms.map(({ id }) => id))]));
-    if (!rebuilt) return { state: "blocked", project, reason: "not-found" };
+    if (!rebuilt) return { state: "blocked", project, reason: "collision" };
     next = rebuilt;
     for (const id of descendantIds(next, selected.id)) affectedOwners.add(id);
     next = synchronizeBuilding(next, selected, boundary);
@@ -105,6 +106,16 @@ function replaceBoundary(project: EditorProject, selected: PlaceNode, boundary: 
       for (const id of descendantIds(next, level.id)) affectedOwners.add(id);
     }
   }
+  const affectedConstructionIds = new Set(
+    selected.kind === "level" && selected.constructionId ? [selected.constructionId] :
+      selected.kind === "building" ? project.places
+        .filter((place) => place.parentId === selected.id && place.kind === "level" && sameShape(place.boundary, selected.boundary) && place.constructionId)
+        .map((place) => place.constructionId!) : [],
+  );
+  if ([...affectedConstructionIds].some((constructionId) => {
+    const construction = next.constructions.find(({ id }) => id === constructionId);
+    return !construction || !transitionsFitRooms(construction);
+  })) return { state: "blocked", project, reason: "collision" };
   if (!equipmentFitsBoundaries(next, affectedOwners)) return { state: "blocked", project, reason: "collision" };
   return { state: "applied", project: next };
 }

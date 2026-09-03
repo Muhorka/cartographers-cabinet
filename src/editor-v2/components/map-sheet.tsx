@@ -9,7 +9,7 @@ import { clientPointToSheet, marqueeRect, selectionsInMarquee, type MarqueeDraft
 import { useTouchViewport } from "./use-touch-viewport"; import { placeToOpenAbove } from "../model/navigation-fallback";
 import { MapSheetTracing } from "./map-sheet-tracing"; import { useDrawingKeyboardConfirmation } from "./use-drawing-keyboard-confirmation"; import { preferredSelectable } from "./map-selection-target";
 import { previewRegionResize, previewRegionVertex, previewWallEndpoint } from "./map-resize-preview"; import { MapGrid } from "./map-grid";
-import type { MapSelection, MapSheetProps } from "./map-sheet-types";
+import { type MapSelection, type MapSheetProps } from "./map-sheet-types";
 import { compassRotationAt } from "./map-compass-rotation"; import { useMapNodeInsertion } from "./use-map-node-insertion";
 import { SelectionRotationHandle } from "./selection-rotation-handle";
 import { captureMapPoint, capturePointPointer } from "./map-point-picker";
@@ -21,8 +21,8 @@ const emptySelectedIds: string[] = []; const emptyDraftStrokes: KernelPoint[][] 
 export function MapSheet({ pointPicker, storyOverlay, rotationControl, project, activePlaceId, viewport, copy, selectedIds = emptySelectedIds, draftStrokes = emptyDraftStrokes, gestureDraft, sheetSize = { width: 1000, height: 700 }, interaction, selectionEditing = false, selectionOnly = false, outlineEditing = false, selectionMode = "direct", selectionLayerId, sketchVisible = true, sketchOpacity = .75, eraserSize = 10, gapClosingEnabled = false, gapClosingTolerance = 14, tracingProject, tracingOpacity = .4, onSelect, onSelectMany, onOpenPlace, onClearSelection, onDeleteSelected, onCancelDrawing, onViewportChange, onGesture, onGestureDraftChange, onMeasureSettingsChange, onNoteTextChange, onMoveSelection, onMoveWallEndpoint, onResizeOpening, onResizeTransition, onResizeElement, onResizeSurface, onResizePlace, onMoveElementVertex, onMoveSurfaceVertex, onMovePlaceVertex, nodeInsertion }: MapSheetProps) {
   const prefix = useId().replaceAll(":", ""); const canvasRef = useRef<SVGSVGElement>(null); const drag = useRef<{ point: { x: number; y: number }; pointerId: number } | undefined>(undefined);
   const insertion = useMapNodeInsertion(nodeInsertion, viewport, sheetSize);
-  const moving = useRef<{ selection: MapSelection; start: KernelPoint; pointerId: number } | undefined>(undefined); const movingEndpoint = useRef<{ wallId: string; endpoint: "start" | "end"; pointerId: number } | undefined>(undefined); const resizingOpening = useRef<{ openingId: string; pointerId: number } | undefined>(undefined);
-  const rotating = useRef<{ pointerId: number } | undefined>(undefined); const resizing = useRef<{ kind: "element" | "surface" | "place" | "transition"; id: string; corner: ResizeCorner; pointerId: number } | undefined>(undefined); const movingVertex = useRef<{ kind: "element" | "surface" | "place"; id: string; polygonIndex: number; vertexIndex: number; pointerId: number } | undefined>(undefined);
+  const moving = useRef<{ selection: MapSelection; start: KernelPoint; pointerId: number } | undefined>(undefined); const movingEndpoint = useRef<{ selection: MapSelection; endpoint: "start" | "end"; pointerId: number } | undefined>(undefined); const resizingOpening = useRef<{ selection: MapSelection; pointerId: number } | undefined>(undefined);
+  const rotating = useRef<{ pointerId: number } | undefined>(undefined); const resizing = useRef<{ kind: "element" | "surface" | "place" | "transition"; id: string; scopeId?: string; corner: ResizeCorner; pointerId: number } | undefined>(undefined); const movingVertex = useRef<{ kind: "element" | "surface" | "place"; id: string; polygonIndex: number; vertexIndex: number; pointerId: number } | undefined>(undefined);
   const suppressSelectionClick = useRef(false); const marquee = useRef<MarqueeDraft | undefined>(undefined); const [marqueePreview, setMarqueePreview] = useState<MarqueeDraft>();
   const [movePreview, setMovePreview] = useState<{ selection: MapSelection; delta: KernelPoint }>(); const [openingWidthPreview, setOpeningWidthPreview] = useState<{ id: string; width: number }>(); const [resizeProjectPreview, setResizeProjectPreview] = useState<typeof project>(); const [renderedGestureDraft, setRenderedGestureDraft] = useState<MapGestureDraft | undefined>(gestureDraft);
   const visibleGestureDraft = onGestureDraftChange ? gestureDraft : renderedGestureDraft;
@@ -30,7 +30,9 @@ export function MapSheet({ pointPicker, storyOverlay, rotationControl, project, 
   const sourceSelection = selectionEditing || selectionOnly;
   const lastPenClick = useRef<{ point: KernelPoint; time: number } | undefined>(undefined);
   const displayedProject = resizeProjectPreview ?? project; const activePlace = displayedProject.places.find(({ id }) => id === activePlaceId); const selected = useMemo(() => new Set(selectedIds), [selectedIds]);
-  const movingIds = useMemo(() => new Set(movePreview ? selected.has(movePreview.selection.id) ? selectedIds : [movePreview.selection.id] : []), [movePreview, selected, selectedIds]);
+  // MapSheet child layers receive legacy id sets for geometry transforms; the
+  // selectedIds contract itself remains the collision-free selection key.
+  const movingIds = useMemo(() => new Set(movePreview ? [movePreview.selection.id] : []), [movePreview]);
   const constructionOwner = constructionPlaceForView(displayedProject, activePlaceId);
   const activeConstruction = displayedProject.constructions.find(({ id }) => id === constructionOwner?.constructionId);
   const broaderPlaceId = placeToOpenAbove(project, activePlaceId);
@@ -73,8 +75,9 @@ export function MapSheet({ pointPicker, storyOverlay, rotationControl, project, 
     if (touchNavigation.begin(event)) return;
     const openingHandle = (event.target as Element).closest<SVGElement>("[data-opening-resize]");
     if (selectionEditing && openingHandle?.dataset.openingResize) {
-      resizingOpening.current = { openingId: openingHandle.dataset.openingResize, pointerId: event.pointerId };
-      const opening = activeConstruction?.openings.find(({ id }) => id === openingHandle.dataset.openingResize); if (opening) setOpeningWidthPreview({ id: opening.id, width: opening.width });
+      const selection = { kind: "opening" as const, id: openingHandle.dataset.openingResize, scopeId: openingHandle.dataset.openingScope };
+      resizingOpening.current = { selection, pointerId: event.pointerId };
+      const opening = activeConstruction?.openings.find(({ id }) => id === selection.id); if (opening) setOpeningWidthPreview({ id: opening.id, width: opening.width });
       event.currentTarget.setPointerCapture(event.pointerId); return;
     }
     if ((event.target as Element).closest("[data-viewport-dial]")) {
@@ -84,8 +87,9 @@ export function MapSheet({ pointPicker, storyOverlay, rotationControl, project, 
     const resizeHandle = (event.target as Element).closest<SVGElement>("[data-resize-corner]");
     const resizeId = resizeHandle?.dataset.elementId ?? resizeHandle?.dataset.surfaceId ?? resizeHandle?.dataset.placeId ?? resizeHandle?.dataset.transitionId;
     if (resizeHandle && (selectionEditing || outlineEditing) && resizeId && resizeHandle.dataset.resizeCorner) {
-      const kind = resizeHandle.dataset.placeId ? "place" : resizeHandle.dataset.surfaceId ? "surface" : resizeHandle.dataset.transitionId ? "transition" : "element"; resizing.current = { kind, id: resizeId, corner: resizeHandle.dataset.resizeCorner as ResizeCorner, pointerId: event.pointerId };
-      onSelect?.({ kind, id: resizeId }); event.currentTarget.setPointerCapture(event.pointerId); return;
+      const kind = resizeHandle.dataset.placeId ? "place" : resizeHandle.dataset.surfaceId ? "surface" : resizeHandle.dataset.transitionId ? "transition" : "element"; const scopeId = resizeHandle.dataset.transitionScope;
+      resizing.current = { kind, id: resizeId, ...(scopeId ? { scopeId } : {}), corner: resizeHandle.dataset.resizeCorner as ResizeCorner, pointerId: event.pointerId };
+      onSelect?.({ kind, id: resizeId, ...(scopeId ? { scopeId } : {}) }); event.currentTarget.setPointerCapture(event.pointerId); return;
     }
     const vertexHandle = (event.target as Element).closest<SVGElement>("[data-region-vertex]"); const vertexId = vertexHandle?.dataset.elementId ?? vertexHandle?.dataset.surfaceId ?? vertexHandle?.dataset.placeId;
     if (vertexHandle && (selectionEditing || outlineEditing) && vertexId) {
@@ -113,16 +117,17 @@ export function MapSheet({ pointPicker, storyOverlay, rotationControl, project, 
     }
     const endpoint = (event.target as Element).closest<SVGElement>("[data-wall-endpoint]");
     if (selectionEditing && endpoint?.dataset.wallId && (endpoint.dataset.wallEndpoint === "start" || endpoint.dataset.wallEndpoint === "end")) {
-      movingEndpoint.current = { wallId: endpoint.dataset.wallId, endpoint: endpoint.dataset.wallEndpoint, pointerId: event.pointerId };
-      onSelect?.({ kind: "wall", id: endpoint.dataset.wallId }); event.currentTarget.setPointerCapture(event.pointerId); return;
+      const selection = { kind: "wall" as const, id: endpoint.dataset.wallId, scopeId: endpoint.dataset.wallScope };
+      movingEndpoint.current = { selection, endpoint: endpoint.dataset.wallEndpoint, pointerId: event.pointerId };
+      onSelect?.(selection); event.currentTarget.setPointerCapture(event.pointerId); return;
     }
     const additive = event.ctrlKey || event.metaKey || event.shiftKey;
     const selectable = preferredSelectable({ event, selectionEditing: sourceSelection, selectionLayerId, selected, additive });
     if (selectable) {
-      const kind = selectable.dataset.selectionKind as MapSelection["kind"] | undefined; const id = selectable.dataset.selectionId;
+      const kind = selectable.dataset.selectionKind as MapSelection["kind"] | undefined; const id = selectable.dataset.selectionId; const scopeId = selectable.dataset.selectionScope;
       const layerId = selectable.dataset.selectionLayer as WorkLayerId | undefined;
       if (sourceSelection && layerId && kind && id) {
-        const selection = { kind, id };
+        const selection = { kind, id, ...(scopeId ? { scopeId } : {}) } as MapSelection;
         onSelect?.(selection, additive ? true : undefined);
         if (selectionEditing && !additive) { moving.current = { selection, start: rawMapPoint(event), pointerId: event.pointerId }; setMovePreview({ selection, delta: { x: 0, y: 0 } }); event.currentTarget.setPointerCapture(event.pointerId); }
       }
@@ -147,10 +152,10 @@ export function MapSheet({ pointPicker, storyOverlay, rotationControl, project, 
       return;
     }
     if (moving.current?.pointerId === event.pointerId) { const point = rawMapPoint(event); setMovePreview({ selection: moving.current.selection, delta: { x: point.x - moving.current.start.x, y: point.y - moving.current.start.y } }); return; }
-    if (resizingOpening.current?.pointerId === event.pointerId) { const width = openingWidthAt(resizingOpening.current.openingId, rawMapPoint(event)); if (width) setOpeningWidthPreview({ id: resizingOpening.current.openingId, width }); return; }
+    if (resizingOpening.current?.pointerId === event.pointerId) { const width = openingWidthAt(resizingOpening.current.selection.id, rawMapPoint(event)); if (width) setOpeningWidthPreview({ id: resizingOpening.current.selection.id, width }); return; }
     if (resizing.current?.pointerId === event.pointerId) { setResizeProjectPreview(previewRegionResize(project, activePlaceId, resizing.current, rawMapPoint(event))); return; }
     if (movingVertex.current?.pointerId === event.pointerId) { setResizeProjectPreview(previewRegionVertex(project, activePlaceId, movingVertex.current, rawMapPoint(event))); return; }
-    if (movingEndpoint.current?.pointerId === event.pointerId) { setResizeProjectPreview(previewWallEndpoint(project, movingEndpoint.current.wallId, movingEndpoint.current.endpoint, rawMapPoint(event))); return; }
+    if (movingEndpoint.current?.pointerId === event.pointerId) { setResizeProjectPreview(previewWallEndpoint(project, movingEndpoint.current.selection.id, movingEndpoint.current.endpoint, rawMapPoint(event), movingEndpoint.current.selection.scopeId)); return; }
     if (!drag.current || drag.current.pointerId !== event.pointerId || !onViewportChange) return;
     const delta = { x: event.clientX - drag.current.point.x, y: event.clientY - drag.current.point.y }; drag.current.point = { x: event.clientX, y: event.clientY };
     onViewportChange(panViewport(viewport, delta));
@@ -160,10 +165,10 @@ export function MapSheet({ pointPicker, storyOverlay, rotationControl, project, 
     if (rotating.current?.pointerId === event.pointerId) { rotating.current = undefined; return; }
     if (marquee.current?.pointerId === event.pointerId) { const current = marquee.current; marquee.current = undefined; setMarqueePreview(undefined); onSelectMany?.(selectionsInMarquee(event.currentTarget, current.clientStart, { x: event.clientX, y: event.clientY }, selectionLayerId)); return; }
     if (resizingOpening.current?.pointerId === event.pointerId) {
-      const current = resizingOpening.current; resizingOpening.current = undefined; const width = openingWidthAt(current.openingId, rawMapPoint(event)); setOpeningWidthPreview(undefined); if (width) onResizeOpening?.(current.openingId, width);
+      const current = resizingOpening.current; resizingOpening.current = undefined; const width = openingWidthAt(current.selection.id, rawMapPoint(event)); setOpeningWidthPreview(undefined); if (width) onResizeOpening?.(current.selection, width);
       return;
     }
-    if (resizing.current?.pointerId === event.pointerId) { const current = resizing.current; resizing.current = undefined; setResizeProjectPreview(undefined); const point = mapPoint(event); if (current.kind === "place") onResizePlace?.(current.id, current.corner, point); else if (current.kind === "surface") onResizeSurface?.(current.id, current.corner, point); else if (current.kind === "transition") onResizeTransition?.(current.id, current.corner, point); else onResizeElement?.(current.id, current.corner, point); return; }
+    if (resizing.current?.pointerId === event.pointerId) { const current = resizing.current; resizing.current = undefined; setResizeProjectPreview(undefined); const point = mapPoint(event); if (current.kind === "place") onResizePlace?.(current.id, current.corner, point); else if (current.kind === "surface") onResizeSurface?.(current.id, current.corner, point); else if (current.kind === "transition") onResizeTransition?.({ kind: "transition", id: current.id, ...(current.scopeId ? { scopeId: current.scopeId } : {}) }, current.corner, point); else onResizeElement?.(current.id, current.corner, point); return; }
     if (movingVertex.current?.pointerId === event.pointerId) { const current = movingVertex.current; movingVertex.current = undefined; setResizeProjectPreview(undefined); const point = mapPoint(event); if (current.kind === "place") onMovePlaceVertex?.(current.id, current.polygonIndex, current.vertexIndex, point); else if (current.kind === "surface") onMoveSurfaceVertex?.(current.id, current.polygonIndex, current.vertexIndex, point); else onMoveElementVertex?.(current.id, current.polygonIndex, current.vertexIndex, point); return; }
     if (activeGesture === "pen") {
       const current = gestureDraftRef.current; if (!current || current.pointerId !== event.pointerId) return; const point = mapPoint(event); lastPenClick.current = { point, time: event.timeStamp }; showGesture({ ...current, pointerId: undefined, hover: undefined }); return;
@@ -174,7 +179,7 @@ export function MapSheet({ pointPicker, storyOverlay, rotationControl, project, 
     }
     if (movingEndpoint.current?.pointerId === event.pointerId) {
       const current = movingEndpoint.current; movingEndpoint.current = undefined; setResizeProjectPreview(undefined);
-      onMoveWallEndpoint?.(current.wallId, current.endpoint, mapPoint(event)); return;
+      onMoveWallEndpoint?.(current.selection, current.endpoint, mapPoint(event)); return;
     }
     if (moving.current?.pointerId === event.pointerId) {
       const start = moving.current.start; const selection = moving.current.selection; const end = mapPoint(event); moving.current = undefined;

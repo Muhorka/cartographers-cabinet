@@ -7,6 +7,7 @@ import { assertProposalCurrent, restoreCheckpointSnapshot } from "../persistence
 import { restoreWorkbenchProject } from "./workbench-project-loading";
 import { checkpointCopy } from "../i18n/checkpoint-copy";
 import type { useProjectAutosave } from "./use-project-autosave";
+import { safePersistenceError } from "../persistence/persistence-errors";
 
 type Autosave = ReturnType<typeof useProjectAutosave>;
 export function useWorkbenchProjectSwitch(input: {
@@ -28,9 +29,9 @@ export function useWorkbenchProjectSwitch(input: {
       if (source && !await input.autosave.flushSession(source)) return false;
       if (request !== generation.current || liveSession.current !== source) return false;
       liveSession.current = loaded.session; input.install(loaded);
-      void setPreference("activeProjectId", project.id).catch((error) => input.onError(String(error)));
+      void setPreference("activeProjectId", project.id).catch((error) => input.onError(safePersistenceError(error).reason));
       return true;
-    } catch (error) { if (request === generation.current) input.onError(String(error)); return false; }
+    } catch (error) { if (request === generation.current) input.onError(safePersistenceError(error).reason); return false; }
   }
   async function restoreCheckpoint(id: string, preserveSafety: (before: EditorProject, after: EditorProject) => Promise<string | undefined>) {
     input.onError(undefined);
@@ -47,7 +48,7 @@ export function useWorkbenchProjectSwitch(input: {
       const outcome = session.executeTransaction({ id: `restore:${id}`, apply: () => restored });
       if (outcome.code !== "committed" && outcome.code !== "no-change") throw new Error(outcome.reason ?? outcome.code);
       return { session, project: session.getViewState().project };
-    } catch (error) { if (liveSession.current === session) input.onError(error instanceof Error && error.message.includes("proposal-stale") ? checkpointCopy[input.locale].proposalStale : String(error)); }
+    } catch (error) { if (liveSession.current === session) input.onError(error instanceof Error && error.message.includes("proposal-stale") ? checkpointCopy[input.locale].proposalStale : safePersistenceError(error).reason); }
   }
   return { loadProject, restoreCheckpoint, getSession: () => liveSession.current };
 }

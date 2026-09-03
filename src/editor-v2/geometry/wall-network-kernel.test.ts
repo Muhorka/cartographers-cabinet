@@ -22,8 +22,29 @@ describe("editor v2 wall network kernel", () => {
 
   it("materializes every noded piece as an independently editable wall", () => {
     const walls = materializeWallSegments([wall("horizontal", 0, 5, 10, 5), wall("vertical", 5, 0, 5, 10)]);
-    expect(walls.map(({ id }) => id).toSorted()).toEqual(["horizontal:1", "horizontal:2", "vertical:1", "vertical:2"]);
+    expect(new Set(walls.map(({ id }) => id)).size).toBe(4);
+    expect(walls.filter(({ sourceWallId }) => sourceWallId === "horizontal")).toHaveLength(2);
+    expect(walls.filter(({ sourceWallId }) => sourceWallId === "vertical")).toHaveLength(2);
     expect(walls.every(({ start, end }) => Math.hypot(end.x - start.x, end.y - start.y) === 5)).toBe(true);
+  });
+
+  it("does not collide with an independent id that resembles an old derived segment", () => {
+    const walls = materializeWallSegments([
+      wall("horizontal", 0, 5, 10, 5), wall("vertical", 5, 0, 5, 10),
+      wall("horizontal:1", 20, 0, 20, 4),
+    ]);
+
+    expect(new Set(walls.map(({ id }) => id)).size).toBe(walls.length);
+    expect(walls.find(({ id }) => id === "horizontal:1")?.sourceWallId).toBeUndefined();
+    expect(walls.filter(({ sourceWallId }) => sourceWallId === "horizontal")).toHaveLength(2);
+  });
+
+  it("keeps derived ids within the persisted identifier budget", () => {
+    const longId = "w".repeat(512);
+    const walls = materializeWallSegments([wall(longId, 0, 5, 10, 5), wall("vertical", 5, 0, 5, 10)]);
+
+    expect(walls.every(({ id }) => id.length <= 512)).toBe(true);
+    expect(walls.filter(({ sourceWallId }) => sourceWallId === longId)).toHaveLength(2);
   });
 
   it("derives rooms from walls instead of storing independent room geometry", () => {
@@ -82,6 +103,26 @@ describe("editor v2 wall network kernel", () => {
     ]);
     expect(result.faces).toHaveLength(1);
     expect(result.diagnostics.some(({ kind }) => kind === "dangling-edge")).toBe(true);
+  });
+
+  it("never snaps the two endpoints of one short wall onto each other", () => {
+    const short = wall("short", 2, 2, 2.1, 2, "partition");
+
+    const persisted = materializeWallSegments([short]);
+
+    expect(persisted).toEqual([short]);
+    expect(buildWallNetwork([short]).segments).toHaveLength(1);
+  });
+
+  it("does not grow a junction cluster beyond the healing tolerance", () => {
+    const result = materializeWallSegments([
+      wall("first", 0, 0, 0, 5, "partition"),
+      wall("second", .1, 0, .1, 5, "partition"),
+      wall("third", .2, 0, .2, 5, "partition"),
+    ]);
+    const starts = new Set(result.map(({ start }) => `${start.x}:${start.y}`));
+
+    expect(starts.size).toBeGreaterThan(1);
   });
 
   it("joins a visually touching wall endpoint to the middle of another wall", () => {

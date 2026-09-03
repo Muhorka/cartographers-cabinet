@@ -6,6 +6,7 @@ import type { EditorProject } from "../model/project-model";
 import type { MapSheet } from "./map-sheet";
 import { EditorWorkbench } from "./editor-workbench";
 import styles from "./editor-workbench.module.css";
+import { selectionKey } from "../drawing/selection-reference";
 
 const fixture = vi.hoisted(() => ({ project: undefined as EditorProject | undefined, saved: undefined as EditorProject | undefined, sheet: undefined as ComponentProps<typeof MapSheet> | undefined }));
 vi.mock("../persistence/project-library", async (original) => ({
@@ -74,7 +75,7 @@ describe("zones through the shared editor session", () => {
     expect(host.querySelector(`.${styles.center}`)).toBe(map);
     expect(host.querySelector('section[aria-label="Strefy"] form input')).toBe(name);
     expect(name.value).toBe("Niedokończony apartament");
-    expect(fixture.sheet!.selectedIds).toContain(room.id);
+    expect(fixture.sheet!.selectedIds).toContain(selectionKey({ kind: "room", id: room.id }));
     expect(state()).toEqual(before);
   });
 

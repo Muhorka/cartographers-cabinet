@@ -4,6 +4,7 @@ import { preferredWorkLayer, workLayerAvailability } from "../model/work-context
 import { EditorSession } from "../state/editor-session";
 import { createToolboxState } from "../toolbox/toolbox-state";
 import type { MapSelection } from "./map-sheet";
+import { selectionKey } from "./map-sheet-types";
 import { fitViewportToRegion, viewportRegion } from "./map-sheet-geometry";
 import { editableOutlineTarget } from "../drawing/outline-target";
 import { selectionIsLocked } from "../drawing/selection-locks";
@@ -15,7 +16,7 @@ export function viewportFor(project: EditorProject, placeId?: string) {
 /** Shared pointer selection policy, independent of map rendering and story mode. */
 export function nextMapSelection(current: MapSelection[], next?: MapSelection, additive = false): MapSelection[] {
   if (!next) return [];
-  const index = current.findIndex(({ kind, id }) => kind === next.kind && id === next.id);
+  const index = current.findIndex((candidate) => selectionKey(candidate) === selectionKey(next));
   if (additive) return index >= 0 ? current.filter((_, candidateIndex) => candidateIndex !== index) : [...current, next];
   return index >= 0 && current.length > 1 ? current : [next];
 }

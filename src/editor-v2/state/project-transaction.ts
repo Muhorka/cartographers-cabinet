@@ -1,10 +1,12 @@
 import type { EditorProject } from "../model/project-model";
 import { normalizeEditorProject } from "../model/project-model";
+import { assertProjectIntegrity } from "../model/project-integrity";
 import { repairProjectConstructions } from "../model/construction-repair";
 import { reconcileRoadRoutes } from "../roads/road-transaction";
 import { immutableSnapshot } from "./immutable-snapshot";
 import { projectRevision } from "./project-revision";
 import { produce, type Draft } from "immer";
+import { editorProjectSchema } from "../persistence/project-file";
 
 export type ProjectTransaction = {
   id: string;
@@ -58,6 +60,20 @@ export function prepareProjectTransaction(
     const routed = reconcileRoadRoutes(before, next);
     if (!routed) return { status: "blocked", code: "road-obstacle", transactionId: transaction.id, before };
     next = routed;
+    if (next.id !== before.id) throw new Error("Project identity cannot change inside a transaction.");
+    if (before.places.length > 0 && next.places.length === 0) throw new Error("A project must keep at least one map.");
+    if (transaction.isolation !== "structural" && next.places.length > 0) {
+      // External and compatibility transactions cross the complete file
+      // schema. Publish the original value after validation so Zod's parsed
+      // clone does not discard structural sharing.
+      const validation = editorProjectSchema.safeParse(next);
+      if (!validation.success) {
+        const issue = validation.error.issues[0];
+        const path = issue?.path.length ? issue.path.join(".") : "project";
+        throw new Error(`Invalid project at ${path}: ${issue?.message ?? "schema validation failed"}`);
+      }
+    }
+    assertProjectIntegrity(next);
     if (projectRevision(next) === projectRevision(before)) return { status: "no-change", transactionId: transaction.id, before };
     return { status: "ready", transactionId: transaction.id, before, project: immutableSnapshot(next, before) };
   } catch (error) {

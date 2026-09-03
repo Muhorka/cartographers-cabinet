@@ -4,7 +4,7 @@ import { createProjectAtScale } from "../model/starter-project";
 import { agentSafetyReasons, assertAgentLocks } from "./agent-change-policy";
 import { EditorSession } from "../state/editor-session";
 import { EditorCommandCoordinator } from "./editor-command-coordinator";
-import { buildMetadataChange } from "./agent-object-command";
+import { buildDeleteChange, buildMetadataChange } from "./agent-object-command";
 
 function fixture() {
   const project = createProjectAtScale("lock-order", "Synthetic floor", "en", "level");
@@ -68,7 +68,10 @@ describe("agent comparisons preserve locks without treating key order as an edit
   it("does not request a safety tracing for key order, but still detects outline and topology edits", () => {
     const before = fixture(); const after = reverseKeys(before);
     expect(agentSafetyReasons(before, after)).toEqual([]);
-    expect(agentSafetyReasons(before, after, 5)).toEqual(["many-targets"]);
+    const manyRecords = structuredClone(before);
+    manyRecords.elements.push(...Array.from({ length: 5 }, (_, index) => ({ ...before.elements[0], id: `many-${index}` })));
+    expect(agentSafetyReasons(before, manyRecords)).toEqual(["many-targets"]);
+    expect(agentSafetyReasons(before, after, { changedRecordCount: 5 })).toEqual(["many-targets"]);
     after.places[0].boundary = { kind: "rectangle", x: -31, y: -20, width: 62, height: 40 };
     expect(agentSafetyReasons(before, after)).toContain("structural-outline");
     after.constructions[0].rooms[0].faceId += "-changed";
@@ -95,6 +98,18 @@ describe("agent comparisons preserve locks without treating key order as an edit
     expect(applied.status).toBe("applied");
     expect(session.getState().project.elements).toEqual(before.elements);
     expect(session.undo().changed).toBe(true);
+    expect(session.getState().project).toEqual(before);
+  });
+
+  it("blocks an agent subtree deletion when a descendant place is locked", () => {
+    const source = fixture(); const owner = source.places[0]!.id;
+    source.places.push({ id: "locked-child", parentId: owner, name: "Locked child", kind: "custom", transform: { x: 0, y: 0, rotation: 0 }, tags: [], access: [], properties: {}, locked: true });
+    const session = new EditorSession(source); const before = session.getState().project;
+    const coordinator = new EditorCommandCoordinator({ getSession: () => session, refresh: () => undefined });
+    const prepared = coordinator.prepare("delete-locked-subtree", (project) => buildDeleteChange(project, owner, [{ type: "place", id: owner }]));
+    expect(prepared.status).toBe("blocked");
+    if (prepared.status !== "blocked") throw new Error(`Unexpected preparation: ${prepared.status}`);
+    expect(prepared.reason).toMatch(/place locked-child is locked/i);
     expect(session.getState().project).toEqual(before);
   });
 });

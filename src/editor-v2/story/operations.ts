@@ -17,6 +17,42 @@ function idFor(item: StoryItem) { return "ref" in item ? storyRefKey(item.ref) :
 function diagnostic(code: string, message: string, refs?: StoryObjectRef[], ids?: string[]): StoryDiagnostic { return { code, message, ...(refs ? { refs } : {}), ...(ids ? { ids } : {}) }; }
 function collectionItems(story: StoryData, collection: StoryCollection) { return story[collection] as StoryItem[]; }
 
+const worldReferenceFields = ["allow", "deny", "keyIds", "guardIds", "secretKnowledge", "knownBy"] as const;
+function withoutDeletedWorldReferences(metadata: StoryObjectMetadata | undefined, deletedIds: ReadonlySet<string>) {
+  if (!metadata) return metadata;
+  const next = { ...metadata };
+  if (metadata.owners) next.owners = metadata.owners.filter((id) => !deletedIds.has(id));
+  if (metadata.access) {
+    const access = { ...metadata.access };
+    for (const field of worldReferenceFields) {
+      const values = access[field];
+      if (values) access[field] = values.filter((id) => !deletedIds.has(id));
+    }
+    next.access = access;
+  }
+  return next;
+}
+
+/** Removes only live access/ownership references; authored history stays inspectable. */
+function removeWorldEntryReferences(story: StoryData, deletedIds: ReadonlySet<string>) {
+  const cleanPatch = <T extends { metadata?: StoryObjectMetadata }>(patch: T): T => ({ ...patch, ...(patch.metadata ? { metadata: withoutDeletedWorldReferences(patch.metadata, deletedIds) } : {}) });
+  return {
+    ...story,
+    memberships: story.memberships.filter(({ subjectId, groupId }) => !deletedIds.has(subjectId) && !deletedIds.has(groupId)),
+    objects: story.objects.map((object) => ({ ...object, metadata: withoutDeletedWorldReferences(object.metadata, deletedIds)! })),
+    groups: story.groups.map((group) => ({ ...group, entryIds: group.entryIds.filter((id) => !deletedIds.has(id)), metadata: withoutDeletedWorldReferences(group.metadata, deletedIds)! })),
+    zones: story.zones.map((zone) => ({ ...zone, ...(zone.entryIds ? { entryIds: zone.entryIds.filter((id) => !deletedIds.has(id)) } : {}), ...(zone.metadata ? { metadata: withoutDeletedWorldReferences(zone.metadata, deletedIds) } : {}) })),
+    scenarios: story.scenarios.map((scenario) => ({ ...scenario, patches: scenario.patches.map(cleanPatch), steps: scenario.steps.map((step) => ({ ...step, patches: step.patches.map(cleanPatch) })) })),
+  };
+}
+
+function operationalRouteReference(story: StoryData, deletedWorldIds: ReadonlySet<string>, deletedScenarioIds: ReadonlySet<string>, deletedStepRefs: ReadonlySet<string>) {
+  return story.routes.find((route) => {
+    const { actorId, scenarioId, stepId } = route.query;
+    return Boolean(actorId && deletedWorldIds.has(actorId)) || Boolean(scenarioId && deletedScenarioIds.has(scenarioId)) || Boolean(scenarioId && stepId && deletedStepRefs.has(`${scenarioId}:${stepId}`));
+  });
+}
+
 export function mergeStoryMetadata(base: StoryObjectMetadata, change: Partial<StoryObjectMetadata>, action: StoryMetadataBulkCommand["action"]): StoryObjectMetadata {
   const combine = (before: string[], after: string[]) => action === "replace" ? [...after] : action === "add" ? [...new Set([...before, ...after])] : before.filter((entry) => !after.includes(entry));
   const beforeAccess = { ...defaultStoryAccessPolicy(), ...(base.access ?? {}) }; const afterAccess = change.access;
@@ -84,6 +120,27 @@ function applyOne(input: StoryData, command: NonBulkCommand): { story: StoryData
   } else {
     (story as unknown as Record<StoryCollection, StoryItem[]>)[command.collection] = clone(command.items);
   }
+  if (command.collection === "world") {
+    const remaining = new Set(story.world.map(({ id }) => id));
+    const deletedIds = new Set(input.world.map(({ id }) => id).filter((id) => !remaining.has(id)));
+    const routeReference = operationalRouteReference(input, deletedIds, new Set(), new Set());
+    if (routeReference) return { story: input, diagnostics: [diagnostic("blocked", `Cannot delete world entry ${[...deletedIds][0]}; saved route ${routeReference.id} uses it as its actor.`)] };
+    if (deletedIds.size) Object.assign(story, removeWorldEntryReferences(story, deletedIds));
+  }
+  if (command.collection === "scenarios") {
+    const beforeById = new Map(input.scenarios.map((scenario) => [scenario.id, scenario]));
+    const remainingScenarioIds = new Set(story.scenarios.map(({ id }) => id));
+    const deletedScenarioIds = new Set(input.scenarios.map(({ id }) => id).filter((id) => !remainingScenarioIds.has(id)));
+    const deletedStepRefs = new Set<string>();
+    for (const [scenarioId, before] of beforeById) {
+      const after = story.scenarios.find((scenario) => scenario.id === scenarioId);
+      if (!after || !Array.isArray(after.steps)) continue;
+      const remainingStepIds = new Set(after.steps.map(({ id }) => id));
+      for (const step of before.steps) if (!remainingStepIds.has(step.id)) deletedStepRefs.add(`${scenarioId}:${step.id}`);
+    }
+    const routeReference = operationalRouteReference(input, new Set(), deletedScenarioIds, deletedStepRefs);
+    if (routeReference) return { story: input, diagnostics: [diagnostic("blocked", `Cannot delete scenario context; saved route ${routeReference.id} still uses it.`)] };
+  }
   const parsed = storyDataSchema.safeParse(story);
   if (!parsed.success) return { story: input, diagnostics: [diagnostic("invalid", parsed.error.issues[0]?.message ?? "Invalid story command.")] };
   return { story: parsed.data, diagnostics: [...diagnostics, ...danglingStoryReferences(parsed.data)] };
@@ -128,7 +185,7 @@ export function applyStoryCommand(input: StoryData, command: StoryCommand): Stor
   const commands = command.kind === "bulk" ? command.commands : [command];
   for (const operation of commands) {
     const next = applyOne(result.story, operation);
-    if (next.diagnostics.some(({ code }) => code === "duplicate" || code === "invalid" || code === "not-found")) return { story: source, changed: false, diagnostics: next.diagnostics };
+    if (next.diagnostics.some(({ code }) => code === "duplicate" || code === "invalid" || code === "not-found" || code === "blocked")) return { story: source, changed: false, diagnostics: next.diagnostics };
     result = { story: next.story, diagnostics: [...result.diagnostics, ...next.diagnostics] };
   }
   return { story: result.story, changed: JSON.stringify(source) !== JSON.stringify(result.story), diagnostics: result.diagnostics };

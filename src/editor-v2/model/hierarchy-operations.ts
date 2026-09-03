@@ -1,28 +1,12 @@
 import { constructionNetwork, createConstructionDocument } from "../construction/construction-document";
 import type { CanonicalWall, KernelPoint } from "../geometry/geometry-types";
 import type { ConstructionSurface, DrawingElement, EditorProject, MapAppearance, PlaceNode, RegionShape } from "./project-model";
-import { shapePoints, shapePolygons } from "../geometry/region-constraints";
-import { assessRegionConstraint, pointInRegion, unionRegionShapes } from "../geometry/region-constraints";
-import { assessPathConstraint } from "../geometry/path-constraints";
+import { shapePolygons } from "../geometry/region-constraints";
 import { roomFaceShape } from "../geometry/room-face-shape";
+import { storyRefKey, type StoryObjectRef } from "../story/types";
+import { descendants, geometryBetweenPlaces, geometryInside, place, relativePose, synchronizeBuildingBoundaries, validContainingPlaces, worldPose, type Pose } from "./hierarchy-references";
+export { validContainingPlaces } from "./hierarchy-references";
 type Identity = { createId(): string };
-function place(project: EditorProject, id: string) {
-  return project.places.find((candidate) => candidate.id === id);
-}
-
-function children(project: EditorProject, id: string) {
-  return project.places.filter(({ parentId }) => parentId === id);
-}
-
-function descendants(project: EditorProject, id: string) {
-  const result = new Set<string>(); const pending = [id];
-  while (pending.length) {
-    const current = pending.pop()!;
-    for (const child of children(project, current)) if (!result.has(child.id)) { result.add(child.id); pending.push(child.id); }
-  }
-  return result;
-}
-
 function boundaryWalls(shape: RegionShape, identity: Identity): CanonicalWall[] {
   const rings = shapePolygons(shape).flatMap(({ outer, holes }) => [outer, ...holes]);
   return rings.flatMap((points) => points.map((start, index) => ({ id: identity.createId(), start, end: points[(index + 1) % points.length], thickness: 0.3, role: "boundary" as const })));
@@ -63,8 +47,12 @@ export function syncConstructionRooms(project: EditorProject, construction: Edit
   const network = createRoomFaces(construction); const faceById = new Map(network.map((face) => [face.id, face])); const roomIds = new Set(construction.rooms.map(({ id }) => id));
   const removedRoomIds = new Set(project.places.filter(({ parentId, kind, id }) => parentId === level.id && kind === "room" && !roomIds.has(id)).map(({ id }) => id));
   const existingRoomIds = new Set(project.places.filter(({ parentId, kind }) => parentId === level.id && kind === "room").map(({ id }) => id));
+  const levelWorld = removedRoomIds.size === 0 ? undefined : worldPose(project, level.id);
+  const orphanedChildTransforms = levelWorld ? new Map(project.places.filter(({ parentId }) => parentId && removedRoomIds.has(parentId)).map((candidate) => [candidate.id, relativePose(worldPose(project, candidate.id), levelWorld)])) : new Map<string, Pose>();
   const places = project.places.filter(({ id }) => !removedRoomIds.has(id)).map((candidate) => {
     const room = construction.rooms.find(({ id }) => id === candidate.id); const face = room ? faceById.get(room.faceId) : undefined;
+    const orphanedTransform = orphanedChildTransforms.get(candidate.id);
+    if (orphanedTransform) return { ...candidate, parentId: level.id, transform: orphanedTransform };
     return room && face ? { ...candidate, parentId: level.id, kind: "room" as const, name: room.name, description: room.description, boundary: roomFaceShape(face), transform: { x: 0, y: 0, rotation: 0 }, visible: room.visible, locked: room.locked } : candidate;
   });
   for (const room of construction.rooms) {
@@ -89,67 +77,6 @@ export function reparentPlace(project: EditorProject, id: string, parentId?: str
   const transform = relativePose(world, container);
   const next = { ...project, places: project.places.map((candidate) => candidate.id === id ? { ...candidate, parentId, transform } : candidate) };
   return selected.kind === "level" ? synchronizeBuildingBoundaries(next, [selected.parentId, parentId]) : next;
-}
-
-const allowedContainerKinds: Record<PlaceNode["kind"], ReadonlySet<PlaceNode["kind"]>> = {
-  world: new Set(),
-  location: new Set(["world", "location", "custom"]),
-  building: new Set(["world", "location", "custom"]),
-  level: new Set(["building"]),
-  room: new Set(),
-  object: new Set(["world", "location", "building", "level", "room", "custom"]),
-  "standalone-room": new Set(["world", "location", "building", "level", "custom"]),
-  custom: new Set(["world", "location", "custom"]),
-};
-
-type Pose = { x: number; y: number; rotation: number };
-
-function composePose(container: Pose, local: Pose): Pose {
-  const radians = container.rotation * Math.PI / 180; const cosine = Math.cos(radians); const sine = Math.sin(radians);
-  return { x: container.x + local.x * cosine - local.y * sine, y: container.y + local.x * sine + local.y * cosine, rotation: container.rotation + local.rotation };
-}
-
-function worldPose(project: EditorProject, id: string): Pose {
-  const lineage: PlaceNode[] = []; const visited = new Set<string>(); let current = place(project, id);
-  while (current) { if (visited.has(current.id)) throw new Error("The hierarchy contains a cycle"); visited.add(current.id); lineage.unshift(current); current = current.parentId ? place(project, current.parentId) : undefined; }
-  return lineage.reduce((pose, candidate) => composePose(pose, candidate.transform), { x: 0, y: 0, rotation: 0 });
-}
-
-function relativePose(world: Pose, container: Pose): Pose {
-  const radians = -container.rotation * Math.PI / 180; const cosine = Math.cos(radians); const sine = Math.sin(radians); const dx = world.x - container.x; const dy = world.y - container.y;
-  return { x: dx * cosine - dy * sine, y: dx * sine + dy * cosine, rotation: world.rotation - container.rotation };
-}
-
-function shapeInContainer(shape: RegionShape, transform: Pose): RegionShape {
-  const radians = transform.rotation * Math.PI / 180; const cosine = Math.cos(radians); const sine = Math.sin(radians);
-  const map = ({ x, y }: KernelPoint) => ({ x: x * cosine - y * sine + transform.x, y: x * sine + y * cosine + transform.y });
-  if (shape.kind === "compound") return { ...shape, polygons: shape.polygons.map(({ outer, holes }) => ({ outer: outer.map(map), holes: holes.map((hole) => hole.map(map)) })) };
-  return { kind: "polygon", points: shapePoints(shape).map(map) };
-}
-
-function synchronizeBuildingBoundaries(project: EditorProject, ids: Array<string | undefined>) {
-  const wanted = new Set(ids.filter((id): id is string => Boolean(id)));
-  return { ...project, places: project.places.map((candidate) => {
-    if (candidate.kind !== "building" || !wanted.has(candidate.id)) return candidate;
-    const boundary = unionRegionShapes(project.places.filter(({ parentId, kind, boundary }) => parentId === candidate.id && kind === "level" && boundary).map((level) => shapeInContainer(level.boundary!, level.transform)));
-    return boundary ? { ...candidate, boundary } : candidate;
-  }) };
-}
-
-function canFitInside(project: EditorProject, selected: PlaceNode, container: PlaceNode) {
-  if (!selected.boundary || !container.boundary || selected.kind === "location" || selected.kind === "custom") return true;
-  const transform = relativePose(worldPose(project, selected.id), worldPose(project, container.id));
-  const candidateShape = shapeInContainer(selected.boundary, transform);
-  if (assessRegionConstraint(candidateShape, container.boundary).state !== "inside") return false;
-  if (selected.kind !== "building") return true;
-  return !project.places.some((sibling) => sibling.id !== selected.id && sibling.kind === "building" && sibling.parentId === container.id && sibling.boundary
-    && assessRegionConstraint(candidateShape, shapeInContainer(sibling.boundary, sibling.transform)).state !== "outside");
-}
-
-export function validContainingPlaces(project: EditorProject, id: string) {
-  const selected = place(project, id); if (!selected) return [];
-  const nestedIds = descendants(project, id); const allowedKinds = allowedContainerKinds[selected.kind];
-  return project.places.filter((candidate) => candidate.id !== id && !nestedIds.has(candidate.id) && allowedKinds.has(candidate.kind) && canFitInside(project, selected, candidate));
 }
 
 export function movePlace(project: EditorProject, id: string, delta: KernelPoint) {
@@ -189,34 +116,7 @@ export function validElementOwners(project: EditorProject, elementId: string) {
   });
 }
 
-function pointBetweenPoses(point: KernelPoint, from: Pose, to: Pose): KernelPoint {
-  const fromRadians = from.rotation * Math.PI / 180; const fromCosine = Math.cos(fromRadians); const fromSine = Math.sin(fromRadians);
-  const world = { x: from.x + point.x * fromCosine - point.y * fromSine, y: from.y + point.x * fromSine + point.y * fromCosine };
-  const toRadians = -to.rotation * Math.PI / 180; const toCosine = Math.cos(toRadians); const toSine = Math.sin(toRadians); const dx = world.x - to.x; const dy = world.y - to.y;
-  return { x: dx * toCosine - dy * toSine, y: dx * toSine + dy * toCosine };
-}
-
-function geometryBetweenPlaces(project: EditorProject, geometry: DrawingElement["geometry"], fromId: string, toId: string): DrawingElement["geometry"] {
-  const from = worldPose(project, fromId); const to = worldPose(project, toId); const map = (point: KernelPoint) => pointBetweenPoses(point, from, to); const angle = from.rotation - to.rotation;
-  if (geometry.kind === "path") return { ...geometry, points: geometry.points.map(map) };
-  if (geometry.kind === "point" || geometry.kind === "note") return { ...geometry, at: map(geometry.at) };
-  if (geometry.kind === "bezier") return { ...geometry, nodes: geometry.nodes.map((node) => ({ anchor: map(node.anchor), ...(node.inHandle ? { inHandle: map(node.inHandle) } : {}), ...(node.outHandle ? { outHandle: map(node.outHandle) } : {}) })) };
-  const shape = geometry.shape;
-  if (shape.kind === "circle") { const center = map({ x: shape.cx, y: shape.cy }); return { kind: "region", shape: { ...shape, cx: center.x, cy: center.y } }; }
-  if (shape.kind === "bezier") return { kind: "region", shape: { ...shape, nodes: shape.nodes.map((node) => ({ anchor: map(node.anchor), ...(node.inHandle ? { inHandle: map(node.inHandle) } : {}), ...(node.outHandle ? { outHandle: map(node.outHandle) } : {}) })) } };
-  if (shape.kind === "ellipse" && Math.abs(angle % 180) < 1e-7) { const center = map({ x: shape.cx, y: shape.cy }); return { kind: "region", shape: { ...shape, cx: center.x, cy: center.y } }; }
-  if (shape.kind === "compound") return { kind: "region", shape: { ...shape, polygons: shape.polygons.map(({ outer, holes }) => ({ outer: outer.map(map), holes: holes.map((hole) => hole.map(map)) })) } };
-  return { kind: "region", shape: { kind: "polygon", points: shapePoints(shape).map(map) } };
-}
-
-function geometryInside(geometry: DrawingElement["geometry"], boundary: RegionShape) {
-  if (geometry.kind === "region") return assessRegionConstraint(geometry.shape, boundary).state === "inside";
-  if (geometry.kind === "path") return assessPathConstraint(geometry.points, boundary).state === "inside";
-  if (geometry.kind === "bezier") return assessPathConstraint(geometry.nodes.map(({ anchor }) => anchor), boundary).state === "inside";
-  return pointInRegion(geometry.at, boundary);
-}
-
-export function worldPosition(project: EditorProject, placeId: string): KernelPoint {
+export function worldPosition(project: EditorProject, placeId: string) {
   const pose = worldPose(project, placeId);
   return { x: pose.x, y: pose.y };
 }
@@ -250,10 +150,80 @@ export function updatePlaceDetails(project: EditorProject, placeId: string, deta
   return { ...project, places: project.places.map((candidate) => candidate.id === placeId ? { ...candidate, ...details } : candidate), constructions };
 }
 
+const storyReferenceKinds = new Set(["place", "element", "surface", "room", "wall", "opening", "transition"]);
+
+function storyReferenceKey(kind: string, id: string, scopeId?: string) {
+  return storyRefKey({ kind: kind as StoryObjectRef["kind"], id, ...(scopeId ? { scopeId } : {}) });
+}
+
+function findRemovedStoryReference(value: unknown, removedRefs: Set<string>, removedRoomIds: Set<string>, seen = new Set<object>()): { kind: string; id: string } | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  if (seen.has(value)) return undefined;
+  seen.add(value);
+  if (!Array.isArray(value) && "kind" in value && "id" in value && typeof value.kind === "string" && typeof value.id === "string" && storyReferenceKinds.has(value.kind)) {
+    const scopeId = "scopeId" in value && typeof value.scopeId === "string" ? value.scopeId : undefined;
+    if (removedRefs.has(storyReferenceKey(value.kind, value.id, scopeId)) || value.kind === "room" && !scopeId && removedRoomIds.has(value.id)) return { kind: value.kind, id: value.id };
+  }
+  if (Array.isArray(value)) for (const item of value) { const found = findRemovedStoryReference(item, removedRefs, removedRoomIds, seen); if (found) return found; }
+  else for (const item of Object.values(value)) { const found = findRemovedStoryReference(item, removedRefs, removedRoomIds, seen); if (found) return found; }
+  return undefined;
+}
+
 export function deletePlaceSubtree(project: EditorProject, placeId: string) {
-  const selected = place(project, placeId); if (!selected) throw new Error("The place does not exist"); if (selected.locked) return project;
+  const selected = place(project, placeId); if (!selected) throw new Error("The place does not exist");
   const removedIds = descendants(project, placeId); removedIds.add(placeId);
   const constructionIds = new Set(project.places.filter(({ id }) => removedIds.has(id)).flatMap(({ constructionId }) => constructionId ? [constructionId] : []));
-  const next = { ...project, places: project.places.filter(({ id }) => !removedIds.has(id)), elements: project.elements.filter(({ belongsToId }) => !removedIds.has(belongsToId)), surfaces: project.surfaces.filter(({ belongsToId }) => !removedIds.has(belongsToId)), constructions: project.constructions.filter(({ id }) => !constructionIds.has(id)) };
+  const removedElementIds = new Set(project.elements.filter(({ belongsToId }) => removedIds.has(belongsToId)).map(({ id }) => id));
+  const lockedPlace = project.places.find(({ id, locked }) => removedIds.has(id) && locked);
+  if (lockedPlace) throw new Error(`Cannot delete place subtree: place ${lockedPlace.id} is locked.`);
+  const lockedElement = project.elements.find(({ belongsToId, locked }) => removedIds.has(belongsToId) && locked);
+  if (lockedElement) throw new Error(`Cannot delete place subtree: element ${lockedElement.id} is locked.`);
+  const lockedSurface = project.surfaces.find(({ belongsToId, locked }) => removedIds.has(belongsToId) && locked);
+  if (lockedSurface) throw new Error(`Cannot delete place subtree: surface ${lockedSurface.id} is locked.`);
+  for (const construction of project.constructions) {
+    if (!constructionIds.has(construction.id)) continue;
+    const lockedWall = construction.walls.find(({ locked }) => locked);
+    if (lockedWall) throw new Error(`Cannot delete place subtree: wall ${lockedWall.id} is locked.`);
+    const lockedRoom = construction.rooms.find(({ locked }) => locked);
+    if (lockedRoom) throw new Error(`Cannot delete place subtree: room ${lockedRoom.id} is locked.`);
+    const lockedOpening = construction.openings.find(({ locked }) => locked);
+    if (lockedOpening) throw new Error(`Cannot delete place subtree: opening ${lockedOpening.id} is locked.`);
+    const lockedTransition = construction.transitions.find(({ locked }) => locked);
+    if (lockedTransition) throw new Error(`Cannot delete place subtree: transition ${lockedTransition.id} is locked.`);
+  }
+  const removedRoomIds = new Set(project.constructions.filter(({ id }) => constructionIds.has(id)).flatMap(({ rooms }) => rooms.map(({ id }) => id)));
+  const externalTransition = project.constructions
+    .filter(({ id }) => !constructionIds.has(id))
+    .flatMap(({ transitions }) => transitions)
+    .find((transition) => [transition.sourceLevelId, transition.targetLevelId, ...(transition.connectedLevelIds ?? [])]
+      .some((levelId) => Boolean(levelId && removedIds.has(levelId))));
+  if (externalTransition) throw new Error(`Cannot delete place subtree: transition ${externalTransition.id} connects to a deleted level.`);
+  const removedRefs = new Set<string>();
+  project.places.filter(({ id }) => removedIds.has(id)).forEach(({ id, kind }) => removedRefs.add(storyReferenceKey(kind === "room" ? "room" : "place", id)));
+  project.elements.filter(({ belongsToId }) => removedIds.has(belongsToId)).forEach(({ id }) => removedRefs.add(storyReferenceKey("element", id)));
+  project.surfaces.filter(({ belongsToId }) => removedIds.has(belongsToId)).forEach(({ id }) => removedRefs.add(storyReferenceKey("surface", id)));
+  project.constructions.filter(({ id }) => constructionIds.has(id)).forEach((construction) => {
+    construction.walls.forEach(({ id }) => removedRefs.add(storyReferenceKey("wall", id, construction.id)));
+    construction.rooms.forEach(({ id }) => removedRefs.add(storyReferenceKey("room", id, construction.id)));
+    construction.openings.forEach(({ id }) => removedRefs.add(storyReferenceKey("opening", id, construction.id)));
+    construction.transitions.forEach(({ id }) => removedRefs.add(storyReferenceKey("transition", id, construction.id)));
+  });
+  const storyReference = findRemovedStoryReference(project.story, removedRefs, removedRoomIds);
+  if (storyReference) throw new Error(`Cannot delete place subtree: story data references ${storyReference.kind} ${storyReference.id}.`);
+  const routeReference = project.story.routes.find((route) => {
+    const endpoints = [route.query.from, route.query.to];
+    if (endpoints.some(({ placeId: endpointPlaceId, levelId }) => removedIds.has(endpointPlaceId) || Boolean(levelId && removedIds.has(levelId)))) return true;
+    const alternatives = route.result.route ? [...route.result.routes, route.result.route] : route.result.routes;
+    return alternatives.some((alternative) => alternative.segments.some(({ placeId: segmentPlaceId, levelId }) => removedIds.has(segmentPlaceId) || Boolean(levelId && removedIds.has(levelId))));
+  });
+  if (routeReference) throw new Error(`Cannot delete place subtree: saved route ${routeReference.id} references the deleted place.`);
+  const next = {
+    ...project,
+    places: project.places.filter(({ id }) => !removedIds.has(id)),
+    elements: project.elements.filter(({ belongsToId }) => !removedIds.has(belongsToId)),
+    surfaces: project.surfaces.filter(({ belongsToId }) => !removedIds.has(belongsToId)),
+    constructions: project.constructions.filter(({ id }) => !constructionIds.has(id)),
+    roadJunctions: (project.roadJunctions ?? []).filter(({ belongsToId, roadIds }) => !removedIds.has(belongsToId) && roadIds.every((id) => !removedElementIds.has(id))),
+  };
   return selected.kind === "level" ? synchronizeBuildingBoundaries(next, [selected.parentId]) : next;
 }

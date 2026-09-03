@@ -4,6 +4,7 @@ import { emptyProject } from "../model/project-model";
 import { joinRoads, roadJoinNoticeKey, type RoadJoinBlockedReason } from "./road-joining";
 import { reconcileRoadRoutes } from "./road-transaction";
 import { parseProjectFile, serializeProjectFile } from "../persistence/project-file";
+import { EditorSession } from "../state/editor-session";
 
 const identity = { createId: (() => { let index = 0; return () => `junction-${++index}`; })() };
 
@@ -42,6 +43,15 @@ describe("road joining", () => {
     expect(joinRoads(result.project, [horizontal.id, vertical.id], identity).state).toBe("blocked");
     const moved = { ...result.project, elements: result.project.elements.map((road) => road.id === "vertical" ? { ...road, geometry: { kind: "path" as const, points: [{ x: 7, y: 0 }, { x: 7, y: 10 }], closed: false } } : road) }; const updated = reconcileRoadRoutes(result.project, moved)!;
     expect(updated.roadJunctions?.[0]?.point).toEqual({ x: 7, y: 5 }); const removed = reconcileRoadRoutes(updated, { ...updated, elements: updated.elements.filter(({ id }) => id !== "vertical") })!; expect(removed.roadJunctions).toEqual([]);
+  });
+
+  it("canonicalizes a persisted junction point and owner when a session opens", () => {
+    const horizontal = pathRoad("horizontal", [{ x: 0, y: 5 }, { x: 10, y: 5 }]);
+    const vertical = pathRoad("vertical", [{ x: 5, y: 0 }, { x: 5, y: 10 }]);
+    const project = projectWithRoads([horizontal, vertical]);
+    project.roadJunctions = [{ id: "junction", belongsToId: "stale-owner", point: { x: 1, y: 1 }, roadIds: [horizontal.id, vertical.id] }];
+    const opened = new EditorSession(project, { initialPlaceId: "world" }).getViewState().project;
+    expect(opened.roadJunctions).toEqual([{ id: "junction", belongsToId: "world", point: { x: 5, y: 5 }, roadIds: [horizontal.id, vertical.id] }]);
   });
 
   it("recognizes a crossing at another road's interior anchor", () => {

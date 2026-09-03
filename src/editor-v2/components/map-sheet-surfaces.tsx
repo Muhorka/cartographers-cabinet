@@ -8,6 +8,7 @@ import styles from "./map-sheet.module.css";
 import type { LabelLayoutPlan } from "../geometry/label-collision";
 import { MapSheetRegionLabel } from "./map-sheet-region-label";
 import { mapLabelWithArea, mapRegionArea } from "../geometry/map-area";
+import { selectionKey, type MapSelection } from "./map-sheet-types";
 
 export function MapSheetSurfaces({ project, activePlaceId, prefix, selected, movingIds, movingTransform, selectionEditing, selectionOnly = false, viewportZoom, showArea = false, units = "metric", labelPlan, onSelect }: {
   project: EditorProject;
@@ -22,18 +23,18 @@ export function MapSheetSurfaces({ project, activePlaceId, prefix, selected, mov
   showArea?: boolean;
   units?: "metric" | "imperial";
   labelPlan?: LabelLayoutPlan;
-  onSelect?(id: string, additive?: boolean): void;
+  onSelect?(selection: MapSelection, additive?: boolean): void;
 }) {
   const visible = project.surfaces.flatMap((surface, index) => {
     const depth = surfaceContextDepth(project, activePlaceId, surface);
     return depth === undefined || !surface.visible ? [] : [{ surface, depth, index }];
   }).toSorted((first, second) => first.depth - second.depth || first.index - second.index);
   return visible.map(({ surface, depth }) => {
-    const editable = depth === 0 && selectionEditing; const selectable = depth !== undefined && (selectionOnly || editable); const isSelected = selected.has(surface.id);
+    const editable = depth === 0 && selectionEditing; const selectable = depth !== undefined && (selectionOnly || editable); const surfaceSelection = { kind: "surface" as const, id: surface.id }; const isSelected = selected.has(selectionKey(surfaceSelection));
     const ownerTransform = depth === 0 ? undefined : matrixAttribute(relativePlaceMatrix(project, activePlaceId, surface.belongsToId));
     const clipId = `${prefix}-surface-${safeId(surface.id)}`; const label = (labelPlan?.get(`surface:${surface.belongsToId}:${surface.id}`) as ReturnType<typeof regionLabelLayout> | undefined) ?? regionLabelLayout(mapLabelWithArea(surface.name, mapRegionArea(surface.shape), units, showArea), surface.shape, viewportZoom, false);
     const vertices = regionVertices(surface.shape); const corners: ResizeCorner[] = ["north-west", "north-east", "south-east", "south-west"];
-    return <g key={surface.id} transform={ownerTransform}><g transform={movingIds.has(surface.id) ? movingTransform : undefined} className={`${styles.surface}${isSelected ? ` ${styles.selected}` : ""}`} style={{ opacity: depth === 0 ? 1 : depth < 0 ? .44 : .68, pointerEvents: selectable ? undefined : "none" }} data-selectable={selectable ? "true" : undefined} data-selection-layer={selectable ? "construction" : undefined} data-selection-kind={selectable ? "surface" : undefined} data-selection-id={selectable ? surface.id : undefined} role={selectable ? "button" : undefined} tabIndex={selectable ? 0 : undefined} aria-label={selectable ? surface.name : undefined} onClick={selectable ? (event) => { event.stopPropagation(); onSelect?.(surface.id, additive(event)); } : undefined} onKeyDown={selectable ? (event) => activate(event, () => onSelect?.(surface.id)) : undefined}>
+    return <g key={selectionKey(surfaceSelection)} transform={ownerTransform}><g transform={movingIds.has(surface.id) ? movingTransform : undefined} className={`${styles.surface}${isSelected ? ` ${styles.selected}` : ""}`} style={{ opacity: depth === 0 ? 1 : depth < 0 ? .44 : .68, pointerEvents: selectable ? undefined : "none" }} data-selectable={selectable ? "true" : undefined} data-selection-layer={selectable ? "construction" : undefined} data-selection-kind={selectable ? "surface" : undefined} data-selection-id={selectable ? surface.id : undefined} role={selectable ? "button" : undefined} tabIndex={selectable ? 0 : undefined} aria-label={selectable ? surface.name : undefined} onClick={selectable ? (event) => { event.stopPropagation(); onSelect?.(surfaceSelection, additive(event)); } : undefined} onKeyDown={selectable ? (event) => activate(event, () => onSelect?.(surfaceSelection)) : undefined}>
       <defs><clipPath id={clipId}><path d={regionPath(surface.shape)} fillRule="evenodd"/></clipPath>{label?.kind === "boundary" && <path id={`${clipId}-label-path`} d={label.path}/>}</defs>
       <path className={styles.surfaceRegion} style={{ fill: surface.appearance?.fillColor, fillOpacity: surface.appearance?.fillOpacity }} d={regionPath(surface.shape)} fillRule="evenodd"/>
       {label && <MapSheetRegionLabel layout={label} clipId={clipId} pathId={`${clipId}-label-path`}/>}

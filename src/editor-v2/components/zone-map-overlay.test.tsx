@@ -49,7 +49,9 @@ describe("zone ink shared by drawing and story", () => {
     project.story.zones[0].members = ["first", "second", "upstairs"].map((id) => ({
       ref: { kind: "room", id, scopeId: id === "upstairs" ? "upper:plan" : "ground:plan" }, relation: "inside", partial: false,
     }));
-    expect(render(project, "district", "east").querySelectorAll("path")).toHaveLength(2);
+    // A building with multiple levels has no single construction viewport;
+    // room overlays become unambiguous once a level is active.
+    expect(render(project, "district", "east").querySelectorAll("path")).toHaveLength(0);
     expect(render(project, "district", "ground").querySelectorAll("path")).toHaveLength(2);
     expect(render(project, "district", "upper").querySelectorAll("path")).toHaveLength(1);
     expect(render(project, "district", "world").querySelectorAll("path")).toHaveLength(0);

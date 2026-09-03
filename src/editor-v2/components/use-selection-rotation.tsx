@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { canRotateSelection, rotateSelection, rotationSelectionBounds, type RotationReason } from "../drawing/selection-rotation";
 import type { EditorSession, EditorSessionState } from "../state/editor-session";
-import type { MapSelection } from "./map-sheet-types";
+import { selectionKey, type MapSelection } from "./map-sheet-types";
 import type { EditorProject } from "../model/project-model";
 import type { DrawingNoticeModel } from "./drawing-notice";
 import type { SelectionRotationControl } from "./selection-rotation-handle";
@@ -21,7 +21,7 @@ const reasons: Record<RotationReason, [string, string]> = {
 export function useSelectionRotation({ session, snapshot, selections, locale, refresh, onSelections }: { session?: EditorSession; snapshot?: EditorSessionState; selections: MapSelection[]; locale: "pl" | "en"; refresh(): void; onSelections(selections: MapSelection[]): void }) {
   const [draft, setDraft] = useState<{ source: EditorProject; key: string; project: EditorProject }>();
   const [failure, setFailure] = useState<string>();
-  const key = `${snapshot?.activePlaceId}:${snapshot?.boundaryEditing}:${selections.map(({ kind, id }) => `${kind}:${id}`).join("|")}`;
+  const key = JSON.stringify([snapshot?.activePlaceId ?? null, Boolean(snapshot?.boundaryEditing), selections.map(selectionKey)]);
   const identity = useMemo(() => ({ createId: () => crypto.randomUUID(), createRoomName: (index: number) => locale === "pl" ? `Pomieszczenie ${index}` : `Room ${index}` }), [locale]);
   const capability = snapshot?.activePlaceId && selections.length ? canRotateSelection(snapshot.project, snapshot.activePlaceId, selections, snapshot.boundaryEditing) : undefined;
   const bounds = useMemo(() => snapshot?.activePlaceId && selections.length ? rotationSelectionBounds(snapshot.project, snapshot.activePlaceId, selections) : undefined, [snapshot, selections]);

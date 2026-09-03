@@ -47,10 +47,13 @@ export function usePersistedTextareaSizes(root: RefObject<HTMLElement | null>, p
     };
     const resizeObserver = new ResizeObserver((entries) => {
       let changed = false;
-      for (const { target } of entries) {
+      for (const { target, contentRect } of entries) {
         const textarea = target as HTMLTextAreaElement;
         const key = textareaKey(textarea);
-        const height = textarea.style.height;
+        // CSS `resize: vertical` changes the used height, not necessarily the
+        // inline style. ResizeObserver is the browser's source of truth for
+        // that manual resize; an explicit style still wins when present.
+        const height = validHeight.test(textarea.style.height) ? textarea.style.height : `${Math.round(contentRect.height)}px`;
         if (!key || !validHeight.test(height) || sizes[key] === height) continue;
         sizes[key] = height;
         changed = true;
