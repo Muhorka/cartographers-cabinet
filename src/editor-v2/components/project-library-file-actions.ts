@@ -13,12 +13,13 @@ function projectLibraryExportError(error: unknown, locale: EditorLocale) {
   return locale === "pl" ? "Nie udało się wyeksportować widoku. Projekt pozostaje zapisany." : "View export failed. Your project is still saved.";
 }
 
-export function projectLibraryFileActions({ snapshot, projects, locale, viewport, onError, onImport }: {
+export function projectLibraryFileActions({ snapshot, projects, getActiveProject, locale, viewport, onError, onImport }: {
   snapshot?: EditorSessionState; projects: EditorProject[]; locale: EditorLocale;
+  getActiveProject?(): EditorProject | undefined;
   viewport?: ProjectRenderOptions["viewport"];
   onError(error?: string): void; onImport(project: EditorProject): void;
 }) {
-  const find = (id: string) => snapshot?.project.id === id ? snapshot.project : projects.find((project) => project.id === id);
+  const find = (id: string) => { const active = getActiveProject?.(); return active?.id === id ? active : snapshot?.project.id === id ? snapshot.project : projects.find((project) => project.id === id); };
   return {
     exportProject(id: string) { const project = find(id); if (project) exportProjectFile(project); },
     async exportView(id: string, format: ProjectViewExportFormat) {

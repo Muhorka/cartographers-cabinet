@@ -93,7 +93,7 @@ export function replaceLegacyStoryGroups(story: StoryData, groups: readonly Stor
 
 function migrateStoryDataUncached(input: unknown): StoryData {
   if (input === undefined || input === null) return emptyStoryData();
-  const canonicalInput = input && typeof input === "object" && (input as { version?: unknown }).version === 1 ? { routes: [], ...(input as Record<string, unknown>) } : input;
+  const canonicalInput = input && typeof input === "object" && (input as { version?: unknown }).version === 1 ? { routes: [], documents: [], ...(input as Record<string, unknown>) } : input;
   const canonical = storyDataSchema.safeParse(canonicalInput); if (canonical.success) return normalizeStoryZones(canonical.data);
   if (!input || typeof input !== "object") return emptyStoryData();
   const source = input as Record<string, unknown>;

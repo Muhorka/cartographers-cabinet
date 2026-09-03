@@ -24,7 +24,7 @@ function StoryReadHarness({ session }: { session: EditorSession }) {
     inspectedPlaceId: snapshot.activePlaceId,
     locale: "en",
     mode: "drawing",
-    refresh: vi.fn(),
+    refresh: vi.fn(), persistNotebook: vi.fn(async () => true),
     zoom: 6,
     onSelect: vi.fn(),
     onFocus: vi.fn(() => false),

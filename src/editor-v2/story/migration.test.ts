@@ -8,6 +8,12 @@ const room = { kind: "room" as const, id: "room", scopeId: "level" };
 const metadata = { tags: ["quiet"], properties: { mood: "calm" as const } };
 
 describe("story zone migration", () => {
+  it("adds an empty notebook to projects saved before documents existed", () => {
+    const legacy = { ...emptyStoryData() } as Record<string, unknown>;
+    delete legacy.documents;
+    expect(migrateStoryData(legacy).documents).toEqual([]);
+  });
+
   it("moves legacy groups into zones without losing members, metadata, entry ids, or lens predicates", () => {
     const group: StoryGroup = { id: "rooms", name: "Rooms", description: "Shared rooms", memberRefs: [room], entryIds: ["staff"], metadata };
     const story = { ...emptyStoryData(), groups: [group], lenses: [{ id: "rooms-lens", name: "Rooms", color: "#123456", expression: { kind: "all" as const, items: [{ kind: "predicate" as const, predicate: { kind: "group" as const, groupId: "rooms" } }, { kind: "not" as const, item: { kind: "predicate" as const, predicate: { kind: "group" as const, groupId: "unknown" } } }] } }] };

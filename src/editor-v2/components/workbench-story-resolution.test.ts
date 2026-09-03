@@ -47,7 +47,7 @@ function largeSession(withEntityProperty = false) {
 
 function StoryHarness({ session, mode }: { session: EditorSession; mode: "drawing" | "story" }) {
   const snapshot = session.getViewState();
-  const workbench = useWorkbenchStory({ session, snapshot, selections: [], inspectedPlaceId: "world", locale: "en", mode, refresh: vi.fn(), zoom: 1, onSelect: vi.fn(), onFocus: vi.fn(() => false), onOpenPlace: vi.fn(), onOpenWorldbook: vi.fn() });
+  const workbench = useWorkbenchStory({ session, snapshot, selections: [], inspectedPlaceId: "world", locale: "en", mode, refresh: vi.fn(), persistNotebook: vi.fn(async () => true), zoom: 1, onSelect: vi.fn(), onFocus: vi.fn(() => false), onOpenPlace: vi.fn(), onOpenWorldbook: vi.fn() });
   return createElement("div", null, workbench.inspector);
 }
 
@@ -84,7 +84,7 @@ describe("lazy workbench Story resolution", () => {
     const session = largeSession();
     function Harness({ mode }: { mode: "drawing" | "story" }) {
       const snapshot = session.getViewState();
-      useWorkbenchStory({ session, snapshot, selections: [], inspectedPlaceId: "world", locale: "en", mode, refresh: vi.fn(), zoom: 1, onSelect: vi.fn(), onFocus: vi.fn(() => false), onOpenPlace: vi.fn(), onOpenWorldbook: vi.fn() });
+      useWorkbenchStory({ session, snapshot, selections: [], inspectedPlaceId: "world", locale: "en", mode, refresh: vi.fn(), persistNotebook: vi.fn(async () => true), zoom: 1, onSelect: vi.fn(), onFocus: vi.fn(() => false), onOpenPlace: vi.fn(), onOpenWorldbook: vi.fn() });
       return createElement("output", null, "ready");
     }
     const host = document.createElement("div");

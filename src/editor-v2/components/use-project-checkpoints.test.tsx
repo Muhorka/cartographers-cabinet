@@ -7,7 +7,7 @@ import { useProjectCheckpoints } from "./use-project-checkpoints";
 const storage = vi.hoisted(() => ({ list: vi.fn(), load: vi.fn(), save: vi.fn(), remove: vi.fn() }));
 vi.mock("../persistence/project-library", () => ({ listProjectCheckpoints: storage.list, loadProjectCheckpoint: storage.load, saveProjectCheckpoint: storage.save, removeProjectCheckpoint: storage.remove, saveProject: vi.fn(), restoreProjectCheckpoint: vi.fn() }));
 let host: HTMLDivElement; let root: ReturnType<typeof createRoot>; let hook: ReturnType<typeof useProjectCheckpoints>;
-function Probe({ project }: { project: EditorProject }) { const value = useProjectCheckpoints(project, "pl"); useLayoutEffect(() => { hook = value; }); return null; }
+function Probe({ project, current = project }: { project: EditorProject; current?: EditorProject }) { const value = useProjectCheckpoints(project, "pl", () => current); useLayoutEffect(() => { hook = value; }); return null; }
 const summary = (id: string, projectId = "p") => ({ id, projectId, name: id, createdAt: "2026-01-01T00:00:00.000Z" });
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); vi.resetAllMocks();
@@ -61,5 +61,14 @@ describe("checkpoint contents load on demand", () => {
     expect(hook.error).toBe("Nie udało się usunąć tej wersji. Zachowana wersja nadal jest dostępna."); expect(hook.items).toHaveLength(2); expect(hook.activeId).toBeUndefined();
     storage.remove.mockResolvedValueOnce(undefined); await act(async () => { await hook.remove("a"); });
     expect(hook.error).toBeUndefined(); expect(hook.items.map(({ id }) => id)).toEqual(["b"]);
+  });
+
+  it("preserves the live notebook document when the rendered project is stale", async () => {
+    const rendered = emptyProject("p", "Rendered"); const current = structuredClone(rendered);
+    current.story.documents = [{ id: "note", title: "Latest", bodyMarkdown: "Current text", references: [] }];
+    storage.save.mockImplementation(async (project: EditorProject) => ({ ...summary("live"), snapshot: project }));
+    await act(async () => root.render(<Probe project={rendered} current={current}/>));
+    await act(async () => { await hook.preserve("live"); });
+    expect(storage.save).toHaveBeenCalledWith(current, "live");
   });
 });

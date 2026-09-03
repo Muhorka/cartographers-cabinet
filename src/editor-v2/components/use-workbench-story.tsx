@@ -30,16 +30,19 @@ import { useStoryWorkspacePanels } from "./use-story-workspace-panels";
 import { replaceProjectScenarios } from "../story/scenario-commands";
 import { useStoryRouteInteraction } from "./use-story-route-interaction";
 import { createWorkbenchStoryResolution, storyInspectorNeedsObjectCatalog } from "./workbench-story-resolution";
+import { StoryNotebook, StoryNotebookToggle } from "../story/components/story-notebook";
+import type { EditorProject } from "../model/project-model";
 
 const empty = emptyStoryData();
-export function useWorkbenchStory({ session, snapshot, selections, inspectedPlaceId, locale, mode, refresh, zoom, onSelect, onFocus, onOpenPlace, onOpenWorldbook }: {
+export function useWorkbenchStory({ session, snapshot, selections, inspectedPlaceId, locale, mode, refresh, persistNotebook, zoom, onSelect, onFocus, onOpenPlace, onOpenWorldbook }: {
   session?: EditorSession; snapshot?: EditorSessionState; selections: MapSelection[]; locale: "pl" | "en";
   inspectedPlaceId?: string;
-  mode: "drawing" | "story"; refresh(): void; zoom: number; onSelect(selection: MapSelection): void; onFocus(refs: StoryObjectRef[]): boolean; onOpenPlace(id: string): void; onOpenWorldbook(): void;
+  mode: "drawing" | "story"; refresh(): void; persistNotebook(project: EditorProject): Promise<boolean>; zoom: number; onSelect(selection: MapSelection): void; onFocus(refs: StoryObjectRef[]): boolean; onOpenPlace(id: string): void; onOpenWorldbook(): void;
 }) {
   const project = snapshot?.project; const copy = storyCopy[locale];
   const [error, setError] = useState<string>();
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [notebookOpen, setNotebookOpen] = useState(false);
   const [bookOpen, setBookOpen] = useState<Partial<Record<StoryDisclosureSection, boolean>>>({ tree: true, zones: false });
   const showWorldbook = () => { setBookOpen((current) => ({ ...current, worldbook: true })); onOpenWorldbook(); };
   const showRoutes = () => { setBookOpen((current) => ({ ...current, routes: true, worldbook: false })); };
@@ -150,6 +153,16 @@ export function useWorkbenchStory({ session, snapshot, selections, inspectedPlac
   const inspectorStory = project ? { ...project.story, objects: [...project.story.objects.filter(({ ref }) => !selected.some((item) => storyRefKey(item.ref) === storyRefKey(ref))), ...selected.map(({ ref, metadata }) => ({ ref, metadata }))] } : empty;
   return {
     liveContext, setView, zoneInspector: zones.inspector ? <>{error && <p role="alert">{error}</p>}{zones.inspector}</> : undefined, clearZone: zones.clear, displayProject: renderedProject, pointPicker,
+    notebook: project ? <StoryNotebook key={project.id} open={notebookOpen} locale={locale} documents={project.story.documents} objects={resolvedObjects} scenarios={project.story.scenarios} onClose={() => setNotebookOpen(false)} onFocus={onFocus} onScenario={(id) => setView({ scenarioId: id })} onDocumentsDraftChange={(documents) => {
+      if (!session) return false;
+      const result = session.replaceStoryDocuments(documents);
+      return result.code === "committed" || result.code === "no-change";
+    }} onDocumentsChange={async (documents) => {
+      if (!session) return false;
+      const result = session.replaceStoryDocuments(documents);
+      if (result.code !== "committed" && result.code !== "no-change") return false;
+      return persistNotebook(session.getViewState().project);
+    }}/> : undefined,
     leftBookProps: {
       labels: { tree: workbenchCopy[locale].projectTree, worldbook: copy.worldbook, zones: copy.zones, lenses: copy.lenses, routes: copy.routes, properties: copy.propertyDictionary },
       zones: zones.list,
@@ -166,6 +179,7 @@ export function useWorkbenchStory({ session, snapshot, selections, inspectedPlac
     },
     toolbar: <div className={styles.toolbar}><StoryTopBar copy={copy} view={view} lenses={controller.collections.lenses} scenarios={controller.collections.scenarios} steps={scenario?.steps} routes={controller.collections.routes} previewRoute={routeInteraction.route} onStep={setStepId} onChange={(patch) => { updateView(patch); if ("activeScenarioId" in patch) setStepId(undefined); if ("activeRouteId" in patch) setRouteSelectionVersion((version) => version + 1); }} onScenario={(id) => setView({ scenarioId: id || undefined })}/>
       {workspace.controls}{workspace.notice}
+      <div className={styles.notebookAction}><StoryNotebookToggle open={notebookOpen} locale={locale} onClick={() => setNotebookOpen((open) => !open)}/></div>
       <div className={styles.history}><button type="button" disabled={!session?.getHistoryState().canUndo} onClick={() => { session?.undo(); refresh(); }}>{locale === "pl" ? "Cofnij" : "Undo"}</button><button type="button" disabled={!session?.getHistoryState().canRedo} onClick={() => { session?.redo(); refresh(); }}>{locale === "pl" ? "Ponów" : "Redo"}</button></div>
       {pointRequest && <p role="status">{locale === "pl" ? `Wskaż ${pointRequest.endpoint === "from" ? "początek" : "koniec"} trasy na mapie.` : `Pick the route ${pointRequest.endpoint} point on the map.`}<button type="button" onClick={routeInteraction.cancelPoint}>{locale === "pl" ? "Anuluj" : "Cancel"}</button></p>}
       {staleRoute && <p role="status">{locale === "pl" ? "Plan lub reguły się zmieniły — zapisana trasa wymaga przeliczenia." : "The plan or rules changed — recalculate the saved route."}<button type="button" onClick={() => openWorldbook("routes")}>{locale === "pl" ? "Otwórz i przelicz" : "Open and recalculate"}</button></p>}

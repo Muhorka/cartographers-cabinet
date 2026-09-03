@@ -7,18 +7,18 @@ import type { MapSheet } from "./map-sheet";
 import { EditorWorkbench } from "./editor-workbench";
 import type { useEditorV2Tools } from "../webmcp/use-editor-tools";
 
-const fixture = vi.hoisted(() => ({ project: undefined as EditorProject | undefined, sheet: undefined as ComponentProps<typeof MapSheet> | undefined, actions: undefined as Parameters<typeof useEditorV2Tools>[2] | undefined, save: vi.fn(), preference: vi.fn(), remove: vi.fn() }));
+const fixture = vi.hoisted(() => ({ project: undefined as EditorProject | undefined, sheet: undefined as ComponentProps<typeof MapSheet> | undefined, sheetRenders: 0, actions: undefined as Parameters<typeof useEditorV2Tools>[2] | undefined, save: vi.fn(), preference: vi.fn(), remove: vi.fn() }));
 vi.mock("../persistence/project-library", async (original) => ({
   ...await original<typeof import("../persistence/project-library")>(),
   scanProjectLibrary: async () => ({ projects: [fixture.project!, createStarterProject("q", "Other project", "pl"), createStarterProject("r", "Third project", "pl")], recoveryRecords: [] }), getPreference: fixture.preference,
-  setPreference: async () => {}, listProjectCheckpoints: async () => [], saveProject: fixture.save, removeProject: fixture.remove,
+  setPreference: async () => {}, listProjectCheckpoints: async () => [], saveProject: fixture.save, saveStoryDocuments: fixture.save, removeProject: fixture.remove,
 }));
 vi.mock("../webmcp/use-editor-tools", () => ({ useEditorV2Tools: (_session: unknown, _place: unknown, actions: Parameters<typeof useEditorV2Tools>[2]) => { fixture.actions = actions; } }));
-vi.mock("./map-sheet", () => ({ MapSheet: (props: ComponentProps<typeof MapSheet>) => { fixture.sheet = props; return <svg/>; } }));
+vi.mock("./map-sheet", () => ({ MapSheet: (props: ComponentProps<typeof MapSheet>) => { fixture.sheet = props; fixture.sheetRenders += 1; return <svg/>; } }));
 let host: HTMLDivElement; let root: ReturnType<typeof createRoot>;
 beforeEach(async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); vi.useFakeTimers();
-  fixture.project = createStarterProject("p", "Autosave fixture", "pl"); fixture.save.mockReset().mockImplementation(async (project) => project);
+  fixture.project = createStarterProject("p", "Autosave fixture", "pl"); fixture.project.story.documents = [{ id: "note", title: "Scena", bodyMarkdown: "Treść", references: [] }]; fixture.sheetRenders = 0; fixture.save.mockReset().mockImplementation(async (project) => project);
   fixture.preference.mockReset().mockImplementation(async (key: string) => key === "locale" ? "pl" : key === "activePlaceId:p" ? "p:level" : undefined); fixture.remove.mockReset().mockResolvedValue(undefined);
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
   await act(async () => root.render(<EditorWorkbench/>));
@@ -27,6 +27,48 @@ beforeEach(async () => {
 afterEach(() => { act(() => root.unmount()); host.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe("autosave follows the document rather than view updates", () => {
+  it("saves notebook text without repainting the map and reopens the live document", async () => {
+    act(() => [...host.querySelectorAll("button")].find((button) => button.textContent === "Opowieść")!.click());
+    act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Otwórz notatnik autora"]')!.click());
+    const title = host.querySelector<HTMLInputElement>('input[aria-label="Tytuł notatki"]')!;
+    const rendersBeforeTyping = fixture.sheetRenders;
+    act(() => { const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!; setter.call(title, "Scena po zmianie"); title.dispatchEvent(new Event("input", { bubbles: true })); });
+    await act(async () => vi.advanceTimersByTimeAsync(700));
+
+    expect(fixture.save).toHaveBeenCalledTimes(1);
+    expect(fixture.save.mock.calls[0][0].story.documents[0].title).toBe("Scena po zmianie");
+    expect(fixture.sheetRenders).toBe(rendersBeforeTyping);
+
+    await act(async () => { expect(await fixture.actions!.openProject("q")).toBe(true); expect(await fixture.actions!.openProject("p")).toBe(true); });
+    expect(fixture.sheet!.project.story.documents[0].title).toBe("Scena po zmianie");
+  });
+
+  it("flushes an unfinished notebook edit when leaving Story mode", async () => {
+    act(() => [...host.querySelectorAll("button")].find((button) => button.textContent === "Opowieść")!.click());
+    act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Otwórz notatnik autora"]')!.click());
+    const title = host.querySelector<HTMLInputElement>('input[aria-label="Tytuł notatki"]')!;
+    act(() => { const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!; setter.call(title, "Ostatni znak"); title.dispatchEvent(new Event("input", { bubbles: true })); });
+    act(() => [...host.querySelectorAll("button")].find((button) => button.textContent === "Kreślenie")!.click());
+    await act(async () => vi.runAllTimersAsync());
+
+    expect(fixture.save).toHaveBeenCalledTimes(1);
+    expect(fixture.save.mock.calls[0][0].story.documents[0].title).toBe("Ostatni znak");
+
+    act(() => [...host.querySelectorAll("button")].find((button) => button.textContent === "Opowieść")!.click());
+    expect(fixture.sheet!.project.story.documents[0].title).toBe("Ostatni znak");
+  });
+
+  it("flushes the current notebook draft before an immediate project switch", async () => {
+    act(() => [...host.querySelectorAll("button")].find((button) => button.textContent === "Opowieść")!.click());
+    act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Otwórz notatnik autora"]')!.click());
+    const title = host.querySelector<HTMLInputElement>('input[aria-label="Tytuł notatki"]')!;
+    act(() => { const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!; setter.call(title, "Przed przełączeniem"); title.dispatchEvent(new Event("input", { bubbles: true })); });
+
+    await act(async () => { expect(await fixture.actions!.openProject("q")).toBe(true); expect(await fixture.actions!.openProject("p")).toBe(true); });
+    expect(fixture.sheet!.project.story.documents[0].title).toBe("Przed przełączeniem");
+    expect(fixture.save.mock.calls.some(([project]) => project.id === "p" && project.story.documents[0].title === "Przed przełączeniem")).toBe(true);
+  });
+
   it("keeps project identity and does not save for repeated selection, pan and navigation", async () => {
     const before = fixture.sheet!.project;
     for (let index = 0; index < 12; index += 1) {

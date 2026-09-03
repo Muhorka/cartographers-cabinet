@@ -1,8 +1,10 @@
 import "fake-indexeddb/auto";
 import Dexie from "dexie";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createStarterProject } from "../model/starter-project";
-import { ProjectConflictError, ProjectLibraryDatabase, scanProjectLibrary, scanProjectRecords } from "./project-library";
+import type { EditorProject } from "../model/project-model";
+import { ProjectConflictError, ProjectLibraryDatabase, readProjectCheckpoint, removeProjectCheckpoint, saveProjectCheckpoint, scanProjectLibrary, scanProjectRecords } from "./project-library";
+import type { AutosaveOutcome } from "./project-autosave";
 import { ProjectSaveQueue } from "./project-save-queue";
 
 const databaseName = "cartographers-cabinet-v4";
@@ -90,5 +92,118 @@ describe("project library cross-tab heads", () => {
     } finally {
       first.close(); second.close(); await Dexie.delete(name);
     }
+  });
+
+  it("uses the same revision fence for notebook and full-project saves", async () => {
+    const name = `${databaseName}-notebook-race-${crypto.randomUUID()}`;
+    const first = new ProjectLibraryDatabase(name); const second = new ProjectLibraryDatabase(name);
+    try {
+      await Promise.all([first.open(), second.open()]);
+      const base = createStarterProject("notebook-race", "Notebook race", "en");
+      await first.saveProject(base);
+      const firstDocuments = [{ id: "note", title: "First", bodyMarkdown: "One", references: [] }];
+      const secondDocuments = [{ id: "note", title: "Second", bodyMarkdown: "Two", references: [] }];
+
+      await first.saveStoryDocuments(base.id, firstDocuments, 1);
+      await expect(second.saveStoryDocuments(base.id, secondDocuments, 1)).rejects.toMatchObject({ code: "project-conflict", actualRevision: 2 });
+      await expect(second.saveProject({ ...base, name: "Stale full save" }, 1)).rejects.toMatchObject({ code: "project-conflict", actualRevision: 2 });
+      expect((await first.projects.get(base.id))?.story.documents).toEqual([]);
+      expect((await first.storyDocuments.get(base.id))?.documents).toEqual(firstDocuments);
+
+      const promoted = await first.saveProject({ ...base, story: { ...base.story, documents: firstDocuments } }, 2);
+      expect(promoted.revision).toBe(3);
+      expect(await first.storyDocuments.get(base.id)).toBeUndefined();
+      expect((await first.projects.get(base.id))?.story.documents).toEqual(firstDocuments);
+    } finally {
+      first.close(); second.close(); await Dexie.delete(name);
+    }
+  });
+
+  it("prevents both notebook and full saves from resurrecting a deleted project", async () => {
+    const name = `${databaseName}-notebook-delete-${crypto.randomUUID()}`;
+    const database = new ProjectLibraryDatabase(name);
+    try {
+      await database.open();
+      const base = createStarterProject("notebook-deleted", "Notebook deleted", "en");
+      await database.saveProject(base);
+      await database.removeProject(base.id, 1);
+      await expect(database.saveStoryDocuments(base.id, [], 1)).rejects.toMatchObject({ code: "project-conflict", deleted: true });
+      await expect(database.saveProject(base, 1)).rejects.toMatchObject({ code: "project-conflict", deleted: true });
+      expect(await database.projects.get(base.id)).toBeUndefined();
+      expect(await database.storyDocuments.get(base.id)).toBeUndefined();
+    } finally {
+      database.close(); await Dexie.delete(name);
+    }
+  });
+});
+
+describe("project checkpoint ownership", () => {
+  it("rejects deleting a checkpoint through another project and preserves it", async () => {
+    const owner = createStarterProject(`checkpoint-owner-${crypto.randomUUID()}`, "Owner", "en");
+    const otherProjectId = `checkpoint-other-${crypto.randomUUID()}`;
+    const checkpoint = await saveProjectCheckpoint(owner, "Keep me", { id: `checkpoint-${crypto.randomUUID()}` });
+
+    await expect(removeProjectCheckpoint(checkpoint.id, otherProjectId)).rejects.toThrow(/not found in this project/i);
+    await expect(readProjectCheckpoint(checkpoint.id, owner.id)).resolves.toMatchObject({ id: checkpoint.id, projectId: owner.id });
+    await removeProjectCheckpoint(checkpoint.id, owner.id);
+  });
+});
+
+describe("project library notebook migration", () => {
+  it("adds notebook storage without changing existing project-head revisions", async () => {
+    const name = `${databaseName}-heads-v3-${crypto.randomUUID()}`;
+    const base = createStarterProject("migrated-head", "Migrated head", "en");
+    const legacy = new Dexie(name);
+    legacy.version(3).stores({ projects: "id,updatedAt,name", preferences: "key", checkpoints: "id,projectId,createdAt,[projectId+createdAt]", projectHeads: "id" });
+    await legacy.open(); await legacy.table("projects").put(base); await legacy.table("projectHeads").put({ id: base.id, revision: 7, deleted: false }); legacy.close();
+    const upgraded = new ProjectLibraryDatabase(name, { captureAlternateVersionThree: true });
+    try {
+      await upgraded.open();
+      expect(await upgraded.projectHeads.get(base.id)).toEqual({ id: base.id, revision: 7, deleted: false });
+      expect(upgraded.tables.map(({ name }) => name)).toContain("storyDocuments");
+    } finally {
+      upgraded.close(); await Dexie.delete(name);
+    }
+  });
+
+  it("adopts a legacy notebook overlay into the shared revision stream", async () => {
+    const name = `${databaseName}-documents-v3-${crypto.randomUUID()}`;
+    const base = createStarterProject("migrated-note", "Migrated note", "en");
+    const documents = [{ id: "legacy-note", title: "Legacy", bodyMarkdown: "Preserved", references: [] }];
+    const legacy = new Dexie(name);
+    legacy.version(3).stores({ projects: "id,updatedAt,name", preferences: "key", checkpoints: "id,projectId,createdAt,[projectId+createdAt]", storyDocuments: "projectId,updatedAt" });
+    await legacy.open(); await legacy.table("projects").put(base); await legacy.table("storyDocuments").put({ projectId: base.id, documents, updatedAt: base.updatedAt }); legacy.close();
+    const upgraded = new ProjectLibraryDatabase(name, { captureAlternateVersionThree: true });
+    try {
+      await upgraded.open();
+      expect(await upgraded.projectHeads.get(base.id)).toEqual({ id: base.id, revision: 2, deleted: false });
+      expect(await upgraded.storyDocuments.get(base.id)).toMatchObject({ documents, revision: 2 });
+    } finally {
+      upgraded.close(); await Dexie.delete(name);
+    }
+  });
+});
+
+describe("project save queue notebook ordering", () => {
+  it("does not run a queued notebook save after deletion has started", async () => {
+    const project = createStarterProject("queued-delete", "Queued delete", "en");
+    let finishFullSave!: () => void;
+    const save = vi.fn((candidate: EditorProject) => new Promise<AutosaveOutcome>((resolve) => {
+      finishFullSave = () => resolve({ state: "saved", project: candidate, revision: 2 });
+    }));
+    const saveDocuments = vi.fn(async (candidate: typeof project) => ({ state: "saved" as const, project: candidate, revision: 3 }));
+    const remove = vi.fn(async () => undefined);
+    const queue = new ProjectSaveQueue({ revisionForId: () => 1, save, saveDocuments });
+    const full = queue.save(project);
+    await vi.waitFor(() => expect(save).toHaveBeenCalledOnce());
+    const notebook = queue.saveStoryDocuments({ ...project, story: { ...project.story, documents: [{ id: "note", title: "Note", bodyMarkdown: "Text", references: [] }] } });
+    const deletion = queue.remove(project.id, remove);
+    finishFullSave();
+
+    await expect(full).resolves.toMatchObject({ state: "saved", revision: 2 });
+    await expect(notebook).resolves.toMatchObject({ state: "failed" });
+    await deletion;
+    expect(saveDocuments).not.toHaveBeenCalled();
+    expect(remove).toHaveBeenCalledWith(2);
   });
 });

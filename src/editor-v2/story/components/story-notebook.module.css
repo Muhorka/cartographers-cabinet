@@ -1,0 +1,54 @@
+.toggle { composes: button from "../../components/book-controls.module.css"; display: inline-flex; align-items: center; gap: .3rem; --book-button-border: #a57c3d66; --book-button-face: #382d25; --book-button-hover-face: #49382c; }
+.toggleActive { --book-button-border: #a8823e; --book-button-face: #49382c; }
+.toggle svg { width: 1rem; height: 1rem; overflow: visible; fill: #62462f; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
+.notebook { position: absolute; z-index: 14; top: 0; right: 0; bottom: 0; min-width: 22rem; max-width: 75%; color: #33291d; border: 1px solid #9d7942; background: linear-gradient(100deg, #d9c99e 0, #f1e5c4 4%, #efe1bc 96%, #cbb887); box-shadow: -12px 5px 32px #0009, inset 12px 0 20px #70552b22; }
+.closed { display: none; }
+.resizeHandle { position: absolute; z-index: 2; top: 0; bottom: 0; left: -7px; width: 14px; cursor: ew-resize; touch-action: none; }
+.resizeHandle::after { position: absolute; top: 40%; bottom: 40%; left: 6px; width: 2px; content: ""; background: #9a7848aa; }
+.resizeHandle:focus-visible { outline: 2px solid #f2d485; outline-offset: -3px; }
+.header { display: flex; align-items: center; justify-content: space-between; min-height: 4rem; padding: .65rem 1rem .5rem; border-bottom: 1px solid #9c7b4d88; background: #392d20; color: #ead9ac; }
+.header small { display: block; color: #bba675; font-size: .58rem; letter-spacing: .18em; text-transform: uppercase; }
+.header h2 { margin: .1rem 0 0; font-size: 1.25rem; font-style: italic; font-weight: 400; }
+.header button { color: inherit; border: 0; background: transparent; cursor: pointer; font: 1.6rem/1 Georgia, serif; }
+.layout { display: grid; height: calc(100% - 4rem); min-height: 0; grid-template-columns: minmax(7rem, 24%) minmax(0, 1fr); }
+.index { display: flex; min-width: 0; flex-direction: column; gap: .25rem; overflow: auto; padding: .7rem .5rem; border-right: 1px solid #9a784866; background: #c9b78588; }
+.index button { overflow: hidden; padding: .42rem .5rem; color: #4d3b27; border: 1px solid transparent; background: transparent; cursor: pointer; text-align: left; text-overflow: ellipsis; white-space: nowrap; font: .78rem Georgia, serif; }
+.index button:hover, .index button:focus-visible, .index .selected { border-color: #9a7848; background: #f4e8c5; }
+.index .newButton { margin-bottom: .35rem; color: #f0dfb4; border-color: #6f5130; background: #4b3927; text-align: center; }
+.page { display: flex; min-width: 0; min-height: 0; flex-direction: column; padding: .75rem 1rem 1rem; }
+.titleRow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: .45rem; }
+.titleRow input { min-width: 0; padding: .25rem .1rem; color: #35291c; border: 0; border-bottom: 1px solid #9c7b4d; outline: 0; background: transparent; font: italic 1.2rem Georgia, serif; }
+.titleRow span { color: #766343; font-size: .65rem; }
+.titleRow .deleteButton { padding: .25rem .4rem; color: #754738; border: 1px solid #a78360; background: transparent; cursor: pointer; font: .67rem Georgia, serif; }
+.editorShell { display: flex; min-height: 10rem; flex: 1 1 auto; flex-direction: column; }
+.formatBar { display: flex; flex-wrap: wrap; gap: .2rem; padding: .55rem 0 .35rem; }
+.formatBar button { min-width: 2rem; padding: .25rem .4rem; color: #493724; border: 1px solid #a98b5b; background: #e6d5aa; cursor: pointer; font: .75rem Georgia, serif; }
+.formatBar button:hover, .formatBar button:focus-visible { background: #fff2ca; }
+.formatBar button:disabled { cursor: default; opacity: .42; }
+.formatDivider { width: 1px; margin: .1rem .15rem; background: #a98b5b; }
+.editorFrame { position: relative; display: flex; min-height: 10rem; flex: 1 1 auto; overflow: auto; color: #2e281f; border: 1px solid #a88858; background: #fff9e8aa; box-shadow: inset 0 0 18px #8c6b3130; }
+.editorFrame:focus-within { border-color: #6f512d; box-shadow: inset 0 0 18px #8c6b3130, 0 0 0 2px #b9945455; }
+.editor { width: 100%; min-height: 100%; padding: .8rem; outline: 0; white-space: pre-wrap; font: .9rem/1.55 Georgia, serif; }
+.editor p { margin: 0 0 .65rem; }
+.editorHeadingOne { margin: .2rem 0 .65rem; font: 600 1.45rem/1.25 Georgia, serif; }
+.editorHeadingTwo { margin: .2rem 0 .55rem; font: 600 1.15rem/1.3 Georgia, serif; }
+.editorQuote { margin: .4rem 0 .7rem; padding-left: .75rem; color: #665238; border-left: 3px solid #aa8752; font-style: italic; }
+.editorOrderedList, .editorUnorderedList { margin: .25rem 0 .7rem; padding-left: 1.5rem; }
+.editorListItem { margin: .12rem 0; }
+.editorBold { font-weight: 700; }
+.editorItalic { font-style: italic; }
+.editorStrikethrough { text-decoration: line-through; }
+.editorPlaceholder { position: absolute; top: .8rem; left: .8rem; color: #8c795d; pointer-events: none; font: italic .9rem/1.55 Georgia, serif; }
+.references { flex: 0 0 auto; padding-top: .55rem; }
+.references h3 { margin: 0 0 .35rem; color: #5c482e; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; }
+.referencePicker { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; gap: .25rem; }
+.referencePicker select, .referencePicker button { min-width: 0; padding: .3rem; color: #3d3022; border: 1px solid #a88858; background: #f3e7c7; font: .68rem Georgia, serif; }
+.referencePicker button { cursor: pointer; }
+.referencePicker button:disabled { cursor: default; opacity: .45; }
+.chips { display: flex; flex-wrap: wrap; gap: .25rem; padding-top: .4rem; }
+.chips span { display: inline-flex; border: 1px solid #9b7b4e; background: #e2cfa1; }
+.chips button { padding: .2rem .35rem; color: #463522; border: 0; background: transparent; cursor: pointer; font: .66rem Georgia, serif; }
+.chips button + button { border-left: 1px solid #aa8a5b; }
+.empty { display: grid; height: 100%; place-content: center; justify-items: center; color: #6e5a3b; text-align: center; }
+.empty button { padding: .5rem .8rem; color: #f1dfb4; border: 1px solid #87653b; background: #493727; cursor: pointer; font: inherit; }
+@media (max-width: 760px) { .notebook { width: 100% !important; min-width: 0; max-width: none; } .resizeHandle { display: none; } .layout { grid-template-columns: 7rem minmax(0, 1fr); } .referencePicker { grid-template-columns: minmax(0, 1fr) auto; } }

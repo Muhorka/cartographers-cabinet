@@ -33,19 +33,24 @@ export function useProjectAutosave(project: EditorProject | undefined, onSaved: 
       if (session.getViewState().project === document) return true;
     }
   }, [flush, queue]);
+  /** Persist the notebook branch without cloning and validating the full map. */
+  const saveStoryDocuments = useCallback(async (document: EditorProject) => {
+    if (timer.current?.projectId === document.id) clearTimeout(timer.current.handle);
+    return queue.saveStoryDocuments(document);
+  }, [queue]);
   useEffect(() => {
     if (!project || queue.isRemoved(project.id)) return;
     const handle = setTimeout(() => { void flush(project); }, 350);
     timer.current = { projectId: project.id, handle };
     return () => clearTimeout(handle);
   }, [project, flush, queue]);
-  const controls = useMemo(() => ({ flush, flushSession,
+  const controls = useMemo(() => ({ flush, flushSession, saveStoryDocuments,
     latest: (id: string) => queue.latest(id),
     remove: async (id: string, action: (expectedRevision?: number) => Promise<void>) => {
       if (timer.current?.projectId === id) clearTimeout(timer.current.handle);
       await queue.remove(id, (expectedRevision) => action(expectedRevision));
     },
-  }), [flush, flushSession, queue]);
+  }), [flush, flushSession, queue, saveStoryDocuments]);
   const status = state.document === project ? state.status : project ? "saving" : "saved";
   return { ...controls, saving: status === "saving", saveFailed: status === "failed", saveConflict: status === "conflict", saveFailure: status === "failed" && state.document === project ? state.error : undefined };
 }

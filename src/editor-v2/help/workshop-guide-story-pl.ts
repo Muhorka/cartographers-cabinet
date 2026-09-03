@@ -165,6 +165,11 @@ export const storyGuideTopicPl: WorkshopGuideTopic = {
     ], subsections: [
       { heading: "Raport", paragraphs: ["Przy wyniku możesz zobaczyć wykorzystane dane, brakujące informacje i konflikty. Raport niczego sam nie zmienia: nie przestawia statusu intencji ani nie zapisuje wyniku jako nowej zasady świata."] },
     ] },
+    { heading: "Notatnik autora", paragraphs: [
+      styled("Przycisk ", { text: "Notatnik", emphasis: "strong" }, " na górnym pasku Opowieści otwiera nad mapą kartkę na pomysły, szkice scen i dłuższe teksty."),
+      "Notatki zapisują się razem z projektem. Pasek nad kartką pozwala tworzyć nagłówki i cytaty oraz wyróżniać tekst; ¶ przywraca zwykły akapit, a Tx usuwa formatowanie.",
+      "Do tekstu możesz wstawiać odnośniki do miejsc, obiektów i scenariuszy projektu. Notatnik ma własne cofanie i ponawianie, a jego szerokość możesz zmienić, przeciągając lewą krawędź kartki.",
+    ] },
     { heading: "Powrót do zwykłego świata", paragraphs: [
       "Podczas pracy możesz mieć jednocześnie włączone soczewki, scenariusz, konkretny krok i trasę.",
       styled("Jeżeli na mapie zaczyna być więcej kolorowych informacji niż samej mapy, wybierz ", { text: "Przywróć widok podstawowy", emphasis: "strong" }, "."),

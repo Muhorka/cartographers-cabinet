@@ -56,10 +56,15 @@ const actor = z.union([ref, z.object({ entryId: id }).strict()]);
 const relation = z.object({ id, from: actor, to: actor, kind: z.enum(["owns", "knows", "visits", "guards", "uses", "contains", "custom"]), label: shortText.optional(), description: text.optional(), source: text.optional() }).strict();
 const intention = z.object({ id, authorId: id.optional(), subject: ref, kind: z.enum(["reachability", "must-pass", "avoid-zone", "access-rule", "custom"]), text, status: z.enum(["draft", "accepted", "rejected"]), target: ref.optional(), through: z.array(ref).max(100_000).optional(), avoidZoneId: id.optional(), accessEntryId: id.optional() }).strict();
 const evidence = z.object({ id, text, refs: z.array(ref).max(100_000), source: z.literal("local"), locator: shortText.optional() }).strict();
+const documentReference = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("object"), ref }).strict(),
+  z.object({ kind: z.literal("scenario"), scenarioId: id }).strict(),
+]);
+const document = z.object({ id, title: shortText, bodyMarkdown: text, references: z.array(documentReference).max(10_000) }).strict();
 export const storyViewContextSchema = z.object({ scenarioId: id.optional(), stepId: id.optional(), lensId: id.optional() }).strict();
 
 export const storyDataSchema = z.object({
-  version: z.literal(1), world: z.array(worldEntry).max(100_000), memberships: z.array(membership).max(200_000), propertyDefinitions: z.array(propertyDefinition).max(100_000), objects: z.array(objectRecord).max(200_000), groups: z.array(group).max(100_000), zones: z.array(zone).max(100_000), lenses: z.array(lens).max(100_000), scenarios: z.array(scenario).max(100_000), relations: z.array(relation).max(200_000), intentions: z.array(intention).max(100_000), evidence: z.array(evidence).max(100_000), routes: z.array(routeRecordSchema).max(100_000).default([]),
+  version: z.literal(1), world: z.array(worldEntry).max(100_000), memberships: z.array(membership).max(200_000), propertyDefinitions: z.array(propertyDefinition).max(100_000), objects: z.array(objectRecord).max(200_000), groups: z.array(group).max(100_000), zones: z.array(zone).max(100_000), lenses: z.array(lens).max(100_000), scenarios: z.array(scenario).max(100_000), relations: z.array(relation).max(200_000), intentions: z.array(intention).max(100_000), evidence: z.array(evidence).max(100_000), routes: z.array(routeRecordSchema).max(100_000).default([]), documents: z.array(document).max(100_000).default([]),
 }).strict().superRefine((story, context) => {
   unique(story.world.map(({ id: value }) => value), context, "world id");
   unique(story.memberships.map(({ subjectId, groupId, kind }) => JSON.stringify([subjectId, groupId, kind])), context, "membership");
@@ -73,6 +78,7 @@ export const storyDataSchema = z.object({
   unique(story.intentions.map(({ id: value }) => value), context, "intention id");
   unique(story.evidence.map(({ id: value }) => value), context, "evidence id");
   unique(story.routes.map(({ id: value }) => value), context, "route id");
+  unique(story.documents.map(({ id: value }) => value), context, "document id");
 }) as z.ZodType<StoryData>;
 
-export const storyCollectionSchemas = { world: z.array(worldEntry), memberships: z.array(membership), propertyDefinitions: z.array(propertyDefinition), objects: z.array(objectRecord), groups: z.array(group), zones: z.array(zone), lenses: z.array(lens), scenarios: z.array(scenario), relations: z.array(relation), intentions: z.array(intention), evidence: z.array(evidence), routes: z.array(routeRecordSchema) } as const;
+export const storyCollectionSchemas = { world: z.array(worldEntry), memberships: z.array(membership), propertyDefinitions: z.array(propertyDefinition), objects: z.array(objectRecord), groups: z.array(group), zones: z.array(zone), lenses: z.array(lens), scenarios: z.array(scenario), relations: z.array(relation), intentions: z.array(intention), evidence: z.array(evidence), routes: z.array(routeRecordSchema), documents: z.array(document) } as const;

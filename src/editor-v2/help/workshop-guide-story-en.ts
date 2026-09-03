@@ -165,6 +165,11 @@ export const storyGuideTopicEn: WorkshopGuideTopic = {
     ], subsections: [
       { heading: "The report", paragraphs: ["The result can show the evidence used, missing information and conflicts. A report changes nothing by itself: it does not change the intention's authoring status or save the result as a new world rule."] },
     ] },
+    { heading: "Writer's notebook", paragraphs: [
+      styled("The ", { text: "Notebook", emphasis: "strong" }, " button in Story's top bar opens a sheet over the map for ideas, scene sketches and longer passages."),
+      "Notes are saved with the project. The bar above the sheet lets you add headings and quotations or emphasise text; ¶ returns to an ordinary paragraph, while Tx clears formatting.",
+      "You can insert references to the project's places, objects and scenarios. The notebook has its own undo and redo, and you can resize it by dragging the sheet's left edge.",
+    ] },
     { heading: "Returning to the ordinary world", paragraphs: [
       "While you work, you can have lenses, a scenario, a particular step and a route visible at the same time.",
       styled("If the map begins to contain more coloured information than map, choose ", { text: "Restore base view", emphasis: "strong" }, "."),

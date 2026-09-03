@@ -6,7 +6,7 @@
   display: grid;
   min-width: 0;
   margin: 0 4px 5px;
-  padding: 5px 31px 5px 6px;
+  padding: 3px 31px 3px 6px;
   max-height: min(46vh, 360px);
   overflow-x: hidden;
   overflow-y: auto;
@@ -164,20 +164,29 @@
 .sketchView label { display: flex; align-items: center; gap: .45rem; }
 .sketchView input[type="range"] { width: 8rem; accent-color: #a5463b; }
 .sketchView input:disabled { opacity: .35; }
-.lineCleanup { display: flex; min-width: 12.5rem; align-items: center; gap: .42rem; margin-left: .42rem; padding-left: .55rem; color: #d7c69f; border-left: 1px solid #c29b5640; font-size: .6rem; }
-.lineCleanup > button { display: flex; width: auto; min-width: 31px; height: 28px; grid-template-columns: none; align-items: center; gap: .3rem; padding-inline: 5px; border-radius: 1px; }
-.lineCleanup > button span { display: none; max-width: 6rem; color: #ead8ac; font-size: .5rem; line-height: 1.05; }
-.lineCleanup > button.activeCleanup { color: #f1d28b; border-color: #c78f50; background: linear-gradient(145deg, #85473b88, #30281f); box-shadow: inset 0 0 0 2px #943c3444, 0 0 7px #b78e4633; }
-.lineCleanup > button.activeCleanup span { display: block; }
+.lineCleanup { display: flex; min-width: 11rem; align-items: center; gap: .42rem; margin-left: .42rem; padding-left: .55rem; color: #d7c69f; border-left: 1px solid #c29b5640; font-size: .6rem; }
 .lineCleanup label { display: grid; min-width: 0; height: 28px; grid-template-columns: minmax(4rem, 7rem) 2.5rem; grid-template-rows: 17px 9px; align-items: center; column-gap: .25rem; white-space: nowrap; }
 .lineCleanup label > span { display: block; grid-column: 1 / -1; grid-row: 2; overflow: hidden; color: #bfae85; font-size: .48rem; line-height: 1; text-overflow: ellipsis; }
 .lineCleanup input[type="range"] { width: 100%; grid-column: 1; grid-row: 1; accent-color: #a5463b; }
 .lineCleanup input:disabled { opacity: .34; }
 .lineCleanup output { min-width: 2.5rem; grid-column: 2; grid-row: 1; color: #ead5a1; text-align: right; }
+.pencilLineCleanup { flex: 0 0 auto; min-width: 0; gap: 0; margin-left: .25rem; padding-left: 0; border-left: 0; }
+.lineControlStack { display: grid; width: 11.2rem; min-width: 0; grid-template-rows: repeat(2, 20px); align-items: center; }
+.pencilLineCleanup .lineControlStack label { display: grid; min-width: 0; height: 20px; grid-template-columns: 5.5rem 3rem 1.6rem; grid-template-rows: 20px; align-items: center; gap: .1rem; margin: 0; font: italic .5rem Georgia, serif; }
+.pencilLineCleanup .lineControlStack > label { padding-left: 0; }
+.pencilLineCleanup .lineControlStack > label > span { display: block; grid-column: 1; grid-row: 1; overflow: hidden; color: #cbb98e; line-height: 1; text-overflow: ellipsis; }
+.pencilLineCleanup .lineControlStack > label > input[type="range"] { width: 100%; grid-column: 2; grid-row: 1; }
+.pencilLineCleanup .lineControlStack > label > output { min-width: 1.6rem; grid-column: 3; grid-row: 1; font-size: .54rem; text-align: right; }
 
-.instrumentBand { display: flex; min-width: 0; align-items: stretch; margin-top: 4px; }
-.instrumentRail { flex: 1 1 auto; min-width: 0; gap: 3px; overflow-x: auto; scrollbar-color: #a57c3d55 transparent; scrollbar-width: thin; }
-.instrumentRail > small { margin: 0 5px 0 2px; color: #bda36e; font-size: .5rem; letter-spacing: .12em; text-transform: uppercase; writing-mode: vertical-rl; transform: rotate(180deg); }
+.instrumentBand { display: flex; height: 32px; min-width: 0; align-items: flex-start; margin-top: 2px; }
+.instrumentBandWithControls { height: 42px; }
+.instrumentRail { position: relative; flex: 1 1 auto; min-width: 0; height: 32px; box-sizing: border-box; flex-wrap: nowrap; gap: 3px; padding-left: 1.7rem; overflow-x: auto; overflow-y: hidden; scrollbar-color: #a57c3d55 transparent; scrollbar-width: thin; }
+.instrumentBandWithControls .instrumentRail { height: 42px; gap: 1px; }
+.instrumentBandWithControls .instrumentRail > button { min-width: 26px; padding-inline: 3px; }
+.instrumentBandWithControls .utilities { gap: 2px; margin-left: 4px; padding-left: 4px; }
+.instrumentBandWithControls .utilities .clear { width: 30px; height: 28px; padding: 2px 4px; }
+.instrumentBandWithControls .utilities .clear span { display: none; }
+.instrumentRail > small { position: absolute; top: 0; bottom: 0; left: 2px; margin: 0; color: #bda36e; font-size: .5rem; letter-spacing: .12em; text-transform: uppercase; writing-mode: vertical-rl; transform: rotate(180deg); }
 
 .instrumentRail button,
 .utilities button {
@@ -209,7 +218,7 @@
 .utilities button:focus-visible,
 .utilities .activeUtility { color: #f1d28b; border-color: #c78f50; outline: none; box-shadow: inset 0 0 0 2px #943c3444, 0 0 7px #b78e4633; }
 
-.utilities { flex: 0 0 auto; gap: 3px; margin-left: 8px; padding-left: 8px; border-left: 1px solid #c29b5640; }
+.utilities { flex: 0 0 auto; height: 32px; gap: 3px; margin-left: 8px; padding-left: 8px; border-left: 1px solid #c29b5640; }
 .utilities i { width: 1px; height: 24px; margin: 0 2px; background: #c29b5640; }
 .utilities button:disabled { opacity: .35; cursor: default; }
 .eraserSize { display:flex; min-width:9rem; align-items:center; gap:.45rem; margin-left:.3rem; color:#d8c599; font:italic .62rem Georgia,serif; white-space:nowrap; }
@@ -231,8 +240,12 @@
   .layerRail button span { font-size: .5rem; }
   .subjectRail { padding: 5px; }
   .subjectRail small { font-size: .54rem; }
+  .utilities { gap: 2px; margin-left: 4px; padding-left: 4px; }
+  .utilities .clear { width: 30px; height: 28px; padding: 2px 4px; }
+  .utilities .clear span { display: none; }
   .instrumentBand { display: grid; }
-  .utilities { justify-content: flex-end; margin: 5px 0 0; padding: 5px 0 0; border-top: 1px solid #c29b5640; border-left: 0; }
+  .instrumentBand { height: auto; }
+  .utilities { height: auto; justify-content: flex-end; margin: 2px 0 0; padding: 2px 0 0; border-top: 1px solid #c29b5640; border-left: 0; }
 }
 
 @media (max-width: 520px) {
@@ -241,5 +254,6 @@
   .subjectRail { display: flex; }
   .subjectRail small,
   .instrumentRail > small { display: none; }
+  .instrumentRail { padding-left: 0; }
   .instrumentRail button { min-width: 30px; }
 }

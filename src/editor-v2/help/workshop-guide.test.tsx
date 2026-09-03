@@ -76,6 +76,8 @@ describe("workshop guide", () => {
     expect(atlas).toContain("Sama kolejność kondygnacji nie tworzy jednak przejścia");
     expect(atlas).toContain("wielopiętrowej genealogii każdej szopy");
     expect(story).toContain("Scenariusz opisuje alternatywny stan świata");
+    expect(story).toContain("Notatnik autora");
+    expect(story).toContain("Notatnik ma własne cofanie i ponawianie");
     expect(story).toContain("zapisane pytanie");
     expect(story).toContain("intencje z całego projektu");
     expect(story).toContain("Warunkowo");

@@ -73,10 +73,10 @@ describe("editor v2 workbench toolbox", () => {
     expect(erasing).toContain("Rozmiar gumki"); expect(erasing).toContain('value="17"');
   });
 
-  it("keeps gap closing beside the relevant drawing instruments", () => {
+  it("shows gap closing as a zero-based tolerance beside the relevant drawing instruments", () => {
     const terrain = activateLayer(createToolboxState(), "terrain");
     const html = renderToStaticMarkup(<WorkbenchToolbox state={terrain} copy={toolboxCopy.pl} availableLayerIds={allLayers} boundaryEditing={false} collapsed={false} canUndo canRedo gapClosingEnabled gapClosingTolerance={18} {...view} {...actions}/>);
-    expect(html).toContain(toolboxCopy.pl.closeGaps); expect(html).toContain(toolboxCopy.pl.closeGapsStrength); expect(html).toContain('aria-pressed="true"'); expect(html).toContain('value="18"');
+    expect(html).toContain(toolboxCopy.pl.closeGapsStrength); expect(html).not.toContain(`title="${toolboxCopy.pl.closeGaps}"`); expect(html).toContain('value="15"'); expect(html).toContain("18 px");
   });
 
   it("restores the open wall-run instrument for construction", () => {
@@ -85,11 +85,16 @@ describe("editor v2 workbench toolbox", () => {
     expect(html).toContain(toolboxCopy.pl.instruments["wall-run"]);
   });
 
-  it("can switch gap closing on from its engraved control", () => {
-    const container = document.createElement("div"); const root = createRoot(container); const onGapClosingEnabled = vi.fn();
-    act(() => root.render(<WorkbenchToolbox state={activateLayer(createToolboxState(), "terrain")} copy={toolboxCopy.pl} availableLayerIds={allLayers} boundaryEditing={false} collapsed={false} canUndo canRedo gapClosingEnabled={false} onGapClosingEnabled={onGapClosingEnabled} {...view} {...actions}/>));
-    act(() => container.querySelector(`button[title="${toolboxCopy.pl.closeGaps}"]`)?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-    expect(onGapClosingEnabled).toHaveBeenCalledWith(true); act(() => root.unmount());
+  it("uses zero to disable gap closing and the first active step for four pixels", () => {
+    const container = document.createElement("div"); const root = createRoot(container); const onGapClosingEnabled = vi.fn(); const onGapClosingTolerance = vi.fn();
+    act(() => root.render(<WorkbenchToolbox state={activateLayer(createToolboxState(), "terrain")} copy={toolboxCopy.pl} availableLayerIds={allLayers} boundaryEditing={false} collapsed={false} canUndo canRedo gapClosingEnabled={false} onGapClosingEnabled={onGapClosingEnabled} onGapClosingTolerance={onGapClosingTolerance} {...view} {...actions}/>));
+    const slider = container.querySelector<HTMLInputElement>(`input[aria-label="${toolboxCopy.pl.closeGapsStrength}"]`)!;
+    act(() => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(slider, "1"); slider.dispatchEvent(new Event("input", { bubbles: true })); });
+    expect(onGapClosingEnabled).toHaveBeenLastCalledWith(true); expect(onGapClosingTolerance).toHaveBeenLastCalledWith(4);
+    act(() => root.render(<WorkbenchToolbox state={activateLayer(createToolboxState(), "terrain")} copy={toolboxCopy.pl} availableLayerIds={allLayers} boundaryEditing={false} collapsed={false} canUndo canRedo gapClosingEnabled gapClosingTolerance={4} onGapClosingEnabled={onGapClosingEnabled} onGapClosingTolerance={onGapClosingTolerance} {...view} {...actions}/>));
+    const enabledSlider = container.querySelector<HTMLInputElement>(`input[aria-label="${toolboxCopy.pl.closeGapsStrength}"]`)!;
+    act(() => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(enabledSlider, "0"); enabledSlider.dispatchEvent(new Event("input", { bubbles: true })); });
+    expect(onGapClosingEnabled).toHaveBeenLastCalledWith(false); act(() => root.unmount());
   });
   it("forwards pencil smoothing changes instead of leaving the controlled slider inert", () => {
     const container = document.createElement("div"); const root = createRoot(container); const onPencilSmoothing = vi.fn();

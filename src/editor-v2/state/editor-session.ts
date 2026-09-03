@@ -11,6 +11,7 @@ import { placeToOpenAfterProjectInstall, reconcileSessionNavigation } from "../m
 import { rebaseCurrentStoryRoutes } from "../story/routes/revision";
 import { reconcileRoadJunctions } from "../roads/road-joining";
 import { assertProjectIntegrity } from "../model/project-integrity";
+import { carryDetachedStoryDocuments, replaceDetachedStoryDocuments } from "./detached-story-documents";
 import type { EditorSelection, EditorSessionOptions, EditorSessionState, PendingStructuralTransaction, SessionResult } from "./editor-session-types";
 export type { EditorSelection, EditorSessionOptions, EditorSessionState, PendingStructuralTransaction, SessionResult } from "./editor-session-types";
 export type { PreparedProjectTransaction, ProjectTransaction } from "./project-transaction";
@@ -159,6 +160,15 @@ export class EditorSession {
     return this.commitPreparedTransaction(this.prepareTransaction(transaction));
   }
 
+  /** Notebook documents travel with the project but keep their own editing history. */
+  replaceStoryDocuments(documents: EditorProject["story"]["documents"]): SessionResult {
+    const next = replaceDetachedStoryDocuments(this.state.project, documents);
+    if (next.reason) return { code: "transaction-failed", changed: false, reason: next.reason };
+    if (next.project === this.state.project) return { code: "no-change", changed: false };
+    this.installProject(next.project);
+    return { code: "committed", changed: true };
+  }
+
   clearCurrentLayer(layerId: WorkLayerId = this.state.toolbox.activeLayerId, category: ConstructionClearCategory = "all"): SessionResult {
     layerId = normalizedClearLayer(layerId);
     const ownerId = this.state.activePlaceId;
@@ -190,7 +200,7 @@ export class EditorSession {
     const previous = this.history.past.pop();
     if (!previous) return { code: "history-empty", changed: false };
     this.pushHistory(this.history.future, this.state.project);
-    this.installProject(previous);
+    this.installProject(carryDetachedStoryDocuments(previous, this.state.project.story.documents));
     return { code: "committed", changed: true };
   }
 
@@ -198,7 +208,7 @@ export class EditorSession {
     const next = this.history.future.pop();
     if (!next) return { code: "history-empty", changed: false };
     this.pushHistory(this.history.past, this.state.project);
-    this.installProject(next);
+    this.installProject(carryDetachedStoryDocuments(next, this.state.project.story.documents));
     return { code: "committed", changed: true };
   }
 

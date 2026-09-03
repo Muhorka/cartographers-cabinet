@@ -115,6 +115,11 @@ type StoryIntentionKind = "reachability" | "must-pass" | "avoid-zone" | "access-
 type StoryIntention = { id: string; authorId?: string; subject: StoryObjectRef; kind: StoryIntentionKind; text: string; status: "draft" | "accepted" | "rejected"; target?: StoryObjectRef; through?: StoryObjectRef[]; avoidZoneId?: string; accessEntryId?: string };
 export type StoryEvidence = { id: string; text: string; refs: StoryObjectRef[]; source: "local"; locator?: string };
 
+export type StoryDocumentReference =
+  | { kind: "object"; ref: StoryObjectRef }
+  | { kind: "scenario"; scenarioId: string };
+export type StoryDocument = { id: string; title: string; bodyMarkdown: string; references: StoryDocumentReference[] };
+
 export type StoryData = {
   version: 1;
   world: StoryWorldEntry[];
@@ -130,6 +135,7 @@ export type StoryData = {
   intentions: StoryIntention[];
   evidence: StoryEvidence[];
   routes: StoryRouteRecord[];
+  documents: StoryDocument[];
 };
 
 export type StoryMetadataBulkAction = "add" | "remove" | "replace";
@@ -156,5 +162,5 @@ export function canonicalStoryRef(ref: StoryObjectRef, ownerScopeId?: string): S
   return ref.kind === "room" && !ref.scopeId && ownerScopeId ? { ...ref, scopeId: ownerScopeId } : ref;
 }
 export function emptyStoryData(): StoryData {
-  return { version: 1, world: [], memberships: [], propertyDefinitions: [], objects: [], groups: [], zones: [], lenses: [], scenarios: [], relations: [], intentions: [], evidence: [], routes: [] };
+  return { version: 1, world: [], memberships: [], propertyDefinitions: [], objects: [], groups: [], zones: [], lenses: [], scenarios: [], relations: [], intentions: [], evidence: [], routes: [], documents: [] };
 }

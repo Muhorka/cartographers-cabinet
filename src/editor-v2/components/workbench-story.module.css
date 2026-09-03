@@ -1,17 +1,19 @@
-.toolbar { composes: buttons fields from "./book-controls.module.css"; position: relative; z-index: 4; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .35rem .6rem; flex: 0 0 auto; padding: .3rem .5rem; border: 1px solid #94743f; color: #e7d9b4; background: #23372e; }
+.toolbar { composes: buttons fields from "./book-controls.module.css"; position: relative; z-index: 4; display: grid; grid-template-columns: auto minmax(4rem, 1fr) auto; align-items: center; gap: .35rem .6rem; flex: 0 0 auto; padding: .3rem .5rem; border: 1px solid #94743f; color: #e7d9b4; background: #23372e; }
 .toolbar > :first-child { grid-column: 1 / -1; }
 .toolbar > [role="status"] { grid-column: 1 / -1; }
-.tabs, .context, .history { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
+.tabs, .context, .notebookAction, .history { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
 .tabs { composes: buttons from "./book-controls.module.css"; margin-bottom: .7rem; }
 .tabBar { padding: .5rem .4rem; font-size: .85rem; }
 .context { padding: .3rem 0; font-size: .85rem; }
 .context label { display: flex; gap: .4rem; align-items: center; }
 .context select { max-width: 12rem; }
-.history { grid-column: 2; justify-content: flex-end; font-size: .8rem; }
+.notebookAction { grid-column: 2; justify-content: center; }
+.history { grid-column: 3; justify-content: flex-end; font-size: .8rem; }
 .book { container-type: inline-size; min-width: 0; }
 .workspaceActions { composes: buttons from "./book-controls.module.css"; display: flex; flex-wrap: wrap; gap: .35rem; margin: 0; }
 
 @media (max-width: 620px) {
   .toolbar { grid-template-columns: minmax(0, 1fr); }
+  .notebookAction { grid-column: 1; justify-content: flex-start; }
   .history { grid-column: 1; justify-content: flex-start; }
 }

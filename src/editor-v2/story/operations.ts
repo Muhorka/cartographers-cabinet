@@ -3,8 +3,8 @@ import { legacyStoryGroups, migrateStoryData, replaceLegacyStoryGroups } from ".
 import { defaultStoryAccessPolicy, sameStoryRef, storyRefKey, type StoryCommandResult, type StoryData, type StoryDiagnostic, type StoryEvidence, type StoryGroup, type StoryLens, type StoryMetadataBulkCommand, type StoryObject, type StoryObjectMetadata, type StoryObjectRef, type StoryPropertyDefinition, type StoryPropertyValue, type StoryRelation, type StoryScenario, type StoryWorldEntry, type StoryZone } from "./types";
 import { memberOfSemanticIssue } from "./membership-semantics";
 
-type StoryCollection = "world" | "propertyDefinitions" | "objects" | "groups" | "zones" | "lenses" | "scenarios" | "relations" | "intentions" | "evidence" | "routes";
-type StoryItem = StoryWorldEntry | StoryPropertyDefinition | StoryObject | StoryGroup | StoryZone | StoryLens | StoryScenario | StoryRelation | StoryData["intentions"][number] | StoryEvidence | StoryData["routes"][number];
+type StoryCollection = "world" | "propertyDefinitions" | "objects" | "groups" | "zones" | "lenses" | "scenarios" | "relations" | "intentions" | "evidence" | "routes" | "documents";
+type StoryItem = StoryWorldEntry | StoryPropertyDefinition | StoryObject | StoryGroup | StoryZone | StoryLens | StoryScenario | StoryRelation | StoryData["intentions"][number] | StoryEvidence | StoryData["routes"][number] | StoryData["documents"][number];
 type NonBulkCommand =
   | { kind: "add"; collection: StoryCollection; item: StoryItem }
   | { kind: "remove"; collection: StoryCollection; id: string }

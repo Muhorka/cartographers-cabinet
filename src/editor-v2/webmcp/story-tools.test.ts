@@ -19,6 +19,18 @@ function tool(tools: WebMcpTool[], name: string) { const found = tools.find((can
 async function structured<T>(value: unknown) { return (await Promise.resolve(value) as { structuredContent: T }).structuredContent; }
 
 describe("Story WebMCP integration", () => {
+  it("reads and edits notebook documents through the existing Story tools", async () => {
+    const { tools, session } = setup();
+    const empty = await structured<{ collection: string; entries: unknown[] }>(tool(tools, "inspect_story_catalog").execute({ collection: "documents" }));
+    expect(empty).toMatchObject({ collection: "documents", entries: [] });
+    const document = { id: "arrival-scene", title: "Arrival", bodyMarkdown: "## First sight", references: [{ kind: "scenario", scenarioId: "night" }] };
+    const prepared = await structured<{ token: string }>(tool(tools, "prepare_edit_story").execute({ collection: "documents", action: "upsert", entries: [document] }));
+    await tool(tools, "apply_prepared_editor_change").execute({ token: prepared.token });
+    expect(session.getState().project.story.documents).toEqual([document]);
+    const read = await structured<{ entries: unknown[] }>(tool(tools, "inspect_story_catalog").execute({ collection: "documents" }));
+    expect(read.entries).toEqual([document]);
+  });
+
   it("returns authored and effective group traits without adding another tool", async () => {
     const { tools, session } = setup();
     session.executeTransaction({ id: "fixture-effective-world", apply: (project) => ({ ...project, story: { ...project.story, world: [...project.story.world, { id: "alice", kind: "character", name: "Alice", tags: [], properties: {} }, { id: "watch", kind: "access-group", name: "Watch", tags: [], properties: { duty: "guard" } }], memberships: [...project.story.memberships, { subjectId: "alice", groupId: "watch", kind: "member-of", source: "manual" }] } }) });

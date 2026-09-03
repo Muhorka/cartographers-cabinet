@@ -1,19 +1,11 @@
-import Dexie, { type EntityTable } from "dexie";
 import { z } from "zod";
 import type { EditorProject } from "../model/project-model";
+import { immutableSnapshot } from "../state/immutable-snapshot";
+import { storyCollectionSchemas } from "../story/schema";
 import { cloneImportedProject, editorProjectSchema, parseProjectFile } from "./project-file";
 import { checkpointSummary, createProjectCheckpoint, type ProjectCheckpoint, type ProjectCheckpointSummary } from "./project-checkpoint";
-
-type Preference = { key: string; value: string };
-export type ProjectHead = { id: string; revision: number; deleted: boolean };
-
-export class ProjectConflictError extends Error {
-  readonly code = "project-conflict" as const;
-  constructor(readonly projectId: string, readonly actualRevision: number | undefined, readonly deleted = false) {
-    super(deleted ? "The project was deleted in another tab." : "The project was changed in another tab.");
-    this.name = "ProjectConflictError";
-  }
-}
+import { ProjectLibraryDatabase } from "./project-library-database";
+export { ProjectConflictError, ProjectLibraryDatabase, type ProjectHead, type StoryDocumentsRecord } from "./project-library-database";
 
 export type ProjectLibraryRecoveryRecord = {
   primaryKey: IDBValidKey;
@@ -25,50 +17,6 @@ export type ProjectLibraryScan = {
   projects: EditorProject[];
   recoveryRecords: ProjectLibraryRecoveryRecord[];
 };
-
-export class ProjectLibraryDatabase extends Dexie {
-  projects!: EntityTable<EditorProject, "id">;
-  preferences!: EntityTable<Preference, "key">;
-  checkpoints!: EntityTable<ProjectCheckpoint, "id">;
-  projectHeads!: EntityTable<ProjectHead, "id">;
-
-  constructor(name = "cartographers-cabinet-v4") {
-    super(name);
-    this.version(1).stores({ projects: "id,updatedAt,name", preferences: "key" });
-    this.version(2).stores({ projects: "id,updatedAt,name", preferences: "key", checkpoints: "id,projectId,createdAt,[projectId+createdAt]" });
-    this.version(3).stores({ projects: "id,updatedAt,name", preferences: "key", checkpoints: "id,projectId,createdAt,[projectId+createdAt]", projectHeads: "id" }).upgrade(async (transaction) => {
-      await transaction.table("projects").toCollection().each((project: EditorProject) => transaction.table("projectHeads").put({ id: project.id, revision: 1, deleted: false }));
-    });
-  }
-
-  async readProjectHead(id: string) { return this.projectHeads.get(id); }
-
-  async saveProject(project: EditorProject, expectedRevision?: number) {
-    const candidate = editorProjectSchema.parse(structuredClone(project));
-    return this.transaction("rw", this.projects, this.projectHeads, async () => {
-      const [head, existing] = await Promise.all([this.projectHeads.get(candidate.id), this.projects.get(candidate.id)]);
-      if (head?.deleted) throw new ProjectConflictError(candidate.id, head.revision, true);
-      if (head ? head.revision !== expectedRevision : existing !== undefined || expectedRevision !== undefined) throw new ProjectConflictError(candidate.id, head?.revision);
-      const revision = (head?.revision ?? 0) + 1;
-      const saved = editorProjectSchema.parse({ ...candidate, updatedAt: new Date().toISOString() });
-      await this.projects.put(saved);
-      await this.projectHeads.put({ id: candidate.id, revision, deleted: false });
-      return { project: saved, revision };
-    });
-  }
-
-  async removeProject(projectId: string, expectedRevision?: number) {
-    return this.transaction("rw", this.projects, this.projectHeads, this.checkpoints, async () => {
-      const [head, existing] = await Promise.all([this.projectHeads.get(projectId), this.projects.get(projectId)]);
-      if (head?.deleted) throw new ProjectConflictError(projectId, head.revision, true);
-      if (head ? head.revision !== expectedRevision : existing !== undefined || expectedRevision !== undefined) throw new ProjectConflictError(projectId, head?.revision);
-      const revision = (head?.revision ?? 0) + 1;
-      await this.projects.delete(projectId);
-      await this.checkpoints.where("projectId").equals(projectId).delete();
-      await this.projectHeads.put({ id: projectId, revision, deleted: true });
-    });
-  }
-}
 
 let database: ProjectLibraryDatabase | undefined;
 function db() { return database ??= new ProjectLibraryDatabase(); }
@@ -102,8 +50,45 @@ export async function scanProjectLibrary(): Promise<ProjectLibraryScan> {
     records.push({ primaryKey: cursor.primaryKey as IDBValidKey, rawRecord });
   });
   const scan = scanProjectRecords(records);
-  const heads = await db().projectHeads.bulkGet(scan.projects.map(({ id }) => id));
-  scan.projects.forEach((project, index) => { const revision = heads[index]?.revision; if (revision !== undefined) projectRevisions.set(project.id, revision); });
+  const projectsById = new Map(scan.projects.map((project) => [project.id, project]));
+  const heads = new Map((await db().projectHeads.toArray()).map((head) => [head.id, head]));
+  for (const [id, project] of projectsById) {
+    const head = heads.get(id);
+    if (head?.deleted) {
+      scan.recoveryRecords.push({ primaryKey: id, rawRecord: structuredClone(project), reason: "Projekt ma znacznik usunięcia, ale jego dane nadal istnieją." });
+      projectsById.delete(id);
+    }
+  }
+  for (const record of await db().storyDocuments.toArray()) {
+    const project = projectsById.get(record.projectId);
+    const head = heads.get(record.projectId);
+    if (!project || !head || head.deleted) {
+      scan.recoveryRecords.push({ primaryKey: `storyDocuments:${record.projectId}`, rawRecord: structuredClone(record), reason: "Notatki nie mają aktywnego projektu bazowego." });
+      continue;
+    }
+    if (record.revision !== head.revision) {
+      scan.recoveryRecords.push({ primaryKey: `storyDocuments:${record.projectId}`, rawRecord: structuredClone(record), reason: "Notatki pochodzą z innej wersji projektu." });
+      continue;
+    }
+    const documents = storyCollectionSchemas.documents.safeParse(record.documents);
+    if (!documents.success) {
+      scan.recoveryRecords.push({ primaryKey: `storyDocuments:${record.projectId}`, rawRecord: structuredClone(record), reason: parseFailureReason(documents.error) });
+      continue;
+    }
+    projectsById.set(record.projectId, immutableSnapshot({
+      ...project,
+      updatedAt: record.updatedAt > project.updatedAt ? record.updatedAt : project.updatedAt,
+      story: { ...project.story, documents: documents.data },
+    }, project));
+  }
+  scan.projects = [...projectsById.values()].toSorted((first, second) => second.updatedAt.localeCompare(first.updatedAt));
+  for (const project of scan.projects) {
+    const revision = heads.get(project.id)?.revision;
+    if (revision !== undefined) {
+      persistedRevisions.set(project, revision);
+      projectRevisions.set(project.id, revision);
+    }
+  }
   return scan;
 }
 
@@ -122,12 +107,21 @@ export async function saveProject(project: EditorProject, expectedRevision?: num
   return saved.project;
 }
 
+/** Persist only the validated notebook branch, using the same revision fence as a full save. */
+export async function saveStoryDocuments(project: EditorProject, expectedRevision?: number) {
+  const record = await db().saveStoryDocuments(project.id, project.story.documents, expectedRevision);
+  const saved = immutableSnapshot({ ...project, updatedAt: record.updatedAt }, project);
+  persistedRevisions.set(saved, record.revision);
+  projectRevisions.set(saved.id, record.revision);
+  return saved;
+}
+
 export async function importSavedProjectAsNew(source: string | unknown, createId: () => string = () => crypto.randomUUID()) {
   const { project } = parseProjectFile(source);
-  return db().transaction("rw", db().projects, db().projectHeads, async () => {
+  return db().transaction("rw", db().projects, db().projectHeads, db().storyDocuments, async () => {
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const id = createId();
-      if (!id.trim() || id === project.id || await db().projects.get(id) || await db().projectHeads.get(id)) continue;
+      if (!id.trim() || id === project.id || await db().projects.get(id) || await db().projectHeads.get(id) || await db().storyDocuments.get(id)) continue;
       const imported = cloneImportedProject(project, id);
       await db().projects.add(imported);
       await db().projectHeads.add({ id, revision: 1, deleted: false });
@@ -140,7 +134,8 @@ export async function importSavedProjectAsNew(source: string | unknown, createId
 }
 
 export async function removeProject(projectId: string, expectedRevision?: number) {
-  await db().removeProject(projectId, expectedRevision);
+  const result = await db().removeProject(projectId, expectedRevision);
+  projectRevisions.set(projectId, result.revision);
 }
 
 export async function listProjectCheckpoints(projectId: string) {
@@ -170,8 +165,12 @@ export async function saveProjectCheckpoint(project: EditorProject, name: string
   return checkpoint;
 }
 
-export async function removeProjectCheckpoint(checkpointId: string) {
-  await db().checkpoints.delete(checkpointId);
+export async function removeProjectCheckpoint(checkpointId: string, projectId: string) {
+  await db().transaction("rw", db().checkpoints, async () => {
+    const checkpoint = await db().checkpoints.get(checkpointId);
+    if (!checkpoint || checkpoint.projectId !== projectId) throw new Error("Checkpoint not found in this project.");
+    await db().checkpoints.delete(checkpointId);
+  });
 }
 
 export async function getPreference(key: string) {

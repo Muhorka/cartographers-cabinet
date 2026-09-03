@@ -7,7 +7,7 @@ import { checkpointSummary, type ProjectCheckpointSummary } from "../persistence
 import { listProjectCheckpoints, loadProjectCheckpoint, removeProjectCheckpoint, saveProjectCheckpoint } from "../persistence/project-library";
 import { safePersistenceError } from "../persistence/persistence-errors";
 
-export function useProjectCheckpoints(project: EditorProject | undefined, locale: EditorLocale) {
+export function useProjectCheckpoints(project: EditorProject | undefined, locale: EditorLocale, getCurrentProject: () => EditorProject | undefined = () => project) {
   const projectId = project?.id;
   const [error, setError] = useState<string>();
   const [items, setItems] = useState<ProjectCheckpointSummary[]>([]); const [activeId, chooseActiveId] = useState<string>(); const [opacity, setOpacity] = useState(.4);
@@ -22,9 +22,10 @@ export function useProjectCheckpoints(project: EditorProject | undefined, locale
     return () => { cancelled = true; };
   }, [effectiveActiveId, projectId]);
   async function preserve(name: string) {
-    if (!project) return;
+    const currentProject = getCurrentProject();
+    if (!currentProject) return;
     try {
-      const checkpoint = await saveProjectCheckpoint(project, name || checkpointCopy[locale].automaticName(new Date()));
+      const checkpoint = await saveProjectCheckpoint(currentProject, name || checkpointCopy[locale].automaticName(new Date()));
       setError(undefined); setItems((current) => [checkpointSummary(checkpoint), ...current]); return checkpoint;
     } catch { setError(checkpointCopy[locale].saveFailed); return undefined; }
   }
@@ -37,7 +38,8 @@ export function useProjectCheckpoints(project: EditorProject | undefined, locale
   }
   async function remove(id: string) {
     try {
-      await removeProjectCheckpoint(id);
+      if (!projectId) throw new Error("No project is selected.");
+      await removeProjectCheckpoint(id, projectId);
       setError(undefined); setItems((current) => current.filter(({ id: checkpointId }) => checkpointId !== id)); if (activeId === id) setActiveId(undefined);
     } catch (cause) { setError(checkpointCopy[locale].removeFailed); throw cause; }
   }

@@ -347,6 +347,7 @@
   text-transform: uppercase;
 }
 .center:has(> .toolDock) { grid-template-rows: auto minmax(0, 1fr); }
+.center[data-mode="story"] { grid-template-rows: auto minmax(0, 1fr); }
 .toolDock { position: relative; z-index: 16; min-width: 0; }
 .sheetFrame { position: relative; z-index: 2; min-height: 0; }
 .rightBook > aside { min-height: 100%; padding-top: 18px; }
