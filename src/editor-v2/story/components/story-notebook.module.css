@@ -16,17 +16,20 @@
 .index button:hover, .index button:focus-visible, .index .selected { border-color: #9a7848; background: #f4e8c5; }
 .index .newButton { margin-bottom: .35rem; color: #f0dfb4; border-color: #6f5130; background: #4b3927; text-align: center; }
 .page { display: flex; min-width: 0; min-height: 0; flex-direction: column; padding: .75rem 1rem 1rem; }
-.titleRow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: .45rem; }
+.titleRow { display: flex; align-items: center; gap: .45rem; }
 .titleRow input { min-width: 0; padding: .25rem .1rem; color: #35291c; border: 0; border-bottom: 1px solid #9c7b4d; outline: 0; background: transparent; font: italic 1.2rem Georgia, serif; }
 .titleRow span { color: #766343; font-size: .65rem; }
-.titleRow .deleteButton { padding: .25rem .4rem; color: #754738; border: 1px solid #a78360; background: transparent; cursor: pointer; font: .67rem Georgia, serif; }
+.titleRow input { flex: 1 1 auto; }
+.titleRow .deleteButton, .titleRow .retryButton { flex: 0 0 auto; padding: .25rem .4rem; color: #754738; border: 1px solid #a78360; background: transparent; cursor: pointer; font: .67rem Georgia, serif; }
+.titleRow .retryButton { color: #4e5c38; border-color: #81915f; }
+.titleRow button:disabled { cursor: default; opacity: .45; }
 .editorShell { display: flex; min-height: 10rem; flex: 1 1 auto; flex-direction: column; }
 .formatBar { display: flex; flex-wrap: wrap; gap: .2rem; padding: .55rem 0 .35rem; }
 .formatBar button { min-width: 2rem; padding: .25rem .4rem; color: #493724; border: 1px solid #a98b5b; background: #e6d5aa; cursor: pointer; font: .75rem Georgia, serif; }
 .formatBar button:hover, .formatBar button:focus-visible { background: #fff2ca; }
 .formatBar button:disabled { cursor: default; opacity: .42; }
 .formatDivider { width: 1px; margin: .1rem .15rem; background: #a98b5b; }
-.editorFrame { position: relative; display: flex; min-height: 10rem; flex: 1 1 auto; overflow: auto; color: #2e281f; border: 1px solid #a88858; background: #fff9e8aa; box-shadow: inset 0 0 18px #8c6b3130; }
+.editorFrame { position: relative; display: block; min-height: 10rem; flex: 1 1 auto; overflow: auto; color: #2e281f; border: 1px solid #a88858; background: #fff9e8aa; box-shadow: inset 0 0 18px #8c6b3130; }
 .editorFrame:focus-within { border-color: #6f512d; box-shadow: inset 0 0 18px #8c6b3130, 0 0 0 2px #b9945455; }
 .editor { width: 100%; min-height: 100%; padding: .8rem; outline: 0; white-space: pre-wrap; font: .9rem/1.55 Georgia, serif; }
 .editor p { margin: 0 0 .65rem; }

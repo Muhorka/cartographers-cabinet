@@ -5,7 +5,7 @@ import { storyCollectionSchemas } from "../story/schema";
 import { cloneImportedProject, editorProjectSchema, parseProjectFile } from "./project-file";
 import { checkpointSummary, createProjectCheckpoint, type ProjectCheckpoint, type ProjectCheckpointSummary } from "./project-checkpoint";
 import { ProjectLibraryDatabase } from "./project-library-database";
-export { ProjectConflictError, ProjectLibraryDatabase, type ProjectHead, type StoryDocumentsRecord } from "./project-library-database";
+export { ProjectConflictError, ProjectLibraryDatabase } from "./project-library-database";
 
 export type ProjectLibraryRecoveryRecord = {
   primaryKey: IDBValidKey;

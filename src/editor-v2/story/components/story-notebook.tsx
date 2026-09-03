@@ -23,6 +23,9 @@ type Props = {
 const widthKey = "cartographers-cabinet:story-notebook-width";
 const clampWidth = (value: number) => Math.min(.75, Math.max(.34, value));
 const newDocument = (locale: "pl" | "en"): StoryDocument => ({ id: crypto.randomUUID(), title: locale === "pl" ? "Nowa notatka" : "New note", bodyMarkdown: "", references: [] });
+const replaceDocument = (documents: StoryDocument[], replacement: StoryDocument) => documents.some(({ id }) => id === replacement.id)
+  ? documents.map((document) => document.id === replacement.id ? replacement : document)
+  : [...documents, replacement];
 
 export function StoryNotebookToggle({ open, locale, onClick }: { open: boolean; locale: "pl" | "en"; onClick(): void }) {
   const label = locale === "pl" ? (open ? "Zwiń notatnik autora" : "Otwórz notatnik autora") : (open ? "Fold the writer's notebook" : "Open the writer's notebook");
@@ -37,6 +40,8 @@ export function StoryNotebook({ open, locale, documents, objects, scenarios, onC
   const [draft, setDraft] = useState<StoryDocument | undefined>(documents[0]);
   const [dirty, setDirty] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
+  const [actionPending, setActionPending] = useState(false);
+  const actionLock = useRef(false);
   const width = useRef(.5);
   const notebook = useRef<HTMLElement>(null);
   const latestChange = useRef(onDocumentsChange);
@@ -49,7 +54,7 @@ export function StoryNotebook({ open, locale, documents, objects, scenarios, onC
   const draftRef = useRef(draft);
   if (sourceDocuments !== documents) {
     setSourceDocuments(documents);
-    if (dirty && draft) setWorkingDocuments([...documents.filter(({ id }) => id !== draft.id), draft]);
+    if (dirty && draft) setWorkingDocuments(replaceDocument(documents, draft));
     else {
       const selected = documents.find(({ id }) => id === selectedId) ?? documents[0];
       setWorkingDocuments(documents); setSelectedId(selected?.id); setDraft(selected);
@@ -60,7 +65,7 @@ export function StoryNotebook({ open, locale, documents, objects, scenarios, onC
   useEffect(() => {
     localeRef.current = locale; workingDocumentsRef.current = workingDocuments; draftRef.current = draft;
     pendingUnmountSave.current = dirty && draft
-      ? [...workingDocuments.filter(({ id }) => id !== draft.id), draft]
+      ? replaceDocument(workingDocuments, draft)
       : undefined;
   }, [dirty, draft, locale, workingDocuments]);
   useEffect(() => () => {
@@ -72,7 +77,7 @@ export function StoryNotebook({ open, locale, documents, objects, scenarios, onC
     if (!dirty || !draft) return;
     const version = editVersion.current;
     const timer = window.setTimeout(() => {
-      const next = [...workingDocuments.filter(({ id }) => id !== draft.id), draft];
+      const next = replaceDocument(workingDocuments, draft);
       void latestChange.current(next, locale === "pl" ? "Zapisz notatkę" : "Save note").then((saved) => {
         if (!saved) { setSaveFailed(true); return; }
         setWorkingDocuments(next); setSaveFailed(false);
@@ -83,10 +88,11 @@ export function StoryNotebook({ open, locale, documents, objects, scenarios, onC
   }, [dirty, draft, locale, workingDocuments]);
 
   const updateDraft = useCallback((patch: Partial<StoryDocument>) => {
+    if (actionLock.current) return;
     const current = draftRef.current;
     if (!current) return;
     const nextDraft = { ...current, ...patch };
-    const next = [...workingDocumentsRef.current.filter(({ id }) => id !== current.id), nextDraft];
+    const next = replaceDocument(workingDocumentsRef.current, nextDraft);
     if (!latestDraftChange.current(next)) { setSaveFailed(true); return; }
     editVersion.current += 1; draftRef.current = nextDraft; pendingUnmountSave.current = next;
     setDraft(nextDraft); setDirty(true); setSaveFailed(false);
@@ -95,16 +101,29 @@ export function StoryNotebook({ open, locale, documents, objects, scenarios, onC
   const saveBeforeLeaving = async () => {
     if (!dirty || !draft) return workingDocuments;
     const version = editVersion.current;
-    const next = [...workingDocuments.filter(({ id }) => id !== draft.id), draft];
+    const next = replaceDocument(workingDocuments, draft);
     if (!await onDocumentsChange(next, locale === "pl" ? "Zapisz notatkę" : "Save note")) { setSaveFailed(true); return undefined; }
-    setWorkingDocuments(next); setSaveFailed(false); if (editVersion.current === version) setDirty(false); return next;
+    setSaveFailed(false);
+    // A programmatic edit can still arrive before React applies `inert`.
+    // Keep that newer draft open instead of completing a transition from an
+    // older snapshot.
+    if (editVersion.current !== version) return undefined;
+    workingDocumentsRef.current = next; setWorkingDocuments(next); setDirty(false); return next;
   };
-  const selectDocument = async (id: string) => { const next = await saveBeforeLeaving(); if (!next) return; const source = next.find((item) => item.id === id); if (!source) return; setSelectedId(id); setDraft(source); setDirty(false); };
-  const create = async () => { const current = await saveBeforeLeaving(); if (!current) return; const document = newDocument(locale); const next = [...current, document]; if (await onDocumentsChange(next, locale === "pl" ? "Utwórz notatkę" : "Create note")) { setWorkingDocuments(next); setSelectedId(document.id); setDraft(document); setDirty(false); setSaveFailed(false); } else setSaveFailed(true); };
-  const remove = async () => {
-    if (!draft || !window.confirm(locale === "pl" ? `Usunąć notatkę „${draft.title}”?` : `Delete “${draft.title}”?`)) return;
-    const next = workingDocuments.filter(({ id }) => id !== draft.id);
-    if (await onDocumentsChange(next, locale === "pl" ? "Usuń notatkę" : "Delete note")) { setWorkingDocuments(next); setSelectedId(next[0]?.id); setDraft(next[0]); setDirty(false); setSaveFailed(false); } else setSaveFailed(true);
+  const runAction = async (action: () => Promise<void>) => {
+    if (actionLock.current) return;
+    actionLock.current = true; setActionPending(true);
+    try { await action(); }
+    finally { actionLock.current = false; setActionPending(false); }
+  };
+  const selectDocument = (id: string) => runAction(async () => { const next = await saveBeforeLeaving(); if (!next) return; const source = next.find((item) => item.id === id); if (!source) return; setSelectedId(id); setDraft(source); setDirty(false); });
+  const create = () => runAction(async () => { const current = await saveBeforeLeaving(); if (!current) return; const document = newDocument(locale); const next = [...current, document]; if (await onDocumentsChange(next, locale === "pl" ? "Utwórz notatkę" : "Create note")) { setWorkingDocuments(next); setSelectedId(document.id); setDraft(document); setDirty(false); setSaveFailed(false); } else setSaveFailed(true); });
+  const remove = () => {
+    if (!draft || !window.confirm(locale === "pl" ? `Usunąć notatkę „${draft.title}”?` : `Delete “${draft.title}”?`)) return Promise.resolve();
+    return runAction(async () => {
+      const next = workingDocuments.filter(({ id }) => id !== draft.id);
+      if (await onDocumentsChange(next, locale === "pl" ? "Usuń notatkę" : "Delete note")) { setWorkingDocuments(next); setSelectedId(next[0]?.id); setDraft(next[0]); setDirty(false); setSaveFailed(false); } else setSaveFailed(true);
+    });
   };
   const beginResize = (event: React.PointerEvent<HTMLDivElement>) => {
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -120,9 +139,9 @@ export function StoryNotebook({ open, locale, documents, objects, scenarios, onC
     <div className={styles.resizeHandle} role="separator" aria-orientation="vertical" aria-label={locale === "pl" ? "Zmień szerokość notatnika" : "Resize notebook"} tabIndex={0} onPointerDown={beginResize} onKeyDown={resizeByKeyboard}/>
     <header className={styles.header}><div><small>{locale === "pl" ? "Opowieść" : "Story"}</small><h2>{locale === "pl" ? "Notatnik autora" : "Writer's notebook"}</h2></div><button type="button" onClick={onClose} aria-label={locale === "pl" ? "Zwiń notatnik" : "Fold notebook"}>×</button></header>
     <div className={styles.layout}>
-      <aside className={styles.index}><button type="button" className={styles.newButton} onClick={() => void create()}>＋ {locale === "pl" ? "Nowa" : "New"}</button>{workingDocuments.map((document) => <button type="button" key={document.id} className={document.id === selectedId ? styles.selected : undefined} onClick={() => void selectDocument(document.id)}>{document.title || (locale === "pl" ? "Bez tytułu" : "Untitled")}</button>)}</aside>
-      <div className={styles.page}>{!draft ? <div className={styles.empty}><p>{locale === "pl" ? "Zapisuj pomysły, sceny i rozdziały razem z mapą." : "Keep ideas, scenes, and chapters together with the map."}</p><button type="button" onClick={create}>{locale === "pl" ? "Utwórz pierwszą notatkę" : "Create the first note"}</button></div> : <>
-        <div className={styles.titleRow}><input value={draft.title} maxLength={2000} aria-label={locale === "pl" ? "Tytuł notatki" : "Note title"} onChange={(event) => updateDraft({ title: event.target.value })}/><span aria-live="polite">{saveFailed ? (locale === "pl" ? "Błąd zapisu" : "Save failed") : dirty ? (locale === "pl" ? "Zapisywanie…" : "Saving…") : (locale === "pl" ? "Zapisano" : "Saved")}</span><button type="button" className={styles.deleteButton} onClick={() => void remove()}>{locale === "pl" ? "Usuń" : "Delete"}</button></div>
+      <aside className={styles.index}><button type="button" className={styles.newButton} disabled={actionPending} onClick={() => void create()}>＋ {locale === "pl" ? "Nowa" : "New"}</button>{workingDocuments.map((document) => <button type="button" key={document.id} disabled={actionPending} className={document.id === selectedId ? styles.selected : undefined} onClick={() => void selectDocument(document.id)}>{document.title || (locale === "pl" ? "Bez tytułu" : "Untitled")}</button>)}</aside>
+      <div className={styles.page} inert={actionPending ? true : undefined}>{!draft ? <div className={styles.empty}><p>{locale === "pl" ? "Zapisuj pomysły, sceny i rozdziały razem z mapą." : "Keep ideas, scenes, and chapters together with the map."}</p><button type="button" disabled={actionPending} onClick={() => void create()}>{locale === "pl" ? "Utwórz pierwszą notatkę" : "Create the first note"}</button></div> : <>
+        <div className={styles.titleRow}><input value={draft.title} maxLength={2000} aria-label={locale === "pl" ? "Tytuł notatki" : "Note title"} onChange={(event) => updateDraft({ title: event.target.value })}/><span aria-live="polite">{saveFailed ? (locale === "pl" ? "Błąd zapisu" : "Save failed") : dirty ? (locale === "pl" ? "Zapisywanie…" : "Saving…") : (locale === "pl" ? "Zapisano" : "Saved")}</span>{saveFailed && dirty && <button type="button" className={styles.retryButton} disabled={actionPending} onClick={() => void runAction(async () => { await saveBeforeLeaving(); })}>{locale === "pl" ? "Ponów zapis" : "Retry save"}</button>}<button type="button" className={styles.deleteButton} disabled={actionPending} onClick={() => void remove()}>{locale === "pl" ? "Usuń" : "Delete"}</button></div>
         <StoryNotebookRichEditor key={draft.id} documentId={draft.id} locale={locale} markdown={draft.bodyMarkdown} onChange={(bodyMarkdown) => updateDraft({ bodyMarkdown })}/>
         <StoryNotebookReferences locale={locale} references={draft.references} objects={objects} scenarios={scenarios} onChange={updateReferences} onFocus={onFocus} onScenario={onScenario}/>
       </>}</div>

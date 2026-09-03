@@ -64,7 +64,7 @@ export class ProjectLibraryDatabase extends Dexie {
     super(name);
     // One unpublished notebook preview used a different v3 table set under the
     // same database name. Capture it before Dexie reconciles that old schema.
-    this.alternateV3Documents = options.captureAlternateVersionThree ?? name === "cartographers-cabinet-v4"
+    this.alternateV3Documents = (options.captureAlternateVersionThree ?? name === "cartographers-cabinet-v4")
       ? captureAlternateVersionThreeDocuments(name)
       : Promise.resolve([]);
     this.version(1).stores({ projects: stores.projects, preferences: stores.preferences });
