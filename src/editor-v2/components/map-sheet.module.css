@@ -5,6 +5,8 @@
 .canvas [data-selection-rotation]:hover>circle,.canvas [data-selection-rotation]:focus-visible>circle{stroke:#a64b3e;stroke-width:2;fill:#f1dfb5}
 .roomTarget:hover .room,.roomTarget:focus-visible .room{fill:#9d493b1c}
 .roomSelection{fill:#a33f353d;stroke:#9f332b;stroke-width:4;stroke-linejoin:round;vector-effect:non-scaling-stroke;pointer-events:none;filter:drop-shadow(0 0 2px #fff0bd)}
+.roomAgentFocus{fill:#27838d2b;stroke:#176f7a;stroke-width:4;stroke-dasharray:7 3;stroke-linejoin:round;vector-effect:non-scaling-stroke;pointer-events:none;filter:drop-shadow(0 0 3px #c9fff2)}
+.agentFocusedWall:not(.selectedWall) .wall{stroke:#176f7a;stroke-width:3.4;stroke-dasharray:7 3;filter:drop-shadow(0 0 3px #c9fff2)}
 .wallEndpoint{fill:#ead49b;stroke:#963e35;stroke-width:1.5;vector-effect:non-scaling-stroke;cursor:crosshair;filter:drop-shadow(0 1px 1px #44301f88)}
 .kind_room .placeRegion{fill:#87987928;stroke:#31483f}
 .roomViewConstruction .wall{opacity:.42}
@@ -22,10 +24,12 @@
 .context{opacity:.53}.descendants{opacity:.82;pointer-events:none}.descendant .placeRegion{fill:#c6b98360;stroke:#4b5d50;stroke-width:1.15}.descendant.kind_building .placeRegion{stroke:#30483e;stroke-dasharray:none}.roomViewConstruction .wall{opacity:.7}.roomViewConstruction .contextWall{opacity:.53}
 .place[data-selectable=true]:hover .placeRegion,.place[data-selectable=true]:focus-visible .placeRegion{filter:none}
 .selected .placeRegion,.selected .elementRegion,.selected .elementPath{stroke:#9f332b;stroke-width:3.2;filter:drop-shadow(0 0 2px #fff0bd)}
+.agentFocused:not(.selected) .placeRegion,.agentFocused:not(.selected) .elementRegion,.agentFocused:not(.selected) .elementPath{stroke:#176f7a;stroke-width:3.2;stroke-dasharray:7 3;filter:drop-shadow(0 0 3px #c9fff2)}
 .selected .point{fill:#a64b3e;stroke:#6f302a;stroke-width:1.8;filter:none}
+.agentFocused:not(.selected) .point{fill:#2b8790;stroke:#155964;stroke-width:2;filter:drop-shadow(0 0 3px #c9fff2)}
 .boundaryLabel{font-weight:500;letter-spacing:.04em;fill:#3e4b41;stroke:#eadbb7f0}
 .tracing{pointer-events:none;mix-blend-mode:multiply;filter:sepia(.55) saturate(1.35) hue-rotate(315deg)}
-.surface{color:#5a4a35;outline:none}.surfaceRegion{fill:#b8945c55;stroke:currentColor;stroke-width:1.5;vector-effect:non-scaling-stroke}.surface[data-selectable=true]{cursor:pointer}.surface[data-selectable=true]:hover .surfaceRegion,.surface[data-selectable=true]:focus-visible .surfaceRegion{stroke:#9b3f35}.selected .surfaceRegion{stroke:#9f332b;stroke-width:3.2;filter:drop-shadow(0 0 2px #fff0bd)}
+.surface{color:#5a4a35;outline:none}.surfaceRegion{fill:#b8945c55;stroke:currentColor;stroke-width:1.5;vector-effect:non-scaling-stroke}.surface[data-selectable=true]{cursor:pointer}.surface[data-selectable=true]:hover .surfaceRegion,.surface[data-selectable=true]:focus-visible .surfaceRegion{stroke:#9b3f35}.selected .surfaceRegion{stroke:#9f332b;stroke-width:3.2;filter:drop-shadow(0 0 2px #fff0bd)}.agentFocused:not(.selected) .surfaceRegion{stroke:#176f7a;stroke-width:3.2;stroke-dasharray:7 3;filter:drop-shadow(0 0 3px #c9fff2)}
 @media(max-width:700px){.compass{transform-origin:58px calc(100% - 58px)}}
 .sheet[data-drawing=true] .canvas,.sheet[data-drawing=true] .canvas *{cursor:crosshair!important}
 .noteBox{fill:#f4e8bd38;stroke:#806b47;stroke-width:.7;stroke-dasharray:2 2;pointer-events:all}.note{pointer-events:none;dominant-baseline:alphabetic}

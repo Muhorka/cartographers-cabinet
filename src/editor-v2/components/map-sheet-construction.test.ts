@@ -7,6 +7,7 @@ import { workbenchCopy } from "../i18n/workbench-copy";
 import { createStarterProject } from "../model/starter-project";
 import { MapSheetConstruction } from "./map-sheet-construction";
 import { svgId } from "../geometry/svg-id";
+import { selectionKey } from "../drawing/selection-reference";
 
 const copy = { ariaLabel: "Map", empty: "Empty", compass: "Compass", zoomIn: "Zoom in", zoomOut: "Zoom out", resetView: "Reset", back: "Back" };
 
@@ -34,6 +35,18 @@ describe("room labels", () => {
     expect(markup).toContain('clip-path="url(#test-room-');
     expect(markup).toMatch(/<g clip-path="url\(#test-room-[^"]+\)"><text/);
     expect(markup).not.toMatch(/<text[^>]*clip-path=/);
+  });
+
+  it("renders a scoped agent focus independently from the user's selection", () => {
+    const project = createStarterProject("project", "Project", "en");
+    const level = project.places.find(({ kind }) => kind === "level")!;
+    const document = project.constructions.find(({ id }) => id === level.constructionId)!;
+    const network = buildWallNetwork(document.walls);
+    const room = document.rooms[0]!;
+    const focusKey = selectionKey({ kind: "room", id: room.id, scopeId: document.id });
+    const markup = renderToStaticMarkup(createElement(MapSheetConstruction, { project, document, network, owner: level, prefix: "test", copy, selectedIds: new Set<string>(), agentFocusedIds: new Set([focusKey]), viewportZoom: 8, roomView: false, roomScope: {}, activeGesture: false, selectionEditing: false, movingIds: new Set<string>() }));
+    expect(markup).toContain('data-agent-focus-highlight="room"');
+    expect(markup).not.toContain('data-selection-highlight="room"');
   });
 
   it("renders construction transitions as selectable construction features with style geometry", () => {

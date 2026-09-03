@@ -46,7 +46,7 @@ describe("scenario workspace through the real editor session", () => {
     expect(editor().textContent).toContain("Pokój po alarmie");
     click("Edytuj skutek", editor());
     expect(fixture.sheet!.activePlaceId).toBe("p:level");
-    expect(fixture.sheet!.selectedIds).toContain(selectionKey({ kind: "room", id: state().constructions[0].rooms[0].id }));
+    expect(fixture.sheet!.selectedIds).toContain(selectionKey({ kind: "room", id: state().constructions[0].rooms[0].id, scopeId: "p:plan" }));
     expect(host.querySelector('aside[aria-label="Opis i powiązania"]')?.textContent).toContain("Pokój po alarmie");
     click("Usuń tylko ten skutek", editor());
     expect(state().story.scenarios[0].steps[0].patches).toEqual([]);

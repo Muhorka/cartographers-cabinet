@@ -14,11 +14,11 @@ export function storyObjectLocation(project: EditorProject, ref: StoryObjectRef,
     placeId = preferred?.id ?? (owners.length === 1 ? owners[0].id : undefined);
   }
   if (!placeId || !project.places.some(({ id }) => id === placeId)) return undefined;
-  return { placeId, ref: object.ref, selection: { kind: object.ref.kind, id: object.ref.id } };
+  return { placeId, ref: object.ref, selection: { kind: object.ref.kind, id: object.ref.id, ...(object.ref.scopeId ? { scopeId: object.ref.scopeId } : {}) } };
 }
 
 type FocusState = { project: EditorProject; activePlaceId?: string };
-type Selection = { kind: StoryObjectRef["kind"]; id: string };
+type Selection = { kind: StoryObjectRef["kind"]; id: string; scopeId?: string };
 
 /** UI and agent focus use the same scoped resolver; never guess a same-name room. */
 export function createStoryObjectFocus(

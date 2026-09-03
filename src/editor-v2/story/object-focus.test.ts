@@ -14,7 +14,7 @@ describe("shared Story object navigation", () => {
   it("locates a scoped room, wall and opening on their construction sheet", () => {
     const { project, level, plan } = fixture();
     for (const ref of [{ kind: "room" as const, id: plan.rooms[0].id }, { kind: "wall" as const, id: plan.walls[0].id }, { kind: "opening" as const, id: "door" }]) {
-      expect(storyObjectLocation(project, { ...ref, scopeId: plan.id })).toMatchObject({ placeId: level.id, selection: ref });
+      expect(storyObjectLocation(project, { ...ref, scopeId: plan.id })).toMatchObject({ placeId: level.id, selection: { ...ref, scopeId: plan.id } });
     }
   });
 
@@ -32,7 +32,7 @@ describe("shared Story object navigation", () => {
     const open = vi.fn(); const select = vi.fn(); const focus = createStoryObjectFocus(() => ({ project }), open, select);
     const door = { kind: "opening" as const, id: "door", scopeId: plan.id };
     expect(focus([door, door])).toBe(true);
-    expect(open).toHaveBeenCalledWith(level.id); expect(select).toHaveBeenLastCalledWith([{ kind: "opening", id: "door" }]);
+    expect(open).toHaveBeenCalledWith(level.id); expect(select).toHaveBeenLastCalledWith([{ kind: "opening", id: "door", scopeId: plan.id }]);
     open.mockClear(); select.mockClear();
     expect(focus([{ ...door, scopeId: "missing" }])).toBe(false);
     expect(focus([door, { kind: "place", id: "focus:world" }])).toBe(false);

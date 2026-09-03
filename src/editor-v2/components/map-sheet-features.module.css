@@ -8,6 +8,7 @@
 .swing{stroke:#9d493e;stroke-width:1.1;stroke-dasharray:3 2}
 .hit{fill:none;stroke:transparent;stroke-width:18;vector-effect:non-scaling-stroke;pointer-events:stroke}
 .opening:hover .jamb,.opening:hover .leaf,.opening:focus-visible .jamb,.opening:focus-visible .leaf,.selected .jamb,.selected .leaf{stroke:#a23f35;stroke-width:2.5}
+.opening.agentFocused:not(.selected) .jamb,.opening.agentFocused:not(.selected) .leaf,.opening.agentFocused:not(.selected) .windowPane,.opening.agentFocused:not(.selected) .passageMark{stroke:#176f7a;stroke-width:2.5;filter:drop-shadow(0 0 3px #c9fff2)}
 .opening:focus-visible .hit,.transition:focus-visible .stairs{stroke:#a23f35;stroke-width:2.4}
 .resizeHandle{fill:#ead49b;stroke:#963e35;stroke-width:1.5;vector-effect:non-scaling-stroke;cursor:ew-resize;filter:drop-shadow(0 1px 1px #44301f88)}
 .transition{color:#5a4c37}
@@ -15,4 +16,5 @@
 .tread{fill:none;stroke:#756449;stroke-width:1;vector-effect:non-scaling-stroke}
 .flightEdge,.stairCore{fill:none;stroke:#4f4636;stroke-width:1.8;vector-effect:non-scaling-stroke}.stairPost{fill:#4f4636;stroke:#ead8aa;stroke-width:.8;vector-effect:non-scaling-stroke}
 .transition:hover .stairs,.transition.selected .stairs{stroke:#a23f35;stroke-width:2.2}
+.transition.agentFocused:not(.selected) .stairs{stroke:#176f7a;stroke-width:2.4;stroke-dasharray:7 3;filter:drop-shadow(0 0 3px #c9fff2)}
 .elevator{fill:#856f4c33;stroke:#3f5148}.direction,.styleGuide{fill:none;stroke:#9a4138;stroke-width:1.1;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke;pointer-events:none}.styleGuide{stroke:#7d6a42;stroke-dasharray:1.6 2.3;stroke-width:1.3}

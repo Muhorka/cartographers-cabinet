@@ -17,8 +17,9 @@ import { selectionKey } from "../drawing/selection-reference";
 import { svgId } from "../geometry/svg-id";
 
 type RoomScope = { wallIds?: ReadonlySet<string>; transitionIds?: ReadonlySet<string> };
+const emptyAgentFocus = new Set<string>();
 
-export function MapSheetConstruction({ project, document, network, owner, prefix, copy, selectedIds, viewportZoom, roomView, roomScope, activeGesture, selectionEditing, selectionOnly = false, selectionLayerId, movingIds, moveDelta, openingWidthPreview, labelPlan, onSelect, onOpenPlace, contextTransitions = [] }: {
+export function MapSheetConstruction({ project, document, network, owner, prefix, copy, selectedIds, agentFocusedIds = emptyAgentFocus, viewportZoom, roomView, roomScope, activeGesture, selectionEditing, selectionOnly = false, selectionLayerId, movingIds, moveDelta, openingWidthPreview, labelPlan, onSelect, onOpenPlace, contextTransitions = [] }: {
   project: EditorProject;
   document: ConstructionDocument;
   network: WallNetworkResult;
@@ -26,6 +27,7 @@ export function MapSheetConstruction({ project, document, network, owner, prefix
   prefix: string;
   copy: MapSheetCopy;
   selectedIds: Set<string>;
+  agentFocusedIds?: Set<string>;
   viewportZoom: number;
   roomView: boolean;
   roomScope: RoomScope;
@@ -55,24 +57,25 @@ export function MapSheetConstruction({ project, document, network, owner, prefix
       const clipId = `${svgId(prefix)}-room-${svgId(room.id)}`; const canOpen = project.places.some(({ id }) => id === room.id);
       const selectable = !activeGesture && (selectionOnly || selectionEditing) && (selectionOnly || room.locked !== true && roomPlace?.locked !== true); const editable = selectionEditing && !activeGesture && room.locked !== true && roomPlace?.locked !== true; const interactive = !activeGesture && (!selectionEditing || editable || selectionOnly); const displayName = mapLabelWithArea(room.name, mapRoomArea(face), project.measureSettings.units, project.measureSettings.showRoomAreas); const label = (labelPlan?.get(`room:${owner?.id ?? ""}:${room.id}`) as ReturnType<typeof roomLabelLayout> | undefined) ?? roomLabelLayout(displayName, face, viewportZoom);
       const canNavigate = canOpen && !selectionEditing;
-      const roomSelected = selectedIds.has(selectionKey({ kind: "room", id: room.id, scopeId: document.id }));
+      const roomKey = selectionKey({ kind: "room", id: room.id, scopeId: document.id }); const roomSelected = selectedIds.has(roomKey); const roomAgentFocused = agentFocusedIds.has(roomKey);
       return <g key={`${document.id}:${room.id}`} className={styles.roomTarget} style={interactive || canNavigate ? undefined : { pointerEvents: "none" }} transform={translated(movingIds.has(room.id))} data-selectable={selectable ? "true" : undefined} data-selection-layer={selectable ? "construction" : undefined} data-selection-kind={selectable ? "room" : undefined} data-selection-id={selectable ? room.id : undefined} data-selection-scope={selectable ? document.id : undefined} role={interactive || canNavigate ? "button" : undefined} tabIndex={interactive || canNavigate ? 0 : undefined} aria-label={interactive || canNavigate ? room.name : undefined} onClick={interactive ? (event) => { event.stopPropagation(); onSelect?.({ kind: "room", id: room.id, scopeId: document.id }, additiveSelection(event)); } : undefined} onDoubleClick={canNavigate && !activeGesture ? (event) => { event.stopPropagation(); onOpenPlace?.(room.id); } : undefined} onKeyDown={(event) => { if (event.key === "Enter" && canNavigate && !activeGesture) { event.preventDefault(); onOpenPlace?.(room.id); } else activateByKeyboard(event, () => { if (interactive) onSelect?.({ kind: "room", id: room.id, scopeId: document.id }); }); }}>
         <defs><clipPath id={clipId}><path d={roomPath(face)} fillRule="evenodd"/></clipPath></defs>
         <path d={roomPath(face)} fillRule="evenodd" style={appearance ? { fill: appearance.fillColor, fillOpacity: appearance.fillOpacity } : undefined} className={`${styles.room}${roomSelected ? ` ${styles.selected}` : ""}`}/>
+        {roomAgentFocused && <path d={roomPath(face)} fillRule="evenodd" className={styles.roomAgentFocus} data-agent-focus-highlight="room" aria-hidden="true"/>}
         {roomSelected && <path d={roomPath(face)} fillRule="evenodd" className={styles.roomSelection} data-selection-highlight="room" aria-hidden="true"/>}
         {label && <MapSheetRegionLabel layout={{ kind: "inside", ...label }} clipId={clipId} pathId={`${clipId}-label-path`} />}<title>{room.name}</title>
       </g>;
     })}
     {document.walls.filter((wall) => wall.visible !== false).map((wall) => {
       const wallInScope = !roomScope.wallIds || roomScope.wallIds.has(wall.id); const wallSelectable = !activeGesture && (selectionOnly || selectionEditing) && wallInScope && (selectionOnly || wall.locked !== true);
-      const selected = selectedIds.has(selectionKey({ kind: "wall", id: wall.id, scopeId: document.id }));
-      return <g key={`${document.id}:${wall.id}`} transform={translated(movedWallIds.has(wall.id))} className={`${selected ? styles.selectedWall : ""}${roomView && !wallSelectable ? ` ${styles.contextWall}` : ""}`}>
+      const wallKey = selectionKey({ kind: "wall", id: wall.id, scopeId: document.id }); const selected = selectedIds.has(wallKey); const agentFocused = agentFocusedIds.has(wallKey);
+      return <g key={`${document.id}:${wall.id}`} transform={translated(movedWallIds.has(wall.id))} className={`${agentFocused ? styles.agentFocusedWall : ""}${selected ? ` ${styles.selectedWall}` : ""}${roomView && !wallSelectable ? ` ${styles.contextWall}` : ""}`}>
         <line className={`${styles.wall} ${styles[`wall_${wall.role}`]}`} data-wall-role={wall.role} x1={wall.start.x} y1={wall.start.y} x2={wall.end.x} y2={wall.end.y}/>
         <line className={styles.wallHit} x1={wall.start.x} y1={wall.start.y} x2={wall.end.x} y2={wall.end.y} data-selectable={wallSelectable ? "true" : undefined} data-selection-layer={wallSelectable ? "construction" : undefined} data-selection-kind={wallSelectable ? "wall" : undefined} data-selection-id={wallSelectable ? wall.id : undefined} data-selection-scope={wallSelectable ? document.id : undefined} role={wallSelectable ? "button" : undefined} tabIndex={wallSelectable ? 0 : undefined} aria-label={wallSelectable ? wall.id : undefined} onClick={wallSelectable ? (event) => { event.stopPropagation(); onSelect?.({ kind: "wall", id: wall.id, scopeId: document.id }, additiveSelection(event)); } : undefined} onKeyDown={wallSelectable ? (event) => activateByKeyboard(event, () => onSelect?.({ kind: "wall", id: wall.id, scopeId: document.id })) : undefined}/>
         {selectionEditing && selectionLayerId === "construction" && selected && <><circle className={styles.wallEndpoint} cx={wall.start.x} cy={wall.start.y} r={5 / viewportZoom} data-wall-endpoint="start" data-wall-id={wall.id} data-wall-scope={document.id}/><circle className={styles.wallEndpoint} cx={wall.end.x} cy={wall.end.y} r={5 / viewportZoom} data-wall-endpoint="end" data-wall-id={wall.id} data-wall-scope={document.id}/></>}
       </g>;
     })}
-    <MapSheetFeatures document={document} prefix={prefix} selectedIds={selectedIds} copy={copy} storyLabel={storyLabel} viewportZoom={viewportZoom} selectionEnabled={(selectionOnly || selectionEditing) && !activeGesture} selectionOnly={selectionOnly} selectableOpeningWallIds={roomScope.wallIds} selectableTransitionIds={roomScope.transitionIds} movingIds={movingIds} movingWallIds={movedWallIds} moveDelta={moveDelta} openingWidthPreview={openingWidthPreview} onSelect={activeGesture ? undefined : onSelect} transitionOverrides={[...document.transitions.map((transition, index) => ({ transition, scopeId: document.id, index })), ...contextTransitions]}/>
+    <MapSheetFeatures document={document} prefix={prefix} selectedIds={selectedIds} agentFocusedIds={agentFocusedIds} copy={copy} storyLabel={storyLabel} viewportZoom={viewportZoom} selectionEnabled={(selectionOnly || selectionEditing) && !activeGesture} selectionOnly={selectionOnly} selectableOpeningWallIds={roomScope.wallIds} selectableTransitionIds={roomScope.transitionIds} movingIds={movingIds} movingWallIds={movedWallIds} moveDelta={moveDelta} openingWidthPreview={openingWidthPreview} onSelect={activeGesture ? undefined : onSelect} transitionOverrides={[...document.transitions.map((transition, index) => ({ transition, scopeId: document.id, index })), ...contextTransitions]}/>
   </g>;
 }
 

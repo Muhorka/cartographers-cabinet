@@ -19,7 +19,7 @@ export type MapSheetProps = {
   nodeInsertion?: { active: boolean; previewAt(point: KernelPoint): KernelPoint | undefined; insertAt(point: KernelPoint): void; cancel(): void };
   project: EditorProject; activePlaceId: string;
   viewport: SheetViewport; copy: MapSheetCopy;
-  selectedIds?: string[]; draftStrokes?: KernelPoint[][]; gestureDraft?: MapGestureDraft;
+  selectedIds?: string[]; agentFocusedIds?: string[]; draftStrokes?: KernelPoint[][]; gestureDraft?: MapGestureDraft;
   sheetSize?: { width: number; height: number }; interaction?: MapSheetInteraction;
   selectionEditing?: boolean; /** Read-only source picking used by Story mode; never enables geometry edits. */ selectionOnly?: boolean; outlineEditing?: boolean; selectionMode?: "direct" | "marquee"; selectionLayerId?: WorkLayerId;
   sketchVisible?: boolean; sketchOpacity?: number; eraserSize?: number; gapClosingEnabled?: boolean; gapClosingTolerance?: number;
