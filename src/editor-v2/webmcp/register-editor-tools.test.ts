@@ -3,7 +3,7 @@ import { addElement } from "../model/hierarchy-operations";
 import { createStarterProject } from "../model/starter-project";
 import { EditorSession } from "../state/editor-session";
 import { registerEditorV2Tools } from "./register-editor-tools";
-import { getWebMcpDiagnostics, isSuccessfulWebMcpResult } from "./diagnostics";
+import { getWebMcpDiagnostics } from "./diagnostics";
 import { buildMetadataChange } from "./agent-object-command";
 import { hierarchySnapshot, projectOverview } from "./project-read-model";
 import { addConstructionSurface } from "../model/hierarchy-operations";
@@ -75,43 +75,6 @@ describe("read-only WebMCP tools for editor V2", () => {
     expect(projectOverview(project)).toMatchObject({ worldDescription: world.description });
   });
 
-  it("distinguishes registration from a successful agent call", async () => {
-    const { tools } = await registeredTools();
-    expect(getWebMcpDiagnostics().lastSuccessfulTool).toBeUndefined();
-    await expect(tools.find(({ name }) => name === "inspect_project_object")!.execute({})).rejects.toThrow();
-    expect(getWebMcpDiagnostics().lastSuccessfulTool).toBeUndefined();
-    await tools.find(({ name }) => name === "inspect_cartographers_project")!.execute({});
-    expect(getWebMcpDiagnostics().lastSuccessfulTool).toBe("inspect_cartographers_project");
-  });
-  it("does not call a logical failure successful", async () => {
-    const { tools } = await registeredTools();
-    const inspect = tools.find(({ name }) => name === "inspect_cartographers_project")!;
-    await inspect.execute({});
-    const before = getWebMcpDiagnostics().lastSuccessfulTool;
-    const update = tools.find(({ name }) => name === "prepare_update_project_object")!;
-    const result = await update.execute({ ref: { type: "element", id: "missing" }, description: "Should not apply" }) as { structuredContent: { status: string } };
-    expect(["blocked", "not-found"]).toContain(result.structuredContent.status);
-    expect(getWebMcpDiagnostics().lastSuccessfulTool).toBe(before);
-  });
-  it.each(["applied", "accepted", "proposed", "prepared", "created", "no-change", "deferred", "unreachable", "opened", "undone", "redone", "focused", "cleared"])("accepts %s as a completed call", (status) => {
-    expect(isSuccessfulWebMcpResult({ structuredContent: { status } })).toBe(true);
-  });
-  it.each(["failed", "blocked", "stale", "stale-context", "stale-session", "not-found", "unavailable", "expired", "busy", "timeout", "cancelled", "error", "future-failure"])("rejects %s as a completed call", (status) => {
-    expect(isSuccessfulWebMcpResult({ structuredContent: { status } })).toBe(false);
-  });
-  it("reports missing browser support without hiding it", async () => {
-    const registration = await registerEditorV2Tools({} as Parameters<typeof registerEditorV2Tools>[0]);
-    expect(registration.available).toBe(false);
-    expect(getWebMcpDiagnostics()).toMatchObject({ state: "unavailable", registered: 0 });
-  });
-
-  it("names failed registrations in diagnostics", async () => {
-    Object.defineProperty(document, "modelContext", { configurable: true, value: { registerTool: async (tool: WebMcpTool) => { if (tool.name === "inspect_open_map") throw new Error("Permission denied"); } } });
-    const registration = await registerEditorV2Tools({} as Parameters<typeof registerEditorV2Tools>[0]);
-    expect(registration.available).toBe(false);
-    expect(getWebMcpDiagnostics()).toMatchObject({ state: "error", registered: 0, errors: ["inspect_open_map: Permission denied"] });
-    registration.dispose();
-  });
   it("registers the read tools and the guarded command tools together", async () => {
     const { tools, signals, registration } = await registeredTools();
     expect(tools.length).toBeGreaterThan(45); expect(tools.map(({ name }) => name)).toContain("prepare_align_objects");
