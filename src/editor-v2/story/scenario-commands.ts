@@ -4,6 +4,7 @@ import { projectStoryData } from "./project-effective";
 import { projectStoryObjectTarget } from "./story-locks";
 import { storyDataSchema } from "./schema";
 import { storyRefKey, type StoryScenario, type StoryTextPatch } from "./types";
+import { current as immerCurrent, isDraft, type Draft } from "immer";
 
 type ScenarioStep = StoryScenario["steps"][number];
 type StepChanges = Partial<Pick<ScenarioStep, "name" | "description" | "patches">>;
@@ -14,7 +15,15 @@ export type ScenarioStepCommand =
   | { kind: "move"; stepId: string; position: number };
 
 function fail(message: string): never { throw new Error(`Scenario operation rejected: ${message}`); }
-function copy<T>(value: T): T { return structuredClone(value); }
+/** Scenario commands may receive records selected from an Immer draft. */
+function copy<T>(value: T): T {
+  const source = isDraft(value)
+    ? immerCurrent(value as Draft<T>)
+    : Array.isArray(value)
+      ? value.map((item) => isDraft(item) ? immerCurrent(item as Draft<unknown>) : item)
+      : value;
+  return structuredClone(source) as T;
+}
 function patchEqual(first: StoryTextPatch, second: StoryTextPatch) { return JSON.stringify(first) === JSON.stringify(second); }
 
 function existingScenarios(project: EditorProject) {

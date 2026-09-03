@@ -1,4 +1,5 @@
 import { storyCollectionSchemas, storyDataSchema } from "./schema";
+import { current as immerCurrent, isDraft, type Draft } from "immer";
 import { legacyStoryGroups, migrateStoryData, replaceLegacyStoryGroups } from "./migration";
 import { defaultStoryAccessPolicy, sameStoryRef, storyRefKey, type StoryCommandResult, type StoryData, type StoryDiagnostic, type StoryEvidence, type StoryGroup, type StoryLens, type StoryMetadataBulkCommand, type StoryObject, type StoryObjectMetadata, type StoryObjectRef, type StoryPropertyDefinition, type StoryPropertyValue, type StoryRelation, type StoryScenario, type StoryWorldEntry, type StoryZone } from "./types";
 import { memberOfSemanticIssue } from "./membership-semantics";
@@ -12,7 +13,20 @@ type NonBulkCommand =
   | { kind: "delete-object"; ref: StoryObjectRef };
 export type StoryCommand = NonBulkCommand | StoryMetadataBulkCommand | { kind: "bulk"; commands: NonBulkCommand[] };
 
-function clone<T>(value: T): T { return structuredClone(value); }
+/**
+ * Story commands are also used as structural transaction callbacks. In that
+ * mode collection items can still be Immer drafts, which the structured
+ * clone algorithm deliberately rejects. Materialize only that boundary;
+ * ordinary command inputs retain the existing clone semantics.
+ */
+function clone<T>(value: T): T {
+  const source = isDraft(value)
+    ? immerCurrent(value as Draft<T>)
+    : Array.isArray(value)
+      ? value.map((item) => isDraft(item) ? immerCurrent(item as Draft<unknown>) : item)
+      : value;
+  return structuredClone(source) as T;
+}
 function idFor(item: StoryItem) { return "ref" in item ? storyRefKey(item.ref) : item.id; }
 function diagnostic(code: string, message: string, refs?: StoryObjectRef[], ids?: string[]): StoryDiagnostic { return { code, message, ...(refs ? { refs } : {}), ...(ids ? { ids } : {}) }; }
 function collectionItems(story: StoryData, collection: StoryCollection) { return story[collection] as StoryItem[]; }

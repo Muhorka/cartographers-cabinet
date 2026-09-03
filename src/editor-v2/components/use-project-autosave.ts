@@ -13,9 +13,9 @@ export function useProjectAutosave(project: EditorProject | undefined, onSaved: 
   const mounted = useRef(true);
   if (project) queue.observe(project.id);
   useEffect(() => { current.current = project; notify.current = onSaved; }, [project, onSaved]);
-  useEffect(() => { mounted.current = true; return () => { mounted.current = false; clearTimeout(timer.current?.handle); }; }, []);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; if (timer.current) clearTimeout(timer.current.handle); timer.current = undefined; }; }, []);
   const flush = useCallback(async (document: EditorProject) => {
-    if (timer.current?.projectId === document.id) clearTimeout(timer.current.handle);
+    if (timer.current?.projectId === document.id) { clearTimeout(timer.current.handle); timer.current = undefined; }
     if (mounted.current && current.current === document) setState({ document, status: "saving" });
     const result = await queue.save(document);
     if (mounted.current) {
@@ -33,21 +33,31 @@ export function useProjectAutosave(project: EditorProject | undefined, onSaved: 
       if (session.getViewState().project === document) return true;
     }
   }, [flush, queue]);
-  /** Persist the notebook branch without cloning and validating the full map. */
+  /**
+   * A notebook edit arriving while the full-save debounce is pending must
+   * promote that pending write to a full flush. Otherwise cancelling the timer
+   * would leave the latest map/Worldbook change only in React state.
+   */
   const saveStoryDocuments = useCallback(async (document: EditorProject) => {
-    if (timer.current?.projectId === document.id) clearTimeout(timer.current.handle);
+    if (timer.current?.projectId === document.id) return flush(document);
     return queue.saveStoryDocuments(document);
-  }, [queue]);
+  }, [flush, queue]);
   useEffect(() => {
     if (!project || queue.isRemoved(project.id)) return;
-    const handle = setTimeout(() => { void flush(project); }, 350);
+    const handle = setTimeout(() => {
+      if (timer.current?.handle === handle) timer.current = undefined;
+      void flush(project);
+    }, 350);
     timer.current = { projectId: project.id, handle };
-    return () => clearTimeout(handle);
+    return () => {
+      clearTimeout(handle);
+      if (timer.current?.handle === handle) timer.current = undefined;
+    };
   }, [project, flush, queue]);
   const controls = useMemo(() => ({ flush, flushSession, saveStoryDocuments,
     latest: (id: string) => queue.latest(id),
     remove: async (id: string, action: (expectedRevision?: number) => Promise<void>) => {
-      if (timer.current?.projectId === id) clearTimeout(timer.current.handle);
+      if (timer.current?.projectId === id) { clearTimeout(timer.current.handle); timer.current = undefined; }
       await queue.remove(id, (expectedRevision) => action(expectedRevision));
     },
   }), [flush, flushSession, queue, saveStoryDocuments]);

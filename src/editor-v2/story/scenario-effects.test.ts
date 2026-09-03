@@ -3,7 +3,8 @@ import { EditorSession } from "../state/editor-session";
 import { emptyProject, type EditorProject } from "../model/project-model";
 import { emptyStoryData, type StoryData } from "./types";
 import { readScenarioEffects } from "./scenario-effects";
-import { removeScenarioEffect, reorderScenarioStep, replaceScenario, updateScenarioStep } from "./scenario-commands";
+import { removeScenarioEffect, reorderScenarioStep, replaceProjectScenarios, replaceScenario, updateScenarioStep } from "./scenario-commands";
+import { applyStoryCommand } from "./operations";
 import { applyProjectStoryMetadata } from "./project-commands";
 
 const placeRef = { kind: "place" as const, id: "place" };
@@ -109,5 +110,36 @@ describe("scenario effects", () => {
     const project = fixture(); const session = new EditorSession(project); const before = session.getState().project;
     expect(session.executeTransaction({ id: "remove-scenario-effect", apply: (current) => removeScenarioEffect(current, "scene", "whole") }).changed).toBe(true);
     expect(session.getState().project.story.scenarios[0]!.patches).toHaveLength(0); expect(session.undo().changed).toBe(true); expect(session.getState().project.story).toEqual(before.story);
+  });
+
+  it("accepts Immer drafts at Story command boundaries in a real structural session", () => {
+    const project = fixture();
+    const session = new EditorSession(project);
+    const result = session.executeTransaction({
+      id: "replace-story-scenarios-command",
+      isolation: "structural",
+      apply: (current) => ({
+        ...current,
+        story: applyStoryCommand(current.story, {
+          kind: "replace",
+          collection: "scenarios",
+          items: current.story.scenarios.filter(({ id }) => id !== "other"),
+        }).story,
+      }),
+    });
+    expect(result).toMatchObject({ code: "committed", changed: true });
+    expect(session.getViewState().project.story.scenarios.map(({ id }) => id)).toEqual(["scene"]);
+  });
+
+  it("accepts Immer drafts at scenario replacement boundaries in a real structural session", () => {
+    const project = fixture();
+    const session = new EditorSession(project);
+    const result = session.executeTransaction({
+      id: "replace-project-scenarios",
+      isolation: "structural",
+      apply: (current) => replaceProjectScenarios(current, current.story.scenarios.filter(({ id }) => id !== "other")),
+    });
+    expect(result).toMatchObject({ code: "committed", changed: true });
+    expect(session.getViewState().project.story.scenarios.map(({ id }) => id)).toEqual(["scene"]);
   });
 });
