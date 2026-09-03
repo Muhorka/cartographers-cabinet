@@ -182,6 +182,47 @@ describe("story route panel", () => {
     await act(async () => root.unmount()); host.remove();
   });
 
+  it("keeps the end navigation action after opening a route start on another sheet", async () => {
+    const value = project();
+    value.places.push({ id: "far-level", name: "Far level", kind: "level", transform: { x: 0, y: 0, rotation: 0 }, boundary: { kind: "rectangle", x: 0, y: 0, width: 10, height: 10 }, tags: [], access: [], properties: {} });
+    const sourceRevision = storyRouteRevision(value);
+    const query = { from: { placeId: "far-level", point: { x: 1, y: 1 } }, to: { placeId: "grounds", point: { x: 2, y: 2 } }, profile: "foot" as const };
+    const alternative = { id: "cross-sheet-route", sourceRevision, segments: [{ placeId: "far-level", levelId: "far-level", kind: "indoor" as const, points: [query.from.point, { x: 2, y: 2 }] }, { placeId: "grounds", kind: "outdoor" as const, points: [{ x: 2, y: 2 }, query.to.point] }], points: [query.from.point, query.to.point], distance: 20, conditions: [], reasons: [], usedOpeningIds: [], usedTransitionIds: [] } satisfies StoryRouteAlternative;
+    const initialRoute = { id: "cross-sheet-route", name: "Cross-sheet route", query, result: { status: "ready" as const, revision: 0, sourceRevision, routes: [alternative], route: alternative, missingFacts: [], reasons: [] }, sourceRevision } satisfies StoryRouteRecord;
+    let activePlaceId = "grounds";
+    const onOpenPlace = vi.fn((placeId: string) => { activePlaceId = placeId; rerender(); });
+    const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+    const rerender = () => root.render(<StoryRoutePanel project={value} activePlaceId={activePlaceId} locale="en" context={{}} initialRoute={initialRoute} onPreview={vi.fn()} onSave={vi.fn()} onOpenPlace={onOpenPlace} />);
+    await act(async () => rerender());
+    const start = () => [...host.querySelectorAll("button")].find((button) => button.textContent === "Show route start") as HTMLButtonElement | undefined;
+    expect(start()).toBeDefined(); expect([...host.querySelectorAll("button")].find((button) => button.textContent === "Show route end")).toBeUndefined();
+    await act(async () => { start()!.click(); await Promise.resolve(); });
+    expect(onOpenPlace).toHaveBeenCalledWith("far-level");
+    expect(start()).toBeUndefined(); expect([...host.querySelectorAll("button")].find((button) => button.textContent === "Show route end")).toBeDefined();
+    await act(async () => root.unmount()); host.remove();
+  });
+
+  it("hides both endpoint navigation actions after opening a same-sheet route start", async () => {
+    const value = project();
+    value.places.push({ id: "far-level", name: "Far level", kind: "level", transform: { x: 0, y: 0, rotation: 0 }, boundary: { kind: "rectangle", x: 0, y: 0, width: 10, height: 10 }, tags: [], access: [], properties: {} });
+    const sourceRevision = storyRouteRevision(value);
+    const query = { from: { placeId: "far-level", point: { x: 1, y: 1 } }, to: { placeId: "far-level", point: { x: 8, y: 8 } }, profile: "foot" as const };
+    const alternative = { id: "same-sheet-route", sourceRevision, segments: [{ placeId: "far-level", levelId: "far-level", kind: "indoor" as const, points: [query.from.point, query.to.point] }], points: [query.from.point, query.to.point], distance: 12.3, conditions: [], reasons: [], usedOpeningIds: [], usedTransitionIds: [] } satisfies StoryRouteAlternative;
+    const initialRoute = { id: "same-sheet-route", name: "Same-sheet route", query, result: { status: "ready" as const, revision: 0, sourceRevision, routes: [alternative], route: alternative, missingFacts: [], reasons: [] }, sourceRevision } satisfies StoryRouteRecord;
+    let activePlaceId = "grounds";
+    const onOpenPlace = vi.fn((placeId: string) => { activePlaceId = placeId; rerender(); });
+    const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+    const rerender = () => root.render(<StoryRoutePanel project={value} activePlaceId={activePlaceId} locale="en" context={{}} initialRoute={initialRoute} onPreview={vi.fn()} onSave={vi.fn()} onOpenPlace={onOpenPlace} />);
+    await act(async () => rerender());
+    const start = () => [...host.querySelectorAll("button")].find((button) => button.textContent === "Show route start") as HTMLButtonElement | undefined;
+    const end = () => [...host.querySelectorAll("button")].find((button) => button.textContent === "Show route end") as HTMLButtonElement | undefined;
+    expect(start()).toBeDefined(); expect(end()).toBeDefined();
+    await act(async () => { start()!.click(); await Promise.resolve(); });
+    expect(onOpenPlace).toHaveBeenCalledWith("far-level");
+    expect(start()).toBeUndefined(); expect(end()).toBeUndefined();
+    await act(async () => root.unmount()); host.remove();
+  });
+
   it("keeps an in-flight calculation across cosmetic project and lens changes", async () => {
     let resolve!: (outcome: RouteCalculationOutcome) => void;
     let request: Parameters<StoryRouteCalculationService["calculate"]>[1] | undefined;

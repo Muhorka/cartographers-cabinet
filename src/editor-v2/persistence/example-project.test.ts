@@ -6,6 +6,8 @@ import { storyRouteRevision } from "../story/routes/revision";
 import type { StoryObjectRef } from "../story/types";
 import { loadExampleProject } from "./example-project";
 import { parseProjectFile } from "./project-file";
+import { createLevelForBuilding } from "../model/hierarchy-operations";
+import { prepareProjectTransaction } from "../state/project-transaction";
 
 const source = fs.readFileSync(path.join(process.cwd(), "public/examples/residence-of-the-silver-lindens.cartographer.json"), "utf8");
 
@@ -48,5 +50,30 @@ describe("Silver Lindens example project", () => {
     const envelope = JSON.parse(source); envelope.project.story.routes[0].sourceRevision = "stale"; envelope.project.story.routes[0].result.sourceRevision = "stale";
     const loaded = await loadExampleProject("stale-copy", async () => new Response(JSON.stringify(envelope)));
     expect(loaded.story.routes[0]!.sourceRevision).toBe("stale"); expect(loaded.story.routes[0]!.sourceRevision).not.toBe(storyRouteRevision(loaded));
+  });
+
+  it("can add another level to a building through the validated editor transaction", () => {
+    const project = parseProjectFile(source).project;
+    const building = project.places.find(({ kind }) => kind === "building");
+    expect(building).toBeDefined();
+    let nextId = 0;
+    const identity = {
+      createId: () => `added-level-part-${++nextId}`,
+      createRoomName: (index: number) => `Room ${index}`,
+    };
+    const result = prepareProjectTransaction(project, {
+      id: "add-level-regression",
+      isolation: "structural",
+      apply: (current) => createLevelForBuilding(current, {
+        id: "added-level",
+        constructionId: "added-level-construction",
+        buildingId: building!.id,
+        name: "Added level",
+        position: "above",
+        roomName: identity.createRoomName,
+      }, identity),
+    }, identity);
+
+    expect(result).toMatchObject({ status: "ready" });
   });
 });

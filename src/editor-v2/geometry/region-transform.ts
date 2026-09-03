@@ -37,6 +37,11 @@ export function translateRegion(shape: RegionShape, delta: KernelPoint): RegionS
   return { ...shape, points: shape.points.map((point) => ({ x: point.x + delta.x, y: point.y + delta.y })) };
 }
 
+/** Copies a region without relying on structuredClone, so Immer draft geometry is supported. */
+export function copyRegion(shape: RegionShape): RegionShape {
+  return translateRegion(shape, { x: 0, y: 0 });
+}
+
 /** Converts a boundary drawn on the containing map into local geometry plus map placement. */
 export function localizeRegion(shape: RegionShape) {
   const center = regionBoundsCenter(shape);

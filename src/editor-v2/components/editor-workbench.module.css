@@ -1,4 +1,5 @@
-.operationError { margin: 0 0 12px; padding: 10px 14px; border: 1px solid #b9725c; color: #ffe5d8; background: #4c2923; }
+.operationError { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 12px; padding: 8px 10px 8px 14px; border: 1px solid #b9725c; color: #ffe5d8; background: #4c2923; }
+.operationError button { flex: 0 0 auto; border: 1px solid #d99b84; padding: 0 7px 2px; color: inherit; background: transparent; font: inherit; cursor: pointer; }
 .loading {
   display: grid;
   min-height: 100vh;

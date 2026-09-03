@@ -1,6 +1,7 @@
 import { constructionNetwork, createConstructionDocument } from "../construction/construction-document";
 import type { CanonicalWall, KernelPoint } from "../geometry/geometry-types";
 import type { ConstructionSurface, DrawingElement, EditorProject, MapAppearance, PlaceNode, RegionShape } from "./project-model";
+import { copyRegion } from "../geometry/region-transform";
 import { shapePolygons } from "../geometry/region-constraints";
 import { roomFaceShape } from "../geometry/room-face-shape";
 import { storyRefKey, type StoryObjectRef } from "../story/types";
@@ -32,7 +33,7 @@ export function createLevelForBuilding(project: EditorProject, input: { id: stri
   const orders = siblings.map((candidate, index) => candidate.order ?? index);
   const order = input.position === "below" ? Math.min(...orders, 0) - 1 : Math.max(...orders, -1) + 1;
   const construction = createConstructionDocument(input.constructionId, boundaryWalls(building.boundary, identity), { createId: identity.createId, createName: input.roomName ?? ((index) => `Room ${index}`) }, building.boundary);
-  const next = createPlace(project, { id: input.id, parentId: building.id, name: input.name, kind: "level", boundary: structuredClone(building.boundary), constructionId: construction.id, order });
+  const next = createPlace(project, { id: input.id, parentId: building.id, name: input.name, kind: "level", boundary: copyRegion(building.boundary), constructionId: construction.id, order });
   return syncConstructionRooms({ ...next, constructions: [...next.constructions, construction] }, construction);
 }
 
@@ -139,7 +140,7 @@ export function wrapStandaloneRoomInBuilding(project: EditorProject, roomId: str
   const construction = { ...generated, rooms: [{ ...generatedRoom, id: room.id, name: room.name, description: room.description, tags: room.tags, access: room.access, properties: room.properties }] };
   let next = { ...project, places: project.places.filter(({ id }) => id !== room.id) };
   next = createPlace(next, { id: input.buildingId, parentId: room.parentId, name: input.buildingName, kind: "building", boundary: room.boundary, transform: room.transform });
-  next = createPlace(next, { id: input.levelId, parentId: input.buildingId, name: input.levelName, kind: "level", boundary: structuredClone(room.boundary), constructionId: construction.id, order: 0 });
+  next = createPlace(next, { id: input.levelId, parentId: input.buildingId, name: input.levelName, kind: "level", boundary: copyRegion(room.boundary), constructionId: construction.id, order: 0 });
   next = syncConstructionRooms({ ...next, constructions: [...next.constructions, construction] }, construction);
   return { ...next, places: next.places.map((candidate) => candidate.id === room.id ? { ...candidate, appearance: room.appearance } : candidate) };
 }
