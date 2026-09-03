@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
-import type { EditorProject } from "../model/project-model";
-import { createProjectAtScale } from "../model/starter-project";
+import { emptyProject, type EditorProject } from "../model/project-model";
+import { createIndependentLevel } from "../model/hierarchy-operations";
 import { agentSafetyReasons, assertAgentLocks } from "./agent-change-policy";
 import { EditorSession } from "../state/editor-session";
 import { EditorCommandCoordinator } from "./editor-command-coordinator";
 import { buildDeleteChange, buildMetadataChange } from "./agent-object-command";
 
 function fixture() {
-  const project = createProjectAtScale("lock-order", "Synthetic floor", "en", "level");
+  let index = 0;
+  const project = createIndependentLevel(emptyProject("lock-order", "Synthetic floor"), { id: "lock-level", constructionId: "lock-plan", name: "Synthetic floor", boundary: { kind: "rectangle", x: -30, y: -20, width: 60, height: 40 } }, { createId: () => `lock-shape-${++index}` });
   const owner = project.places[0].id; const construction = project.constructions[0];
   project.elements.push({ id: "note", belongsToId: owner, name: "Note", layerId: "sketch", subjectId: "sketch.note", geometry: { kind: "note", at: { x: 0, y: 0 }, text: "Keep this", width: 2, height: 1 }, visible: true, locked: false, tags: [], access: [], properties: {} });
   project.surfaces.push({ id: "stage", belongsToId: owner, name: "Stage", kind: "stage", attachment: "free", shape: { kind: "rectangle", x: 2, y: 2, width: 3, height: 2 }, elevation: 1, visible: true, locked: false, tags: [], access: [], properties: {} });

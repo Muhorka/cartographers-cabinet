@@ -43,6 +43,15 @@ describe("map selection drag safety", () => {
     expect(view.onMoveSelection).not.toHaveBeenCalled(); view.dispose();
   });
 
+  it("cancels an active move with the context menu", () => {
+    const view = mount();
+    act(() => view.target.dispatchEvent(pointerEvent("pointerdown", 500, 350, 48)));
+    act(() => view.svg.dispatchEvent(pointerEvent("pointermove", 540, 380, 48)));
+    act(() => view.svg.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 })));
+    act(() => view.svg.dispatchEvent(pointerEvent("pointerup", 540, 380, 48)));
+    expect(view.onMoveSelection).not.toHaveBeenCalled(); view.dispose();
+  });
+
   it("does not delete another selection while a pointer move is armed", () => {
     const view = mount();
     act(() => view.target.dispatchEvent(pointerEvent("pointerdown", 500, 350, 46)));

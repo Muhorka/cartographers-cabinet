@@ -3,13 +3,15 @@ import { createProjectAtScale } from "../model/starter-project";
 import { EditorSession } from "./editor-session";
 import type { ConstructionSurfaceKind } from "../model/project-model";
 import { constructionClearCategories } from "./clear-construction-layer";
-import { createLevelForBuilding } from "../model/hierarchy-operations";
+import { createBuildingWithDefaultLevel, createLevelForBuilding } from "../model/hierarchy-operations";
+import { emptyProject } from "../model/project-model";
 
 const kinds: ConstructionSurfaceKind[] = ["platform", "porch", "terrace", "balcony", "mezzanine", "stage", "custom"];
 const surface = (id: string, belongsToId: string, kind: ConstructionSurfaceKind) => ({ id, belongsToId, name: `Named ${kind}`, kind, shape: { kind: "rectangle" as const, x: 1, y: 1, width: 3, height: 2 }, attachment: "free" as const, elevation: 0, visible: true, locked: false, tags: [], access: [], properties: {} });
 
 function levelProject() {
-  return createProjectAtScale("clear-regression", "Synthetic atlas", "en", "building");
+  let index = 0;
+  return createBuildingWithDefaultLevel(emptyProject("clear-regression", "Synthetic atlas"), { id: "clear-building", levelId: "clear-level", constructionId: "clear-plan", name: "Synthetic building", levelName: "Ground floor", boundary: { kind: "rectangle", x: -30, y: -20, width: 60, height: 40 } }, { createId: () => `clear-shape-${++index}` });
 }
 
 describe("construction clear regression", () => {

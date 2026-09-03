@@ -1,4 +1,5 @@
-import { createBuildingWithDefaultLevel, createIndependentLevel, createPlace } from "./hierarchy-operations";
+import { createConstructionDocument } from "../construction/construction-document";
+import { createBuildingWithDefaultLevel, createPlace } from "./hierarchy-operations";
 import { emptyProject, type EditorProject } from "./project-model";
 import type { EditorLocale } from "../i18n/workbench-copy";
 import { localizeRegion } from "../geometry/region-transform";
@@ -7,11 +8,16 @@ export type StartingScale = "world" | "location" | "building" | "level" | "room"
 
 export function createProjectAtScale(id: string, name: string, locale: EditorLocale, scale: StartingScale): EditorProject {
   let sequence = 0; const identity = { createId: () => `${id}:shape:${++sequence}` };
-  const boundary = { kind: "rectangle" as const, x: -30, y: -20, width: 60, height: 40 };
   let project = emptyProject(id, name); const rootId = `${id}:${scale}`;
-  if (scale === "building") project = createBuildingWithDefaultLevel(project, { id: rootId, levelId: `${id}:level`, constructionId: `${id}:plan`, name, levelName: locale === "pl" ? "Parter" : "Ground floor", boundary, roomName: (index) => locale === "pl" ? `Pomieszczenie ${index}` : `Room ${index}` }, identity);
-  else if (scale === "level") project = createIndependentLevel(project, { id: rootId, constructionId: `${id}:plan`, name, boundary, roomName: (index) => locale === "pl" ? `Pomieszczenie ${index}` : `Room ${index}` }, identity);
-  else project = createPlace(project, { id: rootId, name, kind: scale === "room" ? "standalone-room" : scale, ...(scale === "world" || scale === "location" ? {} : { boundary }) });
+  if (scale === "building" || scale === "level") {
+    const constructionId = `${id}:plan`;
+    const construction = createConstructionDocument(constructionId, [], { createId: identity.createId, createName: (index) => locale === "pl" ? `Pomieszczenie ${index}` : `Room ${index}` });
+    if (scale === "building") {
+      project = createPlace(project, { id: rootId, name, kind: "building" });
+      project = createPlace(project, { id: `${id}:level`, parentId: rootId, name: locale === "pl" ? "Parter" : "Ground floor", kind: "level", constructionId, order: 0 });
+    } else project = createPlace(project, { id: rootId, name, kind: "level", constructionId, order: 0 });
+    project = { ...project, constructions: [construction] };
+  } else project = createPlace(project, { id: rootId, name, kind: scale === "room" ? "standalone-room" : scale });
   return { ...project, updatedAt: new Date().toISOString() };
 }
 
